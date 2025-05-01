@@ -142,8 +142,8 @@ impl CosemDataType {
                 CosemDataType::Float32(_) => 4,
                 CosemDataType::Float64(_) => 8,
                 CosemDataType::OctetString(os) => os.len(),
-                CosemDataType::VisibleString(vs) => vs.as_bytes().len(),
-                CosemDataType::Utf8String(utf8) => utf8.as_bytes().len(),
+                CosemDataType::VisibleString(vs) => vs.len(),
+                CosemDataType::Utf8String(utf8) => utf8.len(),
                 CosemDataType::Bcd(_) => 1,
                 CosemDataType::BitString(bs) => {
                     let bit_len = bs.len();
