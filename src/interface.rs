@@ -1,5 +1,5 @@
 use crate::obis::ObisCode;
-use crate::types::{CosemDataType, BerError};
+use crate::types::{BerError, CosemDataType};
 use std::any::Any;
 
 /// Трейт, определяющий общий интерфейс для всех интерфейсных классов COSEM,
