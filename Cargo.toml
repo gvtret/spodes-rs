@@ -1,0 +1,12 @@
+[package]
+name = "spodes-rs"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+asn1 = "0.15"
+serde = { version = "1.0", features = ["derive"] }
+serde_derive = "1.0"
+
+[dev-dependencies]
+serde_json = "1.0"
