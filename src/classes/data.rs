@@ -1,6 +1,6 @@
 use crate::interface::InterfaceClass;
 use crate::obis::ObisCode;
-use crate::types::{CosemDataType, BerError};
+use crate::types::{BerError, CosemDataType};
 use serde::{Deserialize, Serialize};
 use std::any::Any;
 
@@ -23,7 +23,10 @@ impl Data {
     /// # Returns
     /// Новая структура `Data`.
     pub fn new(logical_name: ObisCode, value: CosemDataType) -> Self {
-        Data { logical_name, value }
+        Data {
+            logical_name,
+            value,
+        }
     }
 }
 
@@ -76,7 +79,8 @@ impl InterfaceClass for Data {
                     }
                     if let CosemDataType::OctetString(obis) = &seq[1] {
                         if obis.len() == 6 {
-                            self.logical_name = ObisCode::new(obis[0], obis[1], obis[2], obis[3], obis[4], obis[5]);
+                            self.logical_name =
+                                ObisCode::new(obis[0], obis[1], obis[2], obis[3], obis[4], obis[5]);
                         } else {
                             return Err(BerError::InvalidLength);
                         }

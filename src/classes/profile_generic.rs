@@ -1,6 +1,6 @@
 use crate::interface::InterfaceClass;
 use crate::obis::ObisCode;
-use crate::types::{CosemDataType, BerError};
+use crate::types::{BerError, CosemDataType};
 use serde::{Deserialize, Serialize};
 use std::any::Any;
 use std::sync::Arc;
@@ -136,7 +136,7 @@ impl InterfaceClass for ProfileGeneric {
             (1, CosemDataType::OctetString(self.logical_name.to_bytes())),
             (2, CosemDataType::Array(self.buffer.clone())),
             (3, capture_objects),
-            (4, CosemDataType::DoubleLongUnsigned(self.capture_period as u32)),
+            (4, CosemDataType::DoubleLongUnsigned(self.capture_period)),
             (5, CosemDataType::Unsigned(self.sort_method)),
             (6, self.sort_object.clone()),
             (7, CosemDataType::DoubleLongUnsigned(self.entries_in_use)),
@@ -175,7 +175,8 @@ impl InterfaceClass for ProfileGeneric {
                     }
                     if let CosemDataType::OctetString(obis) = &seq[1] {
                         if obis.len() == 6 {
-                            self.logical_name = ObisCode::new(obis[0], obis[1], obis[2], obis[3], obis[4], obis[5]);
+                            self.logical_name =
+                                ObisCode::new(obis[0], obis[1], obis[2], obis[3], obis[4], obis[5]);
                         } else {
                             return Err(BerError::InvalidLength);
                         }
@@ -193,7 +194,7 @@ impl InterfaceClass for ProfileGeneric {
                         return Err(BerError::InvalidTag);
                     }
                     if let CosemDataType::DoubleLongUnsigned(capture_period) = seq[4] {
-                        self.capture_period = capture_period as u32;
+                        self.capture_period = capture_period;
                     } else {
                         return Err(BerError::InvalidTag);
                     }
@@ -204,12 +205,12 @@ impl InterfaceClass for ProfileGeneric {
                     }
                     self.sort_object = seq[6].clone();
                     if let CosemDataType::DoubleLongUnsigned(entries_in_use) = seq[7] {
-                        self.entries_in_use = entries_in_use as u32;
+                        self.entries_in_use = entries_in_use;
                     } else {
                         return Err(BerError::InvalidTag);
                     }
                     if let CosemDataType::DoubleLongUnsigned(profile_entries) = seq[8] {
-                        self.profile_entries = profile_entries as u32;
+                        self.profile_entries = profile_entries;
                     } else {
                         return Err(BerError::InvalidTag);
                     }
@@ -228,7 +229,10 @@ impl InterfaceClass for ProfileGeneric {
         match method_id {
             1 => self.reset(),
             2 => self.capture(),
-            _ => Err(format!("Method {} not supported for ProfileGeneric class", method_id)),
+            _ => Err(format!(
+                "Method {} not supported for ProfileGeneric class",
+                method_id
+            )),
         }
     }
 

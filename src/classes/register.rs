@@ -1,6 +1,6 @@
 use crate::interface::InterfaceClass;
 use crate::obis::ObisCode;
-use crate::types::{CosemDataType, BerError};
+use crate::types::{BerError, CosemDataType};
 use serde::{Deserialize, Serialize};
 use std::any::Any;
 
@@ -98,7 +98,8 @@ impl InterfaceClass for Register {
                     }
                     if let CosemDataType::OctetString(obis) = &seq[1] {
                         if obis.len() == 6 {
-                            self.logical_name = ObisCode::new(obis[0], obis[1], obis[2], obis[3], obis[4], obis[5]);
+                            self.logical_name =
+                                ObisCode::new(obis[0], obis[1], obis[2], obis[3], obis[4], obis[5]);
                         } else {
                             return Err(BerError::InvalidLength);
                         }
@@ -121,7 +122,10 @@ impl InterfaceClass for Register {
     ) -> Result<CosemDataType, String> {
         match method_id {
             1 => self.reset(),
-            _ => Err(format!("Method {} not supported for Register class", method_id)),
+            _ => Err(format!(
+                "Method {} not supported for Register class",
+                method_id
+            )),
         }
     }
 
