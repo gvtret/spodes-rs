@@ -1,4 +1,6 @@
-use spodes_rs::classes::{data::Data, profile_generic::ProfileGeneric, register::Register};
+use spodes_rs::classes::data::Data;
+use spodes_rs::classes::profile_generic::{ProfileGeneric, ProfileGenericConfig};
+use spodes_rs::classes::register::Register;
 use spodes_rs::interface::InterfaceClass;
 use spodes_rs::obis::ObisCode;
 use spodes_rs::serialization::{deserialize_object, serialize_object};
@@ -49,20 +51,30 @@ fn test_profile_generic_serialization_deserialization() {
     let entries_in_use = 1;
     let profile_entries = 100;
 
-    let profile = ProfileGeneric::new(
-        obis.clone(),
-        buffer.clone(),
+    let config = ProfileGenericConfig {
+        logical_name: obis.clone(),
+        buffer: buffer.clone(),
         capture_objects,
         capture_period,
         sort_method,
-        sort_object.clone(),
+        sort_object: sort_object.clone(),
         entries_in_use,
         profile_entries,
-    );
+    };
+    let profile = ProfileGeneric::new(config);
 
     let serialized = serialize_object(&profile).expect("Serialization failed");
-    let mut deserialized =
-        ProfileGeneric::new(obis, vec![], vec![], 0, 0, CosemDataType::Null, 0, 0);
+    let config = ProfileGenericConfig {
+        logical_name: obis,
+        buffer: vec![],
+        capture_objects: vec![],
+        capture_period: 0,
+        sort_method: 0,
+        sort_object: CosemDataType::Null,
+        entries_in_use: 0,
+        profile_entries: 0,
+    };
+    let mut deserialized = ProfileGeneric::new(config);
     deserialize_object(&mut deserialized, &serialized).expect("Deserialization failed");
 
     assert_eq!(deserialized.logical_name(), profile.logical_name());
@@ -106,16 +118,17 @@ fn test_profile_generic_capture_method() {
     let data_obis = ObisCode::new(0, 0, 96, 1, 0, 255);
     let data = Data::new(data_obis.clone(), CosemDataType::Integer(42));
     let capture_objects = vec![(Arc::new(data) as Arc<dyn InterfaceClass + Send + Sync>, 2)];
-    let mut profile = ProfileGeneric::new(
-        obis,
-        vec![],
+    let config = ProfileGenericConfig {
+        logical_name: obis,
+        buffer: vec![],
         capture_objects,
-        3600,
-        1,
-        CosemDataType::Null,
-        0,
-        100,
-    );
+        capture_period: 3600,
+        sort_method: 1,
+        sort_object: CosemDataType::Null,
+        entries_in_use: 0,
+        profile_entries: 100,
+    };
+    let mut profile = ProfileGeneric::new(config);
 
     let result = profile
         .invoke_method(2, None)
