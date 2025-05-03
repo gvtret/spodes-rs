@@ -3,7 +3,6 @@ use crate::obis::ObisCode;
 use crate::types::{CosemDataType, BerError};
 use serde::{Deserialize, Serialize};
 use std::any::Any;
-use std::sync::Arc;
 
 /// Конфигурационная структура для создания объекта `Clock`.
 #[derive(Clone, Serialize, Deserialize, Debug)]
@@ -56,13 +55,21 @@ impl Clock {
         }
     }
 
-    /// Настраивает время на ближайший квартал часа.
+    /// Настраивает время на ближайшую четверть часа (0, 15, 30, 45 минуты).
     fn adjust_to_quarter(&mut self) -> Result<CosemDataType, String> {
         if let CosemDataType::DateTime(mut dt) = self.time.clone() {
             if dt.len() == 12 {
-                let minutes = dt[6];
-                let seconds = dt[7];
-                let new_minutes = ((minutes as u32 + 7) / 15 * 15) % 60;
+                let minutes = dt[6] as u32;
+                // Округляем до ближайшей четверти часа (0, 15, 30, 45)
+                let new_minutes = if minutes < 8 {
+                    0
+                } else if minutes < 23 {
+                    15
+                } else if minutes < 37 {
+                    30
+                } else {
+                    45
+                };
                 dt[6] = new_minutes as u8;
                 dt[7] = 0; // Обнуляем секунды
                 dt[8] = 0; // Обнуляем сотые доли секунды
@@ -216,8 +223,8 @@ fn write_length(length: usize, buf: &mut Vec<u8>) -> Result<(), BerError> {
     } else {
         let bytes = (length as u64).to_be_bytes();
         let first_non_zero = bytes.iter().position(|&b| b != 0).unwrap_or(7);
-        let num_bytes = 8 - first_non_zero;
-        buf.push(0x80 | num_bytes as u8);
+        let num_octets = 8 - first_non_zero;
+        buf.push(0x80 | num_octets as u8);
         buf.extend_from_slice(&bytes[first_non_zero..]);
     }
     Ok(())

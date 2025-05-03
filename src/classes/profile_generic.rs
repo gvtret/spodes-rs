@@ -20,6 +20,21 @@ pub struct ProfileGenericConfig {
     pub profile_entries: u32,
 }
 
+impl fmt::Debug for ProfileGenericConfig {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_struct("ProfileGenericConfig")
+            .field("logical_name", &self.logical_name)
+            .field("buffer", &self.buffer)
+            .field("capture_objects", &format_args!("Vec<...> (len={})", self.capture_objects.len()))
+            .field("capture_period", &self.capture_period)
+            .field("sort_method", &self.sort_method)
+            .field("sort_object", &self.sort_object)
+            .field("entries_in_use", &self.entries_in_use)
+            .field("profile_entries", &self.profile_entries)
+            .finish()
+    }
+}
+
 /// Интерфейсный класс `ProfileGeneric` (class_id = 7) для хранения профилей данных,
 /// таких как нагрузочные профили или журналы событий, в соответствии с IEC 62056-6-2
 /// в библиотеке `spodes-rs`.
@@ -150,7 +165,7 @@ impl InterfaceClass for ProfileGeneric {
             (1, CosemDataType::OctetString(self.logical_name.to_bytes())),
             (2, CosemDataType::Array(self.buffer.clone())),
             (3, capture_objects),
-            (4, CosemDataType::DoubleLongUnsigned(self.capture_period as u32)),
+            (4, CosemDataType::DoubleLongUnsigned(self.capture_period)),
             (5, CosemDataType::Unsigned(self.sort_method)),
             (6, self.sort_object.clone()),
             (7, CosemDataType::DoubleLongUnsigned(self.entries_in_use)),
@@ -208,7 +223,7 @@ impl InterfaceClass for ProfileGeneric {
                     return Err(BerError::InvalidTag);
                 }
                 if let CosemDataType::DoubleLongUnsigned(capture_period) = seq[4] {
-                    self.capture_period = capture_period as u32;
+                    self.capture_period = capture_period;
                 } else {
                     return Err(BerError::InvalidTag);
                 }
@@ -219,12 +234,12 @@ impl InterfaceClass for ProfileGeneric {
                 }
                 self.sort_object = seq[6].clone();
                 if let CosemDataType::DoubleLongUnsigned(entries_in_use) = seq[7] {
-                    self.entries_in_use = entries_in_use as u32;
+                    self.entries_in_use = entries_in_use;
                 } else {
                     return Err(BerError::InvalidTag);
                 }
                 if let CosemDataType::DoubleLongUnsigned(profile_entries) = seq[8] {
-                    self.profile_entries = profile_entries as u32;
+                    self.profile_entries = profile_entries;
                 } else {
                     return Err(BerError::InvalidTag);
                 }
@@ -259,8 +274,8 @@ fn write_length(length: usize, buf: &mut Vec<u8>) -> Result<(), BerError> {
     } else {
         let bytes = (length as u64).to_be_bytes();
         let first_non_zero = bytes.iter().position(|&b| b != 0).unwrap_or(7);
-        let num_bytes = 8 - first_non_zero;
-        buf.push(0x80 | num_bytes as u8);
+        let num_octets = 8 - first_non_zero;
+        buf.push(0x80 | num_octets as u8);
         buf.extend_from_slice(&bytes[first_non_zero..]);
     }
     Ok(())

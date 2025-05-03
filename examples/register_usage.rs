@@ -6,7 +6,7 @@ use spodes_rs::types::CosemDataType;
 
 fn main() {
     let obis = ObisCode::new(1, 0, 1, 8, 0, 255);
-    let value = CosemDataType::Long64(1000);
+    let value = CosemDataType::DoubleLong(1000);
     let scaler_unit = CosemDataType::OctetString(vec![0x00, 0x1B]);
     let mut register = Register::new(obis.clone(), value, scaler_unit);
 
