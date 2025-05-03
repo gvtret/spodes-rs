@@ -2,6 +2,7 @@ use spodes_rs::classes::data::Data;
 use spodes_rs::classes::profile_generic::{ProfileGeneric, ProfileGenericConfig};
 use spodes_rs::classes::register::Register;
 use spodes_rs::classes::clock::{Clock, ClockConfig};
+use spodes_rs::classes::extended_register::ExtendedRegister;
 use spodes_rs::interface::InterfaceClass;
 use spodes_rs::obis::ObisCode;
 use spodes_rs::serialization::{deserialize_object, serialize_object};
@@ -295,4 +296,84 @@ fn test_clock_adjust_to_preset_time() {
     let result = clock.invoke_method(3, Some(new_time.clone())).expect("Adjust to preset time failed");
     assert_eq!(result, CosemDataType::Null);
     assert_eq!(clock.attributes()[1].1, new_time);
+}
+
+#[test]
+fn test_extended_register_serialization_deserialization() {
+    let obis = ObisCode::new(1, 0, 1, 8, 1, 255);
+    let value = CosemDataType::DoubleLong(2000);
+    let scaler_unit = CosemDataType::OctetString(vec![0x00, 0x1B]); // Пример scaler_unit
+    let status = CosemDataType::Unsigned(1); // Статус: действительное измерение
+    let capture_time = CosemDataType::DateTime(vec![
+        0x07, 0xE5, 0x05, 0x01, // Год: 2025, Месяц: 5, День: 1
+        0x02, // День недели: вторник
+        0x10, 0x30, 0x00, // Час: 16, Минуты: 30, Секунды: 0
+        0x00, // Сотые доли секунды: 0
+        0x00, 0x00, 0x00, // Отклонение от UTC: 0
+    ]);
+
+    let extended_register = ExtendedRegister::new(
+        obis.clone(),
+        value.clone(),
+        scaler_unit.clone(),
+        status.clone(),
+        capture_time.clone(),
+    );
+    
+    let serialized = serialize_object(&extended_register).expect("Serialization failed");
+    let mut deserialized = ExtendedRegister::new(
+        obis.clone(),
+        CosemDataType::Null,
+        CosemDataType::Null,
+        CosemDataType::Null,
+        CosemDataType::Null,
+    );
+    deserialize_object(&mut deserialized, &serialized).expect("Deserialization failed");
+    
+    assert_eq!(deserialized.logical_name(), extended_register.logical_name());
+    assert_eq!(deserialized.attributes()[1].1, value);
+    assert_eq!(deserialized.attributes()[2].1, scaler_unit);
+    assert_eq!(deserialized.attributes()[3].1, status);
+    assert_eq!(deserialized.attributes()[4].1, capture_time);
+}
+
+#[test]
+fn test_extended_register_reset_method() {
+    let obis = ObisCode::new(1, 0, 1, 8, 1, 255);
+    let value = CosemDataType::DoubleLong(2000);
+    let scaler_unit = CosemDataType::OctetString(vec![0x00, 0x1B]);
+    let status = CosemDataType::Unsigned(1);
+    let capture_time = CosemDataType::DateTime(vec![
+        0x07, 0xE5, 0x05, 0x01, // Год: 2025, Месяц: 5, День: 1
+        0x02, // День недели: вторник
+        0x10, 0x30, 0x00, // Час: 16, Минуты: 30, Секунды: 0
+        0x00, // Сотые доли секунды: 0
+        0x00, 0x00, 0x00, // Отклонение от UTC: 0
+    ]);
+    let mut extended_register = ExtendedRegister::new(obis, value, scaler_unit, status, capture_time);
+    
+    let result = extended_register.invoke_method(1, None).expect("Reset method failed");
+    assert_eq!(result, CosemDataType::Null);
+    assert_eq!(extended_register.attributes()[1].1, CosemDataType::DoubleLong(0));
+    assert_eq!(extended_register.attributes()[3].1, CosemDataType::Null);
+    assert_eq!(extended_register.attributes()[4].1, CosemDataType::Null);
+}
+
+#[test]
+fn test_extended_register_capture_method() {
+    let obis = ObisCode::new(1, 0, 1, 8, 1, 255);
+    let value = CosemDataType::DoubleLong(2000);
+    let scaler_unit = CosemDataType::OctetString(vec![0x00, 0x1B]);
+    let status = CosemDataType::Null;
+    let capture_time = CosemDataType::Null;
+    let mut extended_register = ExtendedRegister::new(obis, value, scaler_unit, status, capture_time);
+    
+    let result = extended_register.invoke_method(2, None).expect("Capture method failed");
+    assert_eq!(result, CosemDataType::Null);
+    assert_eq!(extended_register.attributes()[3].1, CosemDataType::Unsigned(1));
+    if let CosemDataType::DateTime(dt) = &extended_register.attributes()[4].1 {
+        assert_eq!(dt, &vec![0x07, 0xE5, 0x05, 0x01, 0x02, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00]);
+    } else {
+        panic!("Expected DateTime");
+    }
 }
