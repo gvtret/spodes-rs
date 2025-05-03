@@ -1,9 +1,24 @@
 use crate::interface::InterfaceClass;
 use crate::obis::ObisCode;
-use crate::types::{BerError, CosemDataType};
+use crate::types::{CosemDataType, BerError};
 use serde::{Deserialize, Serialize};
 use std::any::Any;
+use std::fmt;
 use std::sync::Arc;
+
+/// Конфигурационная структура для создания объекта `ProfileGeneric`.
+#[derive(Clone, Serialize, Deserialize)]
+pub struct ProfileGenericConfig {
+    pub logical_name: ObisCode,
+    pub buffer: Vec<CosemDataType>,
+    #[serde(skip)]
+    pub capture_objects: Vec<(Arc<dyn InterfaceClass + Send + Sync>, u8)>,
+    pub capture_period: u32,
+    pub sort_method: u8,
+    pub sort_object: CosemDataType,
+    pub entries_in_use: u32,
+    pub profile_entries: u32,
+}
 
 /// Интерфейсный класс `ProfileGeneric` (class_id = 7) для хранения профилей данных,
 /// таких как нагрузочные профили или журналы событий, в соответствии с IEC 62056-6-2
@@ -23,40 +38,39 @@ pub struct ProfileGeneric {
     profile_entries: u32,
 }
 
+impl fmt::Debug for ProfileGeneric {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_struct("ProfileGeneric")
+            .field("logical_name", &self.logical_name)
+            .field("buffer", &self.buffer)
+            .field("capture_objects", &format_args!("Vec<...> (len={})", self.capture_objects.len()))
+            .field("capture_period", &self.capture_period)
+            .field("sort_method", &self.sort_method)
+            .field("sort_object", &self.sort_object)
+            .field("entries_in_use", &self.entries_in_use)
+            .field("profile_entries", &self.profile_entries)
+            .finish()
+    }
+}
+
 impl ProfileGeneric {
-    /// Создает новый объект `ProfileGeneric`.
+    /// Создает новый объект `ProfileGeneric` из конфигурации.
     ///
     /// # Arguments
-    /// * `logical_name` - OBIS-код объекта.
-    /// * `buffer` - Буфер записей профиля.
-    /// * `capture_objects` - Список пар (объект, идентификатор атрибута) для захвата.
-    /// * `capture_period` - Период захвата данных (в секундах).
-    /// * `sort_method` - Метод сортировки (например, 1 для FIFO).
-    /// * `sort_object` - Объект сортировки.
-    /// * `entries_in_use` - Количество используемых записей.
-    /// * `profile_entries` - Максимальное количество записей.
+    /// * `config` - Конфигурация для создания объекта.
     ///
     /// # Returns
     /// Новая структура `ProfileGeneric`.
-    pub fn new(
-        logical_name: ObisCode,
-        buffer: Vec<CosemDataType>,
-        capture_objects: Vec<(Arc<dyn InterfaceClass + Send + Sync>, u8)>,
-        capture_period: u32,
-        sort_method: u8,
-        sort_object: CosemDataType,
-        entries_in_use: u32,
-        profile_entries: u32,
-    ) -> Self {
+    pub fn new(config: ProfileGenericConfig) -> Self {
         ProfileGeneric {
-            logical_name,
-            buffer,
-            capture_objects,
-            capture_period,
-            sort_method,
-            sort_object,
-            entries_in_use,
-            profile_entries,
+            logical_name: config.logical_name,
+            buffer: config.buffer,
+            capture_objects: config.capture_objects,
+            capture_period: config.capture_period,
+            sort_method: config.sort_method,
+            sort_object: config.sort_object,
+            entries_in_use: config.entries_in_use,
+            profile_entries: config.profile_entries,
         }
     }
 
@@ -94,7 +108,7 @@ impl ProfileGeneric {
         }
 
         // Добавляем текущую метку времени
-        captured_values.push(CosemDataType::DateTime(vec![0x07, 0xE5, 0x05, 0x01])); // Пример
+        captured_values.push(CosemDataType::DateTime(vec![0x07, 0xE5, 0x05, 0x01, 0x02, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00])); // Пример
 
         let new_entry = CosemDataType::Structure(captured_values);
         self.buffer.push(new_entry);
@@ -136,7 +150,7 @@ impl InterfaceClass for ProfileGeneric {
             (1, CosemDataType::OctetString(self.logical_name.to_bytes())),
             (2, CosemDataType::Array(self.buffer.clone())),
             (3, capture_objects),
-            (4, CosemDataType::DoubleLongUnsigned(self.capture_period)),
+            (4, CosemDataType::DoubleLongUnsigned(self.capture_period as u32)),
             (5, CosemDataType::Unsigned(self.sort_method)),
             (6, self.sort_object.clone()),
             (7, CosemDataType::DoubleLongUnsigned(self.entries_in_use)),
@@ -151,7 +165,6 @@ impl InterfaceClass for ProfileGeneric {
     fn serialize_ber(&self, buf: &mut Vec<u8>) -> Result<(), BerError> {
         let mut seq_buf = Vec::new();
         CosemDataType::LongUnsigned(self.class_id()).serialize_ber(&mut seq_buf)?;
-        CosemDataType::OctetString(self.logical_name.to_bytes()).serialize_ber(&mut seq_buf)?;
         for (_, attr) in self.attributes() {
             attr.serialize_ber(&mut seq_buf)?;
         }
@@ -163,60 +176,61 @@ impl InterfaceClass for ProfileGeneric {
 
     fn deserialize_ber(&mut self, data: &[u8]) -> Result<(), BerError> {
         let (tlv, rest) = CosemDataType::deserialize_ber(data)?;
-        if rest.is_empty() {
-            if let CosemDataType::Structure(seq) = tlv {
-                if seq.len() == 10 {
-                    if let CosemDataType::LongUnsigned(class_id) = seq[0] {
-                        if class_id != self.class_id() {
-                            return Err(BerError::InvalidValue);
-                        }
-                    } else {
-                        return Err(BerError::InvalidTag);
+        if !rest.is_empty() {
+            return Err(BerError::InvalidTag);
+        }
+        if let CosemDataType::Structure(seq) = tlv {
+            if seq.len() == 9 {
+                if let CosemDataType::LongUnsigned(class_id) = seq[0] {
+                    if class_id != self.class_id() {
+                        return Err(BerError::InvalidValue);
                     }
-                    if let CosemDataType::OctetString(obis) = &seq[1] {
-                        if obis.len() == 6 {
-                            self.logical_name =
-                                ObisCode::new(obis[0], obis[1], obis[2], obis[3], obis[4], obis[5]);
-                        } else {
-                            return Err(BerError::InvalidLength);
-                        }
-                    } else {
-                        return Err(BerError::InvalidTag);
-                    }
-                    if let CosemDataType::Array(buffer) = &seq[2] {
-                        self.buffer = buffer.clone();
-                    } else {
-                        return Err(BerError::InvalidTag);
-                    }
-                    if let CosemDataType::Array(_) = &seq[3] {
-                        // capture_objects десериализуются отдельно, если нужно
-                    } else {
-                        return Err(BerError::InvalidTag);
-                    }
-                    if let CosemDataType::DoubleLongUnsigned(capture_period) = seq[4] {
-                        self.capture_period = capture_period;
-                    } else {
-                        return Err(BerError::InvalidTag);
-                    }
-                    if let CosemDataType::Unsigned(sort_method) = seq[5] {
-                        self.sort_method = sort_method;
-                    } else {
-                        return Err(BerError::InvalidTag);
-                    }
-                    self.sort_object = seq[6].clone();
-                    if let CosemDataType::DoubleLongUnsigned(entries_in_use) = seq[7] {
-                        self.entries_in_use = entries_in_use;
-                    } else {
-                        return Err(BerError::InvalidTag);
-                    }
-                    if let CosemDataType::DoubleLongUnsigned(profile_entries) = seq[8] {
-                        self.profile_entries = profile_entries;
-                    } else {
-                        return Err(BerError::InvalidTag);
-                    }
-                    return Ok(());
+                } else {
+                    return Err(BerError::InvalidTag);
                 }
+                if let CosemDataType::OctetString(obis) = &seq[1] {
+                    if obis.len() == 6 {
+                        self.logical_name = ObisCode::new(obis[0], obis[1], obis[2], obis[3], obis[4], obis[5]);
+                    } else {
+                        return Err(BerError::InvalidLength);
+                    }
+                } else {
+                    return Err(BerError::InvalidTag);
+                }
+                if let CosemDataType::Array(buffer) = &seq[2] {
+                    self.buffer = buffer.clone();
+                } else {
+                    return Err(BerError::InvalidTag);
+                }
+                if let CosemDataType::Array(_) = &seq[3] {
+                    // capture_objects десериализуются отдельно, если нужно
+                } else {
+                    return Err(BerError::InvalidTag);
+                }
+                if let CosemDataType::DoubleLongUnsigned(capture_period) = seq[4] {
+                    self.capture_period = capture_period as u32;
+                } else {
+                    return Err(BerError::InvalidTag);
+                }
+                if let CosemDataType::Unsigned(sort_method) = seq[5] {
+                    self.sort_method = sort_method;
+                } else {
+                    return Err(BerError::InvalidTag);
+                }
+                self.sort_object = seq[6].clone();
+                if let CosemDataType::DoubleLongUnsigned(entries_in_use) = seq[7] {
+                    self.entries_in_use = entries_in_use as u32;
+                } else {
+                    return Err(BerError::InvalidTag);
+                }
+                if let CosemDataType::DoubleLongUnsigned(profile_entries) = seq[8] {
+                    self.profile_entries = profile_entries as u32;
+                } else {
+                    return Err(BerError::InvalidTag);
+                }
+                return Ok(());
             }
+            return Err(BerError::InvalidLength);
         }
         Err(BerError::InvalidTag)
     }
@@ -229,10 +243,7 @@ impl InterfaceClass for ProfileGeneric {
         match method_id {
             1 => self.reset(),
             2 => self.capture(),
-            _ => Err(format!(
-                "Method {} not supported for ProfileGeneric class",
-                method_id
-            )),
+            _ => Err(format!("Method {} not supported for ProfileGeneric class", method_id)),
         }
     }
 
