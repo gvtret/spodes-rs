@@ -3,6 +3,7 @@ use spodes_rs::classes::profile_generic::{ProfileGeneric, ProfileGenericConfig};
 use spodes_rs::classes::register::Register;
 use spodes_rs::classes::clock::{Clock, ClockConfig};
 use spodes_rs::classes::extended_register::ExtendedRegister;
+use spodes_rs::classes::demand_register::DemandRegister;
 use spodes_rs::interface::InterfaceClass;
 use spodes_rs::obis::ObisCode;
 use spodes_rs::serialization::{deserialize_object, serialize_object};
@@ -375,5 +376,152 @@ fn test_extended_register_capture_method() {
         assert_eq!(dt, &vec![0x07, 0xE5, 0x05, 0x01, 0x02, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00]);
     } else {
         panic!("Expected DateTime");
+    }
+}
+
+#[test]
+fn test_demand_register_serialization_deserialization() {
+    let obis = ObisCode::new(1, 0, 1, 8, 2, 255);
+    let current_average_value = CosemDataType::DoubleLong(3000);
+    let last_average_value = CosemDataType::DoubleLong(2500);
+    let scaler_unit = CosemDataType::OctetString(vec![0x00, 0x1B]); // Пример scaler_unit
+    let status = CosemDataType::Unsigned(1); // Статус: действительное измерение
+    let capture_time = CosemDataType::DateTime(vec![
+        0x07, 0xE5, 0x05, 0x01, // Год: 2025, Месяц: 5, День: 1
+        0x02, // День недели: вторник
+        0x10, 0x30, 0x00, // Час: 16, Минуты: 30, Секунды: 0
+        0x00, // Сотые доли секунды: 0
+        0x00, 0x00, 0x00, // Отклонение от UTC: 0
+    ]);
+    let start_time_current = CosemDataType::DateTime(vec![
+        0x07, 0xE5, 0x05, 0x01, // Год: 2025, Месяц: 5, День: 1
+        0x02, // День недели: вторник
+        0x10, 0x00, 0x00, // Час: 16, Минуты: 0, Секунды: 0
+        0x00, // Сотые доли секунды: 0
+        0x00, 0x00, 0x00, // Отклонение от UTC: 0
+    ]);
+    let period = CosemDataType::DoubleLongUnsigned(3600); // 1 час
+    let number_of_periods = CosemDataType::LongUnsigned(24); // 24 периода в сутки
+
+    let demand_register = DemandRegister::new(
+        obis.clone(),
+        current_average_value.clone(),
+        last_average_value.clone(),
+        scaler_unit.clone(),
+        status.clone(),
+        capture_time.clone(),
+        start_time_current.clone(),
+        period.clone(),
+        number_of_periods.clone(),
+    );
+    
+    let serialized = serialize_object(&demand_register).expect("Serialization failed");
+    let mut deserialized = DemandRegister::new(
+        obis.clone(),
+        CosemDataType::Null,
+        CosemDataType::Null,
+        CosemDataType::Null,
+        CosemDataType::Null,
+        CosemDataType::Null,
+        CosemDataType::Null,
+        CosemDataType::Null,
+        CosemDataType::Null,
+    );
+    deserialize_object(&mut deserialized, &serialized).expect("Deserialization failed");
+    
+    assert_eq!(deserialized.logical_name(), demand_register.logical_name());
+    assert_eq!(deserialized.attributes()[1].1, current_average_value);
+    assert_eq!(deserialized.attributes()[2].1, last_average_value);
+    assert_eq!(deserialized.attributes()[3].1, scaler_unit);
+    assert_eq!(deserialized.attributes()[4].1, status);
+    assert_eq!(deserialized.attributes()[5].1, capture_time);
+    assert_eq!(deserialized.attributes()[6].1, start_time_current);
+    assert_eq!(deserialized.attributes()[7].1, period);
+    assert_eq!(deserialized.attributes()[8].1, number_of_periods);
+}
+
+#[test]
+fn test_demand_register_reset_method() {
+    let obis = ObisCode::new(1, 0, 1, 8, 2, 255);
+    let current_average_value = CosemDataType::DoubleLong(3000);
+    let last_average_value = CosemDataType::DoubleLong(2500);
+    let scaler_unit = CosemDataType::OctetString(vec![0x00, 0x1B]);
+    let status = CosemDataType::Unsigned(1);
+    let capture_time = CosemDataType::DateTime(vec![
+        0x07, 0xE5, 0x05, 0x01, // Год: 2025, Месяц: 5, День: 1
+        0x02, // День недели: вторник
+        0x10, 0x30, 0x00, // Час: 16, Минуты: 30, Секунды: 0
+        0x00, // Сотые доли секунды: 0
+        0x00, 0x00, 0x00, // Отклонение от UTC: 0
+    ]);
+    let start_time_current = CosemDataType::DateTime(vec![
+        0x07, 0xE5, 0x05, 0x01, // Год: 2025, Месяц: 5, День: 1
+        0x02, // День недели: вторник
+        0x10, 0x00, 0x00, // Час: 16, Минуты: 0, Секунды: 0
+        0x00, // Сотые доли секунды: 0
+        0x00, 0x00, 0x00, // Отклонение от UTC: 0
+    ]);
+    let period = CosemDataType::DoubleLongUnsigned(3600);
+    let number_of_periods = CosemDataType::LongUnsigned(24);
+    
+    let mut demand_register = DemandRegister::new(
+        obis,
+        current_average_value,
+        last_average_value,
+        scaler_unit,
+        status,
+        capture_time,
+        start_time_current,
+        period,
+        number_of_periods,
+    );
+    
+    let result = demand_register.invoke_method(1, None).expect("Reset method failed");
+    assert_eq!(result, CosemDataType::Null);
+    assert_eq!(demand_register.attributes()[1].1, CosemDataType::DoubleLong(0));
+    assert_eq!(demand_register.attributes()[2].1, CosemDataType::DoubleLong(0));
+    assert_eq!(demand_register.attributes()[4].1, CosemDataType::Null);
+    assert_eq!(demand_register.attributes()[5].1, CosemDataType::Null);
+    assert_eq!(demand_register.attributes()[6].1, CosemDataType::Null);
+}
+
+#[test]
+fn test_demand_register_next_period_method() {
+    let obis = ObisCode::new(1, 0, 1, 8, 2, 255);
+    let current_average_value = CosemDataType::DoubleLong(3000);
+    let last_average_value = CosemDataType::DoubleLong(2500);
+    let scaler_unit = CosemDataType::OctetString(vec![0x00, 0x1B]);
+    let status = CosemDataType::Null;
+    let capture_time = CosemDataType::Null;
+    let start_time_current = CosemDataType::Null;
+    let period = CosemDataType::DoubleLongUnsigned(3600);
+    let number_of_periods = CosemDataType::LongUnsigned(24);
+    
+    let mut demand_register = DemandRegister::new(
+        obis,
+        current_average_value,
+        last_average_value,
+        scaler_unit,
+        status,
+        capture_time,
+        start_time_current,
+        period,
+        number_of_periods,
+    );
+    
+    let result = demand_register.invoke_method(2, None).expect("Next period method failed");
+    assert_eq!(result, CosemDataType::Null);
+    assert_eq!(demand_register.attributes()[1].1, CosemDataType::DoubleLong(0));
+    assert_eq!(demand_register.attributes()[2].1, CosemDataType::DoubleLong(3000));
+    assert_eq!(demand_register.attributes()[4].1, CosemDataType::Unsigned(1));
+    if let CosemDataType::DateTime(dt) = &demand_register.attributes()[5].1 {
+        assert_eq!(dt, &vec![0x07, 0xE5, 0x05, 0x01, 0x02, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00]);
+    } else {
+        panic!("Expected DateTime for capture_time");
+    }
+    if let CosemDataType::DateTime(dt) = &demand_register.attributes()[6].1 {
+        assert_eq!(dt, &vec![0x07, 0xE5, 0x05, 0x01, 0x02, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00]);
+    } else {
+        panic!("Expected DateTime for start_time_current");
     }
 }
