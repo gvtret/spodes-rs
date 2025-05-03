@@ -4,6 +4,20 @@ use crate::types::{CosemDataType, BerError};
 use serde::{Deserialize, Serialize};
 use std::any::Any;
 
+/// Конфигурационная структура для создания объекта `DemandRegister`.
+#[derive(Clone, Serialize, Deserialize, Debug)]
+pub struct DemandRegisterConfig {
+    pub logical_name: ObisCode,
+    pub current_average_value: CosemDataType,
+    pub last_average_value: CosemDataType,
+    pub scaler_unit: CosemDataType,
+    pub status: CosemDataType,
+    pub capture_time: CosemDataType,
+    pub start_time_current: CosemDataType,
+    pub period: CosemDataType,
+    pub number_of_periods: CosemDataType,
+}
+
 /// Интерфейсный класс `DemandRegister` (class_id = 5) для управления измеряемыми
 /// величинами спроса, такими как максимальная мощность за период, с поддержкой
 /// периодов измерения и времени захвата, в соответствии с IEC 62056-6-2 в библиотеке `spodes-rs`.
@@ -21,42 +35,24 @@ pub struct DemandRegister {
 }
 
 impl DemandRegister {
-    /// Создает новый объект `DemandRegister`.
+    /// Создает новый объект `DemandRegister` из конфигурации.
     ///
     /// # Arguments
-    /// * `logical_name` - OBIS-код объекта.
-    /// * `current_average_value` - Текущее среднее значение спроса (например, CosemDataType::DoubleLong).
-    /// * `last_average_value` - Последнее среднее значение спроса (например, CosemDataType::DoubleLong).
-    /// * `scaler_unit` - Единица измерения и масштаб (CosemDataType::OctetString).
-    /// * `status` - Статус измерения (например, CosemDataType::Unsigned).
-    /// * `capture_time` - Время захвата текущего значения (CosemDataType::DateTime).
-    /// * `start_time_current` - Время начала текущего периода (CosemDataType::DateTime).
-    /// * `period` - Длительность периода измерения в секундах (CosemDataType::DoubleLongUnsigned).
-    /// * `number_of_periods` - Количество периодов измерения (CosemDataType::LongUnsigned).
+    /// * `config` - Конфигурация для создания объекта.
     ///
     /// # Returns
     /// Новая структура `DemandRegister`.
-    pub fn new(
-        logical_name: ObisCode,
-        current_average_value: CosemDataType,
-        last_average_value: CosemDataType,
-        scaler_unit: CosemDataType,
-        status: CosemDataType,
-        capture_time: CosemDataType,
-        start_time_current: CosemDataType,
-        period: CosemDataType,
-        number_of_periods: CosemDataType,
-    ) -> Self {
+    pub fn new(config: DemandRegisterConfig) -> Self {
         DemandRegister {
-            logical_name,
-            current_average_value,
-            last_average_value,
-            scaler_unit,
-            status,
-            capture_time,
-            start_time_current,
-            period,
-            number_of_periods,
+            logical_name: config.logical_name,
+            current_average_value: config.current_average_value,
+            last_average_value: config.last_average_value,
+            scaler_unit: config.scaler_unit,
+            status: config.status,
+            capture_time: config.capture_time,
+            start_time_current: config.start_time_current,
+            period: config.period,
+            number_of_periods: config.number_of_periods,
         }
     }
 

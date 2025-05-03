@@ -3,7 +3,7 @@ use spodes_rs::classes::profile_generic::{ProfileGeneric, ProfileGenericConfig};
 use spodes_rs::classes::register::Register;
 use spodes_rs::classes::clock::{Clock, ClockConfig};
 use spodes_rs::classes::extended_register::ExtendedRegister;
-use spodes_rs::classes::demand_register::DemandRegister;
+use spodes_rs::classes::demand_register::{DemandRegister, DemandRegisterConfig};
 use spodes_rs::interface::InterfaceClass;
 use spodes_rs::obis::ObisCode;
 use spodes_rs::serialization::{deserialize_object, serialize_object};
@@ -403,30 +403,32 @@ fn test_demand_register_serialization_deserialization() {
     let period = CosemDataType::DoubleLongUnsigned(3600); // 1 час
     let number_of_periods = CosemDataType::LongUnsigned(24); // 24 периода в сутки
 
-    let demand_register = DemandRegister::new(
-        obis.clone(),
-        current_average_value.clone(),
-        last_average_value.clone(),
-        scaler_unit.clone(),
-        status.clone(),
-        capture_time.clone(),
-        start_time_current.clone(),
-        period.clone(),
-        number_of_periods.clone(),
-    );
+    let config = DemandRegisterConfig {
+        logical_name: obis.clone(),
+        current_average_value: current_average_value.clone(),
+        last_average_value: last_average_value.clone(),
+        scaler_unit: scaler_unit.clone(),
+        status: status.clone(),
+        capture_time: capture_time.clone(),
+        start_time_current: start_time_current.clone(),
+        period: period.clone(),
+        number_of_periods: number_of_periods.clone(),
+    };
+    let demand_register = DemandRegister::new(config);
     
     let serialized = serialize_object(&demand_register).expect("Serialization failed");
-    let mut deserialized = DemandRegister::new(
-        obis.clone(),
-        CosemDataType::Null,
-        CosemDataType::Null,
-        CosemDataType::Null,
-        CosemDataType::Null,
-        CosemDataType::Null,
-        CosemDataType::Null,
-        CosemDataType::Null,
-        CosemDataType::Null,
-    );
+    let config = DemandRegisterConfig {
+        logical_name: obis.clone(),
+        current_average_value: CosemDataType::Null,
+        last_average_value: CosemDataType::Null,
+        scaler_unit: CosemDataType::Null,
+        status: CosemDataType::Null,
+        capture_time: CosemDataType::Null,
+        start_time_current: CosemDataType::Null,
+        period: CosemDataType::Null,
+        number_of_periods: CosemDataType::Null,
+    };
+    let mut deserialized = DemandRegister::new(config);
     deserialize_object(&mut deserialized, &serialized).expect("Deserialization failed");
     
     assert_eq!(deserialized.logical_name(), demand_register.logical_name());
@@ -464,8 +466,8 @@ fn test_demand_register_reset_method() {
     let period = CosemDataType::DoubleLongUnsigned(3600);
     let number_of_periods = CosemDataType::LongUnsigned(24);
     
-    let mut demand_register = DemandRegister::new(
-        obis,
+    let config = DemandRegisterConfig {
+        logical_name: obis,
         current_average_value,
         last_average_value,
         scaler_unit,
@@ -474,7 +476,8 @@ fn test_demand_register_reset_method() {
         start_time_current,
         period,
         number_of_periods,
-    );
+    };
+    let mut demand_register = DemandRegister::new(config);
     
     let result = demand_register.invoke_method(1, None).expect("Reset method failed");
     assert_eq!(result, CosemDataType::Null);
@@ -497,8 +500,8 @@ fn test_demand_register_next_period_method() {
     let period = CosemDataType::DoubleLongUnsigned(3600);
     let number_of_periods = CosemDataType::LongUnsigned(24);
     
-    let mut demand_register = DemandRegister::new(
-        obis,
+    let config = DemandRegisterConfig {
+        logical_name: obis,
         current_average_value,
         last_average_value,
         scaler_unit,
@@ -507,7 +510,8 @@ fn test_demand_register_next_period_method() {
         start_time_current,
         period,
         number_of_periods,
-    );
+    };
+    let mut demand_register = DemandRegister::new(config);
     
     let result = demand_register.invoke_method(2, None).expect("Next period method failed");
     assert_eq!(result, CosemDataType::Null);
