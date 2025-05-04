@@ -5,6 +5,8 @@ use spodes_rs::classes::clock::{Clock, ClockConfig};
 use spodes_rs::classes::extended_register::ExtendedRegister;
 use spodes_rs::classes::demand_register::{DemandRegister, DemandRegisterConfig};
 use spodes_rs::classes::register_activation::{RegisterActivation, RegisterActivationConfig};
+use spodes_rs::classes::script_table::{ScriptTable, ScriptTableConfig};
+use spodes_rs::classes::schedule::{Schedule, ScheduleConfig};
 use spodes_rs::interface::InterfaceClass;
 use spodes_rs::obis::ObisCode;
 use spodes_rs::serialization::{deserialize_object, serialize_object};
@@ -595,7 +597,7 @@ fn test_register_activation_add_mask() {
     
     let result = register_activation.invoke_method(1, Some(new_mask.clone())).expect("Add mask failed");
     assert_eq!(result, CosemDataType::Null);
-    if let CosemDataType::Array(masks) = &register_activation.attributes()[2].1 {
+    if let CosemDataType::Array(ref masks) = register_activation.attributes()[2].1 {
         assert_eq!(masks.len(), 1);
         assert_eq!(masks[0], new_mask);
     } else {
@@ -629,10 +631,148 @@ fn test_register_activation_delete_mask() {
     
     let result = register_activation.invoke_method(2, Some(mask_name)).expect("Delete mask failed");
     assert_eq!(result, CosemDataType::Null);
-    if let CosemDataType::Array(masks) = &register_activation.attributes()[2].1 {
+    if let CosemDataType::Array(ref masks) = register_activation.attributes()[2].1 {
         assert_eq!(masks.len(), 0);
     } else {
         panic!("Expected Array for mask_list");
     }
     assert_eq!(register_activation.attributes()[3].1, CosemDataType::Null);
+}
+
+#[test]
+fn test_script_table_serialization_deserialization() {
+    let obis = ObisCode::new(0, 0, 10, 100, 0, 255);
+    let scripts = vec![CosemDataType::Structure(vec![
+        CosemDataType::LongUnsigned(1), // script_identifier
+        CosemDataType::Structure(vec![
+            CosemDataType::LongUnsigned(3), // class_id: Register
+            CosemDataType::OctetString(vec![1, 0, 1, 8, 0, 255]), // logical_name
+            CosemDataType::Integer(1), // method_index: reset
+        ]), // action
+    ])];
+
+    let config = ScriptTableConfig {
+        logical_name: obis.clone(),
+        scripts: scripts.clone(),
+    };
+    let script_table = ScriptTable::new(config);
+    
+    let serialized = serialize_object(&script_table).expect("Serialization failed");
+    let config = ScriptTableConfig {
+        logical_name: obis.clone(),
+        scripts: vec![],
+    };
+    let mut deserialized = ScriptTable::new(config);
+    deserialize_object(&mut deserialized, &serialized).expect("Deserialization failed");
+    
+    assert_eq!(deserialized.logical_name(), script_table.logical_name());
+    assert_eq!(deserialized.attributes()[1].1, CosemDataType::Array(scripts));
+}
+
+#[test]
+fn test_script_table_execute() {
+    let obis = ObisCode::new(0, 0, 10, 100, 0, 255);
+    let scripts = vec![CosemDataType::Structure(vec![
+        CosemDataType::LongUnsigned(1), // script_identifier
+        CosemDataType::Structure(vec![
+            CosemDataType::LongUnsigned(3), // class_id: Register
+            CosemDataType::OctetString(vec![1, 0, 1, 8, 0, 255]), // logical_name
+            CosemDataType::Integer(1), // method_index: reset
+        ]), // action
+    ])];
+
+    let config = ScriptTableConfig {
+        logical_name: obis,
+        scripts,
+    };
+    let mut script_table = ScriptTable::new(config);
+    
+    let script_id = CosemDataType::LongUnsigned(1);
+    let result = script_table.invoke_method(1, Some(script_id)).expect("Execute script failed");
+    assert_eq!(result, CosemDataType::Null);
+
+    let invalid_script_id = CosemDataType::LongUnsigned(2);
+    let result = script_table.invoke_method(1, Some(invalid_script_id));
+    assert!(result.is_err());
+    if let Err(e) = result {
+        assert_eq!(e, "Script with ID 2 not found");
+    }
+}
+
+#[test]
+fn test_schedule_serialization_deserialization() {
+    let obis = ObisCode::new(0, 0, 10, 101, 0, 255);
+    let entries = vec![CosemDataType::Structure(vec![
+        CosemDataType::DateTime(vec![
+            0x07, 0xE5, 0x05, 0x01, // Год: 2025, Месяц: 5, День: 1
+            0x02, // День недели: вторник
+            0x10, 0x00, 0x00, // Час: 16, Минуты: 0, Секунды: 0
+            0x00, // Сотые доли секунды: 0
+            0x00, 0x00, 0x00, // Отклонение от UTC: 0
+        ]), // time
+        CosemDataType::Structure(vec![
+            CosemDataType::LongUnsigned(9), // class_id: ScriptTable
+            CosemDataType::OctetString(vec![0, 0, 10, 100, 0, 255]), // logical_name
+            CosemDataType::Integer(1), // method_index: execute
+            CosemDataType::LongUnsigned(1), // parameter: script_identifier
+        ]), // action
+    ])];
+
+    let config = ScheduleConfig {
+        logical_name: obis.clone(),
+        entries: entries.clone(),
+        enabled: true,
+    };
+    let schedule = Schedule::new(config);
+    
+    let serialized = serialize_object(&schedule).expect("Serialization failed");
+    println!("Serialized data: {:?}", serialized);
+    println!("Serialized data length: {}", serialized.len());
+    let config = ScheduleConfig {
+        logical_name: obis.clone(),
+        entries: vec![],
+        enabled: false,
+    };
+    let mut deserialized = Schedule::new(config);
+    deserialize_object(&mut deserialized, &serialized).expect("Deserialization failed");
+    
+    assert_eq!(deserialized.logical_name(), schedule.logical_name());
+    assert_eq!(deserialized.attributes()[1].1, CosemDataType::Array(entries));
+}
+
+#[test]
+fn test_schedule_enable_disable() {
+    let obis = ObisCode::new(0, 0, 10, 101, 0, 255);
+    let entries = vec![CosemDataType::Structure(vec![
+        CosemDataType::DateTime(vec![
+            0x07, 0xE5, 0x05, 0x01, // Год: 2025, Месяц: 5, День: 1
+            0x02, // День недели: вторник
+            0x10, 0x00, 0x00, // Час: 16, Минуты: 0, Секунды: 0
+            0x00, // Сотые доли секунды: 0
+            0x00, 0x00, 0x00, // Отклонение от UTC: 0
+        ]), // time
+        CosemDataType::Structure(vec![
+            CosemDataType::LongUnsigned(9), // class_id: ScriptTable
+            CosemDataType::OctetString(vec![0, 0, 10, 100, 0, 255]), // logical_name
+            CosemDataType::Integer(1), // method_index: execute
+            CosemDataType::LongUnsigned(1), // parameter: script_identifier
+        ]), // action
+    ])];
+
+    let config = ScheduleConfig {
+        logical_name: obis,
+        entries,
+        enabled: false,
+    };
+    let mut schedule = Schedule::new(config);
+    
+    // Проверяем включение
+    let result = schedule.invoke_method(1, None).expect("Enable schedule failed");
+    assert_eq!(result, CosemDataType::Null);
+    assert!(schedule.is_enabled());
+
+    // Проверяем выключение
+    let result = schedule.invoke_method(2, None).expect("Disable schedule failed");
+    assert_eq!(result, CosemDataType::Null);
+    assert!(!schedule.is_enabled());
 }

@@ -1,7 +1,9 @@
-pub mod clock;
 pub mod data;
-pub mod profile_generic;
 pub mod register;
+pub mod profile_generic;
+pub mod clock;
 pub mod extended_register;
 pub mod demand_register;
 pub mod register_activation;
+pub mod script_table;
+pub mod schedule;
