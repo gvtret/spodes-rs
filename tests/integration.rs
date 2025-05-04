@@ -4,6 +4,7 @@ use spodes_rs::classes::register::Register;
 use spodes_rs::classes::clock::{Clock, ClockConfig};
 use spodes_rs::classes::extended_register::ExtendedRegister;
 use spodes_rs::classes::demand_register::{DemandRegister, DemandRegisterConfig};
+use spodes_rs::classes::register_activation::{RegisterActivation, RegisterActivationConfig};
 use spodes_rs::interface::InterfaceClass;
 use spodes_rs::obis::ObisCode;
 use spodes_rs::serialization::{deserialize_object, serialize_object};
@@ -528,4 +529,110 @@ fn test_demand_register_next_period_method() {
     } else {
         panic!("Expected DateTime for start_time_current");
     }
+}
+
+#[test]
+fn test_register_activation_serialization_deserialization() {
+    let obis = ObisCode::new(0, 0, 10, 106, 0, 255);
+    let register_assignment = vec![CosemDataType::Structure(vec![
+        CosemDataType::LongUnsigned(3), // class_id: Register
+        CosemDataType::OctetString(vec![1, 0, 1, 8, 0, 255]), // logical_name
+        CosemDataType::Integer(2), // attribute_index
+    ])];
+    let mask_list = vec![CosemDataType::Structure(vec![
+        CosemDataType::OctetString(vec![0x54, 0x41, 0x52, 0x49, 0x46, 0x46, 0x31]), // mask_name: "TARIFF1"
+        CosemDataType::Array(vec![CosemDataType::Unsigned(1)]), // register_indices
+    ])];
+    let active_mask = CosemDataType::OctetString(vec![0x54, 0x41, 0x52, 0x49, 0x46, 0x46, 0x31]); // "TARIFF1"
+
+    let config = RegisterActivationConfig {
+        logical_name: obis.clone(),
+        register_assignment: register_assignment.clone(),
+        mask_list: mask_list.clone(),
+        active_mask: active_mask.clone(),
+    };
+    let register_activation = RegisterActivation::new(config);
+    
+    let serialized = serialize_object(&register_activation).expect("Serialization failed");
+    let config = RegisterActivationConfig {
+        logical_name: obis.clone(),
+        register_assignment: vec![],
+        mask_list: vec![],
+        active_mask: CosemDataType::Null,
+    };
+    let mut deserialized = RegisterActivation::new(config);
+    deserialize_object(&mut deserialized, &serialized).expect("Deserialization failed");
+    
+    assert_eq!(deserialized.logical_name(), register_activation.logical_name());
+    assert_eq!(deserialized.attributes()[1].1, CosemDataType::Array(register_assignment));
+    assert_eq!(deserialized.attributes()[2].1, CosemDataType::Array(mask_list));
+    assert_eq!(deserialized.attributes()[3].1, active_mask);
+}
+
+#[test]
+fn test_register_activation_add_mask() {
+    let obis = ObisCode::new(0, 0, 10, 106, 0, 255);
+    let register_assignment = vec![CosemDataType::Structure(vec![
+        CosemDataType::LongUnsigned(3), // class_id: Register
+        CosemDataType::OctetString(vec![1, 0, 1, 8, 0, 255]), // logical_name
+        CosemDataType::Integer(2), // attribute_index
+    ])];
+    let mask_list = vec![];
+    let active_mask = CosemDataType::Null;
+
+    let config = RegisterActivationConfig {
+        logical_name: obis,
+        register_assignment,
+        mask_list,
+        active_mask,
+    };
+    let mut register_activation = RegisterActivation::new(config);
+    
+    let new_mask = CosemDataType::Structure(vec![
+        CosemDataType::OctetString(vec![0x54, 0x41, 0x52, 0x49, 0x46, 0x46, 0x31]), // mask_name: "TARIFF1"
+        CosemDataType::Array(vec![CosemDataType::Unsigned(1)]), // register_indices
+    ]);
+    
+    let result = register_activation.invoke_method(1, Some(new_mask.clone())).expect("Add mask failed");
+    assert_eq!(result, CosemDataType::Null);
+    if let CosemDataType::Array(masks) = &register_activation.attributes()[2].1 {
+        assert_eq!(masks.len(), 1);
+        assert_eq!(masks[0], new_mask);
+    } else {
+        panic!("Expected Array for mask_list");
+    }
+}
+
+#[test]
+fn test_register_activation_delete_mask() {
+    let obis = ObisCode::new(0, 0, 10, 106, 0, 255);
+    let register_assignment = vec![CosemDataType::Structure(vec![
+        CosemDataType::LongUnsigned(3), // class_id: Register
+        CosemDataType::OctetString(vec![1, 0, 1, 8, 0, 255]), // logical_name
+        CosemDataType::Integer(2), // attribute_index
+    ])];
+    let mask_list = vec![CosemDataType::Structure(vec![
+        CosemDataType::OctetString(vec![0x54, 0x41, 0x52, 0x49, 0x46, 0x46, 0x31]), // mask_name: "TARIFF1"
+        CosemDataType::Array(vec![CosemDataType::Unsigned(1)]), // register_indices
+    ])];
+    let active_mask = CosemDataType::OctetString(vec![0x54, 0x41, 0x52, 0x49, 0x46, 0x46, 0x31]); // "TARIFF1"
+
+    let config = RegisterActivationConfig {
+        logical_name: obis,
+        register_assignment,
+        mask_list,
+        active_mask,
+    };
+    let mut register_activation = RegisterActivation::new(config);
+    
+    let mask_name = CosemDataType::OctetString(vec![0x54, 0x41, 0x52, 0x49, 0x46, 0x46, 0x31]); // "TARIFF1"
+    
+    let result = register_activation.invoke_method(2, Some(mask_name)).expect("Delete mask failed");
+    assert_eq!(result, CosemDataType::Null);
+    if let CosemDataType::Array(masks) = &register_activation.attributes()[2].1 {
+        assert_eq!(masks.len(), 0);
+    } else {
+        panic!("Expected Array for mask_list");
+    }
+    assert_eq!(register_activation.attributes()[3].1, CosemDataType::Null);
 }
