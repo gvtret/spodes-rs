@@ -1,11 +1,57 @@
 [package]
 name = "spodes-rs"
 version = "0.1.0"
+authors = ["Georgiy T. <tretelnitsky.george@yandex.ru>"]
 edition = "2021"
+description = "A Rust library implementing DLMS/COSEM interface classes according to IEC 62056-6-2."
+license = "MIT OR Apache-2.0"
 
 [dependencies]
 serde = { version = "1.0", features = ["derive"] }
-serde_derive = "1.0"
+sha1 = "0.10"
+hmac = "0.12"
+aes-gcm = "0.10"
+rand = "0.9.1"
+
 
 [dev-dependencies]
-serde_json = "1.0"
+
+[[example]]
+name = "clock_usage"
+path = "examples/clock_usage.rs"
+
+[[example]]
+name = "data_usage"
+path = "examples/data_usage.rs"
+
+[[example]]
+name = "register_usage"
+path = "examples/register_usage.rs"
+
+[[example]]
+name = "profile_generic_usage"
+path = "examples/profile_generic_usage.rs"
+
+[[example]]
+name = "extended_register_usage"
+path = "examples/extended_register_usage.rs"
+
+[[example]]
+name = "demand_register_usage"
+path = "examples/demand_register_usage.rs"
+
+[[example]]
+name = "register_activation_usage"
+path = "examples/register_activation_usage.rs"
+
+[[example]]
+name = "schedule_usage"
+path = "examples/schedule_usage.rs"
+
+[[example]]
+name = "script_table_usage"
+path = "examples/script_table_usage.rs"
+
+[[example]]
+name = "special_days_table_usage"
+path = "examples/special_days_table_usage.rs"
