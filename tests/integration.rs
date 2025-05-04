@@ -7,6 +7,7 @@ use spodes_rs::classes::demand_register::{DemandRegister, DemandRegisterConfig};
 use spodes_rs::classes::register_activation::{RegisterActivation, RegisterActivationConfig};
 use spodes_rs::classes::script_table::{ScriptTable, ScriptTableConfig};
 use spodes_rs::classes::schedule::{Schedule, ScheduleConfig};
+use spodes_rs::classes::special_days_table::{SpecialDaysTable, SpecialDaysTableConfig};
 use spodes_rs::interface::InterfaceClass;
 use spodes_rs::obis::ObisCode;
 use spodes_rs::serialization::{deserialize_object, serialize_object};
@@ -31,7 +32,7 @@ fn test_data_serialization_deserialization() {
 fn test_register_serialization_deserialization() {
     let obis = ObisCode::new(1, 0, 1, 8, 0, 255);
     let value = CosemDataType::DoubleLong(1000);
-    let scaler_unit = CosemDataType::OctetString(vec![0x00, 0x1B]); // Пример scaler_unit
+    let scaler_unit = CosemDataType::OctetString(vec![0x00, 0x1B]);
     let register = Register::new(obis.clone(), value.clone(), scaler_unit.clone());
     
     let serialized = serialize_object(&register).expect("Serialization failed");
@@ -306,8 +307,8 @@ fn test_clock_adjust_to_preset_time() {
 fn test_extended_register_serialization_deserialization() {
     let obis = ObisCode::new(1, 0, 1, 8, 1, 255);
     let value = CosemDataType::DoubleLong(2000);
-    let scaler_unit = CosemDataType::OctetString(vec![0x00, 0x1B]); // Пример scaler_unit
-    let status = CosemDataType::Unsigned(1); // Статус: действительное измерение
+    let scaler_unit = CosemDataType::OctetString(vec![0x00, 0x1B]);
+    let status = CosemDataType::Unsigned(1);
     let capture_time = CosemDataType::DateTime(vec![
         0x07, 0xE5, 0x05, 0x01, // Год: 2025, Месяц: 5, День: 1
         0x02, // День недели: вторник
@@ -387,8 +388,8 @@ fn test_demand_register_serialization_deserialization() {
     let obis = ObisCode::new(1, 0, 1, 8, 2, 255);
     let current_average_value = CosemDataType::DoubleLong(3000);
     let last_average_value = CosemDataType::DoubleLong(2500);
-    let scaler_unit = CosemDataType::OctetString(vec![0x00, 0x1B]); // Пример scaler_unit
-    let status = CosemDataType::Unsigned(1); // Статус: действительное измерение
+    let scaler_unit = CosemDataType::OctetString(vec![0x00, 0x1B]);
+    let status = CosemDataType::Unsigned(1);
     let capture_time = CosemDataType::DateTime(vec![
         0x07, 0xE5, 0x05, 0x01, // Год: 2025, Месяц: 5, День: 1
         0x02, // День недели: вторник
@@ -403,8 +404,8 @@ fn test_demand_register_serialization_deserialization() {
         0x00, // Сотые доли секунды: 0
         0x00, 0x00, 0x00, // Отклонение от UTC: 0
     ]);
-    let period = CosemDataType::DoubleLongUnsigned(3600); // 1 час
-    let number_of_periods = CosemDataType::LongUnsigned(24); // 24 периода в сутки
+    let period = CosemDataType::DoubleLongUnsigned(3600);
+    let number_of_periods = CosemDataType::LongUnsigned(24);
 
     let config = DemandRegisterConfig {
         logical_name: obis.clone(),
@@ -726,8 +727,6 @@ fn test_schedule_serialization_deserialization() {
     let schedule = Schedule::new(config);
     
     let serialized = serialize_object(&schedule).expect("Serialization failed");
-    println!("Serialized data: {:?}", serialized);
-    println!("Serialized data length: {}", serialized.len());
     let config = ScheduleConfig {
         logical_name: obis.clone(),
         entries: vec![],
@@ -766,13 +765,106 @@ fn test_schedule_enable_disable() {
     };
     let mut schedule = Schedule::new(config);
     
-    // Проверяем включение
     let result = schedule.invoke_method(1, None).expect("Enable schedule failed");
     assert_eq!(result, CosemDataType::Null);
     assert!(schedule.is_enabled());
 
-    // Проверяем выключение
     let result = schedule.invoke_method(2, None).expect("Disable schedule failed");
     assert_eq!(result, CosemDataType::Null);
     assert!(!schedule.is_enabled());
+}
+
+#[test]
+fn test_special_days_table_serialization_deserialization() {
+    let obis = ObisCode::new(0, 0, 11, 102, 0, 255);
+    let entries = vec![
+        CosemDataType::DateTime(vec![
+            0x07, 0xE5, 0x01, 0x01, 0x02, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+        ]),
+        CosemDataType::DateTime(vec![
+            0x07, 0xE5, 0x12, 0x25, 0x04, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+        ]),
+    ];
+
+    let config = SpecialDaysTableConfig {
+        logical_name: obis.clone(),
+        entries: entries.clone(),
+    };
+    let special_days_table = SpecialDaysTable::new(config);
+    
+    let serialized = serialize_object(&special_days_table).expect("Serialization failed");
+    let config = SpecialDaysTableConfig {
+        logical_name: obis.clone(),
+        entries: vec![],
+    };
+    let mut deserialized = SpecialDaysTable::new(config);
+    deserialize_object(&mut deserialized, &serialized).expect("Deserialization failed");
+    
+    assert_eq!(deserialized.logical_name(), special_days_table.logical_name());
+    assert_eq!(deserialized.attributes()[1].1, CosemDataType::Array(entries));
+}
+
+#[test]
+fn test_special_days_table_insert_method() {
+    let obis = ObisCode::new(0, 0, 11, 102, 0, 255);
+    let config = SpecialDaysTableConfig {
+        logical_name: obis.clone(),
+        entries: vec![],
+    };
+    let mut special_days_table = SpecialDaysTable::new(config);
+
+    let new_date = CosemDataType::DateTime(vec![
+        0x07, 0xE5, 0x01, 0x01, 0x02, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+    ]);
+
+    let result = special_days_table.invoke_method(1, Some(new_date.clone())).expect("Insert method failed");
+    assert_eq!(result, CosemDataType::Null);
+    if let CosemDataType::Array(entries) = &special_days_table.attributes()[1].1 {
+        assert_eq!(entries.len(), 1);
+        assert_eq!(entries[0], new_date);
+    } else {
+        panic!("Expected Array for entries");
+    }
+
+    let result = special_days_table.invoke_method(1, Some(CosemDataType::Integer(42)));
+    assert!(result.is_err());
+    assert_eq!(result.unwrap_err(), "Expected DateTime for insert");
+
+    let invalid_date = CosemDataType::DateTime(vec![0x07, 0xE5, 0x01, 0x01]);
+    let result = special_days_table.invoke_method(1, Some(invalid_date));
+    assert!(result.is_err());
+    assert_eq!(result.unwrap_err(), "Invalid DateTime length");
+}
+
+#[test]
+fn test_special_days_table_delete_method() {
+    let obis = ObisCode::new(0, 0, 11, 102, 0, 255);
+    let date = CosemDataType::DateTime(vec![
+        0x07, 0xE5, 0x01, 0x01, 0x02, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+    ]);
+    let config = SpecialDaysTableConfig {
+        logical_name: obis.clone(),
+        entries: vec![date.clone()],
+    };
+    let mut special_days_table = SpecialDaysTable::new(config);
+
+    let result = special_days_table.invoke_method(2, Some(date.clone())).expect("Delete method failed");
+    assert_eq!(result, CosemDataType::Null);
+    if let CosemDataType::Array(entries) = &special_days_table.attributes()[1].1 {
+        assert_eq!(entries.len(), 0);
+    } else {
+        panic!("Expected Array for entries");
+    }
+
+    let result = special_days_table.invoke_method(2, Some(date)).expect("Delete non-existent date failed");
+    assert_eq!(result, CosemDataType::Null);
+
+    let result = special_days_table.invoke_method(2, Some(CosemDataType::Integer(42)));
+    assert!(result.is_err());
+    assert_eq!(result.unwrap_err(), "Expected DateTime for delete");
+
+    let invalid_date = CosemDataType::DateTime(vec![0x07, 0xE5, 0x01, 0x01]);
+    let result = special_days_table.invoke_method(2, Some(invalid_date));
+    assert!(result.is_err());
+    assert_eq!(result.unwrap_err(), "Invalid DateTime length");
 }
