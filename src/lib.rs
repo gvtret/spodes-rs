@@ -20,3 +20,7 @@ pub mod serialization;
 /// Transport layer: physical-medium abstraction and the HDLC and wrapper
 /// data-link sub-layers that carry xDLMS APDUs (IEC 62056-46 / IEC 62056-47).
 pub mod transport;
+
+/// Application-layer xDLMS services (GET/SET/ACTION) and association
+/// establishment (AARQ/AARE), per IEC 62056-5-3, using LN referencing.
+pub mod service;
