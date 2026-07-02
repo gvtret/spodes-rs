@@ -18,6 +18,8 @@
 use std::collections::VecDeque;
 use std::io;
 
+pub mod wrapper;
+
 /// A bidirectional byte channel abstracting the physical medium.
 ///
 /// Framing sub-layers (HDLC, wrapper) are built on top of this trait, so they
