@@ -16,3 +16,7 @@ pub mod classes;
 
 /// Модуль для сериализации и десериализации объектов в формате BER.
 pub mod serialization;
+
+/// Transport layer: physical-medium abstraction and the HDLC and wrapper
+/// data-link sub-layers that carry xDLMS APDUs (IEC 62056-46 / IEC 62056-47).
+pub mod transport;
