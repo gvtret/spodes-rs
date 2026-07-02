@@ -19,3 +19,4 @@ pub mod register_monitor;
 pub mod single_action_schedule;
 pub mod image_transfer;
 pub mod arbitrator;
+pub mod iec_hdlc_setup;
