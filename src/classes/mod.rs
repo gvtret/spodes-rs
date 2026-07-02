@@ -24,3 +24,4 @@ pub mod iec_local_port_setup;
 pub mod mac_address_setup;
 pub mod ipv4_setup;
 pub mod ipv6_setup;
+pub mod sap_assignment;
