@@ -18,6 +18,7 @@
 use std::collections::VecDeque;
 use std::io;
 
+pub mod hdlc;
 pub mod wrapper;
 
 /// A bidirectional byte channel abstracting the physical medium.
