@@ -14,14 +14,19 @@
 use crate::types::CosemDataType;
 
 use super::get::GetDataResult;
-use super::{tag, MethodDescriptor, ServiceError};
+use super::{tag, DataBlockSa, MethodDescriptor, ServiceError};
 
 mod request_type {
     pub const NORMAL: u8 = 1;
+    pub const NEXT_PBLOCK: u8 = 2;
+    pub const WITH_FIRST_PBLOCK: u8 = 4;
+    pub const WITH_PBLOCK: u8 = 6;
 }
 
 mod response_type {
     pub const NORMAL: u8 = 1;
+    pub const WITH_PBLOCK: u8 = 2;
+    pub const NEXT_PBLOCK: u8 = 4;
 }
 
 /// An ACTION-Request APDU.
@@ -33,6 +38,23 @@ pub enum ActionRequest {
         method: MethodDescriptor,
         /// Method invocation parameters, if any.
         parameters: Option<CosemDataType>,
+    },
+    /// ACTION-REQUEST-NEXT-PBLOCK: acknowledge a response block and ask for the next.
+    NextPblock {
+        invoke_id_and_priority: u8,
+        block_number: u32,
+    },
+    /// ACTION-REQUEST-WITH-FIRST-PBLOCK: method reference and the first block of
+    /// the invocation parameters.
+    WithFirstPblock {
+        invoke_id_and_priority: u8,
+        method: MethodDescriptor,
+        datablock: DataBlockSa,
+    },
+    /// ACTION-REQUEST-WITH-PBLOCK: a subsequent block of the invocation parameters.
+    WithPblock {
+        invoke_id_and_priority: u8,
+        datablock: DataBlockSa,
     },
 }
 
@@ -52,6 +74,22 @@ impl ActionRequest {
                         data.serialize_ber(&mut buf)?;
                     }
                 }
+            }
+            ActionRequest::NextPblock { invoke_id_and_priority, block_number } => {
+                buf.push(request_type::NEXT_PBLOCK);
+                buf.push(*invoke_id_and_priority);
+                buf.extend_from_slice(&block_number.to_be_bytes());
+            }
+            ActionRequest::WithFirstPblock { invoke_id_and_priority, method, datablock } => {
+                buf.push(request_type::WITH_FIRST_PBLOCK);
+                buf.push(*invoke_id_and_priority);
+                method.encode(&mut buf);
+                datablock.encode(&mut buf);
+            }
+            ActionRequest::WithPblock { invoke_id_and_priority, datablock } => {
+                buf.push(request_type::WITH_PBLOCK);
+                buf.push(*invoke_id_and_priority);
+                datablock.encode(&mut buf);
             }
         }
         Ok(buf)
@@ -78,6 +116,22 @@ impl ActionRequest {
                 };
                 Ok(ActionRequest::Normal { invoke_id_and_priority, method, parameters })
             }
+            request_type::NEXT_PBLOCK => {
+                let b = bytes.get(3..7).ok_or(ServiceError::Truncated)?;
+                Ok(ActionRequest::NextPblock {
+                    invoke_id_and_priority,
+                    block_number: u32::from_be_bytes([b[0], b[1], b[2], b[3]]),
+                })
+            }
+            request_type::WITH_FIRST_PBLOCK => {
+                let (method, n) = MethodDescriptor::decode(&bytes[3..])?;
+                let (datablock, _) = DataBlockSa::decode(&bytes[3 + n..])?;
+                Ok(ActionRequest::WithFirstPblock { invoke_id_and_priority, method, datablock })
+            }
+            request_type::WITH_PBLOCK => {
+                let (datablock, _) = DataBlockSa::decode(&bytes[3..])?;
+                Ok(ActionRequest::WithPblock { invoke_id_and_priority, datablock })
+            }
             other => Err(ServiceError::UnexpectedType(other)),
         }
     }
@@ -91,6 +145,16 @@ pub enum ActionResponse {
         invoke_id_and_priority: u8,
         result: u8,
         return_parameters: Option<GetDataResult>,
+    },
+    /// ACTION-RESPONSE-WITH-PBLOCK: one block of the return parameters.
+    WithPblock {
+        invoke_id_and_priority: u8,
+        datablock: DataBlockSa,
+    },
+    /// ACTION-RESPONSE-NEXT-PBLOCK: acknowledge a request block and ask for the next.
+    NextPblock {
+        invoke_id_and_priority: u8,
+        block_number: u32,
     },
 }
 
@@ -116,6 +180,16 @@ impl ActionResponse {
                         buf.push(*code);
                     }
                 }
+            }
+            ActionResponse::WithPblock { invoke_id_and_priority, datablock } => {
+                buf.push(response_type::WITH_PBLOCK);
+                buf.push(*invoke_id_and_priority);
+                datablock.encode(&mut buf);
+            }
+            ActionResponse::NextPblock { invoke_id_and_priority, block_number } => {
+                buf.push(response_type::NEXT_PBLOCK);
+                buf.push(*invoke_id_and_priority);
+                buf.extend_from_slice(&block_number.to_be_bytes());
             }
         }
         Ok(buf)
@@ -148,6 +222,17 @@ impl ActionResponse {
                     None => return Err(ServiceError::Truncated),
                 };
                 Ok(ActionResponse::Normal { invoke_id_and_priority, result, return_parameters })
+            }
+            response_type::WITH_PBLOCK => {
+                let (datablock, _) = DataBlockSa::decode(&bytes[3..])?;
+                Ok(ActionResponse::WithPblock { invoke_id_and_priority, datablock })
+            }
+            response_type::NEXT_PBLOCK => {
+                let b = bytes.get(3..7).ok_or(ServiceError::Truncated)?;
+                Ok(ActionResponse::NextPblock {
+                    invoke_id_and_priority,
+                    block_number: u32::from_be_bytes([b[0], b[1], b[2], b[3]]),
+                })
             }
             other => Err(ServiceError::UnexpectedType(other)),
         }
@@ -215,5 +300,38 @@ mod tests {
         // C7 01 C1 00 01 00 <11 07>.
         assert_eq!(bytes, vec![0xC7, 0x01, 0xC1, 0x00, 0x01, 0x00, 0x11, 0x07]);
         assert_eq!(ActionResponse::decode(&bytes).unwrap(), resp);
+    }
+
+    #[test]
+    fn action_request_block_variants_round_trip() {
+        let next = ActionRequest::NextPblock { invoke_id_and_priority: 0xC1, block_number: 2 };
+        assert_eq!(next.encode().unwrap(), vec![0xC3, 0x02, 0xC1, 0x00, 0x00, 0x00, 0x02]);
+        assert_eq!(ActionRequest::decode(&next.encode().unwrap()).unwrap(), next);
+
+        let first = ActionRequest::WithFirstPblock {
+            invoke_id_and_priority: 0xC1,
+            method: method(),
+            datablock: DataBlockSa { last_block: false, block_number: 1, raw_data: vec![0xAA, 0xBB] },
+        };
+        assert_eq!(ActionRequest::decode(&first.encode().unwrap()).unwrap(), first);
+
+        let more = ActionRequest::WithPblock {
+            invoke_id_and_priority: 0xC1,
+            datablock: DataBlockSa { last_block: true, block_number: 2, raw_data: vec![0xCC] },
+        };
+        assert_eq!(ActionRequest::decode(&more.encode().unwrap()).unwrap(), more);
+    }
+
+    #[test]
+    fn action_response_block_variants_round_trip() {
+        let block = ActionResponse::WithPblock {
+            invoke_id_and_priority: 0xC1,
+            datablock: DataBlockSa { last_block: false, block_number: 1, raw_data: vec![0x01, 0x02, 0x03] },
+        };
+        assert_eq!(ActionResponse::decode(&block.encode().unwrap()).unwrap(), block);
+
+        let next = ActionResponse::NextPblock { invoke_id_and_priority: 0xC1, block_number: 1 };
+        assert_eq!(next.encode().unwrap(), vec![0xC7, 0x04, 0xC1, 0x00, 0x00, 0x00, 0x01]);
+        assert_eq!(ActionResponse::decode(&next.encode().unwrap()).unwrap(), next);
     }
 }

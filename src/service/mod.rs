@@ -145,6 +145,63 @@ impl MethodDescriptor {
     }
 }
 
+/// `DataBlock-SA`: one block of a SET/ACTION block transfer. Encoded as
+/// `last-block (boolean) ‖ block-number (u32) ‖ raw-data (A-XDR octet-string)`.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct DataBlockSa {
+    pub last_block: bool,
+    pub block_number: u32,
+    pub raw_data: Vec<u8>,
+}
+
+impl DataBlockSa {
+    pub fn encode(&self, buf: &mut Vec<u8>) {
+        buf.push(self.last_block as u8);
+        buf.extend_from_slice(&self.block_number.to_be_bytes());
+        push_length(self.raw_data.len(), buf);
+        buf.extend_from_slice(&self.raw_data);
+    }
+
+    pub fn decode(bytes: &[u8]) -> Result<(DataBlockSa, usize), ServiceError> {
+        let last_block = *bytes.first().ok_or(ServiceError::Truncated)? != 0;
+        let b = bytes.get(1..5).ok_or(ServiceError::Truncated)?;
+        let block_number = u32::from_be_bytes([b[0], b[1], b[2], b[3]]);
+        let (len, header) = read_length(&bytes[5..])?;
+        let start = 5 + header;
+        let raw_data = bytes.get(start..start + len).ok_or(ServiceError::Truncated)?.to_vec();
+        Ok((DataBlockSa { last_block, block_number, raw_data }, start + len))
+    }
+}
+
+/// Writes an A-XDR length octet (short or long form).
+pub(crate) fn push_length(length: usize, buf: &mut Vec<u8>) {
+    if length < 128 {
+        buf.push(length as u8);
+    } else {
+        let bytes = (length as u64).to_be_bytes();
+        let first = bytes.iter().position(|&b| b != 0).unwrap_or(7);
+        let n = 8 - first;
+        buf.push(0x80 | n as u8);
+        buf.extend_from_slice(&bytes[first..]);
+    }
+}
+
+/// Reads an A-XDR length octet, returning the length and octets consumed.
+pub(crate) fn read_length(bytes: &[u8]) -> Result<(usize, usize), ServiceError> {
+    let first = *bytes.first().ok_or(ServiceError::Truncated)?;
+    if first < 128 {
+        Ok((first as usize, 1))
+    } else {
+        let n = (first & 0x7F) as usize;
+        let slice = bytes.get(1..1 + n).ok_or(ServiceError::Truncated)?;
+        let mut len = 0usize;
+        for &b in slice {
+            len = (len << 8) | b as usize;
+        }
+        Ok((len, 1 + n))
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -176,5 +233,17 @@ mod tests {
         let (decoded, n) = MethodDescriptor::decode(&buf).unwrap();
         assert_eq!(n, 9);
         assert_eq!(decoded, d);
+    }
+
+    #[test]
+    fn data_block_sa_round_trips() {
+        let block = DataBlockSa { last_block: true, block_number: 3, raw_data: vec![0x0A; 17] };
+        let mut buf = Vec::new();
+        block.encode(&mut buf);
+        // 01 00000003 11 <17 octets> — as in IEC 62056-5-3 Annex F.8.
+        assert_eq!(buf[..6], [0x01, 0x00, 0x00, 0x00, 0x03, 0x11]);
+        let (decoded, n) = DataBlockSa::decode(&buf).unwrap();
+        assert_eq!(n, buf.len());
+        assert_eq!(decoded, block);
     }
 }
