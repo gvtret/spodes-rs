@@ -10,6 +10,7 @@ use crate::obis::ObisCode;
 use crate::types::BerError;
 
 pub mod get;
+pub mod set;
 
 /// APDU tags of the xDLMS services (LN referencing), IEC 62056-5-3 Table 60.
 pub mod tag {

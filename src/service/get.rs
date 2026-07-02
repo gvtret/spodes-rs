@@ -34,7 +34,8 @@ pub struct AccessSelection {
 }
 
 impl AccessSelection {
-    fn encode(this: &Option<AccessSelection>, buf: &mut Vec<u8>) -> Result<(), ServiceError> {
+    /// Encodes an optional selective-access descriptor (0x00 = absent).
+    pub fn encode_into(this: &Option<AccessSelection>, buf: &mut Vec<u8>) -> Result<(), ServiceError> {
         match this {
             None => buf.push(0x00),
             Some(sel) => {
@@ -46,7 +47,9 @@ impl AccessSelection {
         Ok(())
     }
 
-    fn decode(bytes: &[u8]) -> Result<(Option<AccessSelection>, usize), ServiceError> {
+    /// Decodes an optional selective-access descriptor, returning it and the
+    /// number of octets consumed.
+    pub fn decode_from(bytes: &[u8]) -> Result<(Option<AccessSelection>, usize), ServiceError> {
         match bytes.first() {
             Some(0x00) => Ok((None, 1)),
             Some(0x01) => {
@@ -86,7 +89,7 @@ impl GetRequest {
                 buf.push(request_type::NORMAL);
                 buf.push(*invoke_id_and_priority);
                 attribute.encode(&mut buf);
-                AccessSelection::encode(access_selection, &mut buf)?;
+                AccessSelection::encode_into(access_selection, &mut buf)?;
             }
             GetRequest::Next { invoke_id_and_priority, block_number } => {
                 buf.push(request_type::NEXT);
@@ -109,7 +112,7 @@ impl GetRequest {
         match bytes[1] {
             request_type::NORMAL => {
                 let (attribute, n) = AttributeDescriptor::decode(&bytes[3..])?;
-                let (access_selection, _) = AccessSelection::decode(&bytes[3 + n..])?;
+                let (access_selection, _) = AccessSelection::decode_from(&bytes[3 + n..])?;
                 Ok(GetRequest::Normal { invoke_id_and_priority, attribute, access_selection })
             }
             request_type::NEXT => {
