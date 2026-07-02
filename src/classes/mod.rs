@@ -16,3 +16,4 @@ pub mod push_setup;
 pub mod tcp_udp_setup;
 pub mod activity_calendar;
 pub mod register_monitor;
+pub mod single_action_schedule;
