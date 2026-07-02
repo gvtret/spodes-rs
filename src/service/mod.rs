@@ -11,6 +11,7 @@ use crate::types::BerError;
 
 pub mod acse;
 pub mod action;
+pub mod ciphering;
 pub mod get;
 pub mod set;
 
