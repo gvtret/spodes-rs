@@ -28,3 +28,4 @@ pub mod sap_assignment;
 pub mod mbus_slave_port_setup;
 pub mod gsm_diagnostic;
 pub mod gprs_modem_setup;
+pub mod data_protection;
