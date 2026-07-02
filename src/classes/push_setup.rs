@@ -1,0 +1,347 @@
+use crate::interface::InterfaceClass;
+use crate::obis::ObisCode;
+use crate::types::{CosemDataType, BerError};
+use serde::{Deserialize, Serialize};
+use std::any::Any;
+
+/// Configuration structure used to build a [`PushSetup`] object.
+#[derive(Clone, Serialize, Deserialize, Debug)]
+pub struct PushSetupConfig {
+    pub logical_name: ObisCode,
+    /// Class version: 0, 1 or 2. Selects which attributes and methods are exposed.
+    pub version: u8,
+    /// Attribute 2: array of `cosem_object_instance_id` entries to be pushed.
+    pub push_object_list: Vec<CosemDataType>,
+    /// Attribute 3: `send_destination_and_method` structure.
+    pub send_destination_and_method: CosemDataType,
+    /// Attribute 4: array of communication windows.
+    pub communication_window: Vec<CosemDataType>,
+    /// Attribute 5: randomisation start interval, in seconds.
+    pub randomisation_start_interval: u16,
+    /// Attribute 6: number of retries.
+    pub number_of_retries: u8,
+    /// Attribute 7 (version 2): `repetition_delay` structure.
+    pub repetition_delay: CosemDataType,
+    /// Attribute 8: reference to the communication port setup object.
+    pub port_reference: Vec<u8>,
+    /// Attribute 9: push client SAP.
+    pub push_client_sap: i8,
+    /// Attribute 10: array of push protection parameters.
+    pub push_protection_parameters: Vec<CosemDataType>,
+    /// Attribute 11: push operation method (enum).
+    pub push_operation_method: u8,
+    /// Attribute 12: `confirmation_parameters` structure.
+    pub confirmation_parameters: CosemDataType,
+    /// Attribute 13: date-time of the last successful confirmation.
+    pub last_confirmation_date_time: CosemDataType,
+}
+
+/// `Push setup` interface class (class_id = 40) per IEC 62056-6-2 §4.4.8. Holds
+/// the configuration of the server's unsolicited (push) output.
+///
+/// All three versions are supported:
+/// * version 0 — attributes 1..7, method `push`;
+/// * version 1 — attributes 1..10, method `push`;
+/// * version 2 — attributes 1..13, methods `push` and `reset`.
+///
+/// In versions 0 and 1 attribute 7 (`repetition_delay`) is a `long-unsigned`;
+/// in version 2 it is a structure. The `push` method triggers a data
+/// notification. As the transport/service layer is not implemented yet, `push`
+/// is a no-op trigger that succeeds without actually sending anything.
+#[derive(Clone, Serialize, Deserialize, Debug)]
+pub struct PushSetup {
+    version: u8,
+    logical_name: ObisCode,
+    push_object_list: Vec<CosemDataType>,
+    send_destination_and_method: CosemDataType,
+    communication_window: Vec<CosemDataType>,
+    randomisation_start_interval: u16,
+    number_of_retries: u8,
+    repetition_delay: CosemDataType,
+    port_reference: Vec<u8>,
+    push_client_sap: i8,
+    push_protection_parameters: Vec<CosemDataType>,
+    push_operation_method: u8,
+    confirmation_parameters: CosemDataType,
+    last_confirmation_date_time: CosemDataType,
+}
+
+impl PushSetup {
+    /// Builds a new [`PushSetup`] from its configuration.
+    pub fn new(config: PushSetupConfig) -> Self {
+        PushSetup {
+            version: config.version,
+            logical_name: config.logical_name,
+            push_object_list: config.push_object_list,
+            send_destination_and_method: config.send_destination_and_method,
+            communication_window: config.communication_window,
+            randomisation_start_interval: config.randomisation_start_interval,
+            number_of_retries: config.number_of_retries,
+            repetition_delay: config.repetition_delay,
+            port_reference: config.port_reference,
+            push_client_sap: config.push_client_sap,
+            push_protection_parameters: config.push_protection_parameters,
+            push_operation_method: config.push_operation_method,
+            confirmation_parameters: config.confirmation_parameters,
+            last_confirmation_date_time: config.last_confirmation_date_time,
+        }
+    }
+
+    /// Method 1: `push` — triggers sending the push object list to the
+    /// destination (IEC 62056-6-2 §4.4.8.3.1). The actual transmission belongs to
+    /// the transport layer, which is not implemented yet, so this only validates
+    /// that the object is triggerable and succeeds.
+    fn push(&mut self) -> Result<CosemDataType, String> {
+        Ok(CosemDataType::Null)
+    }
+
+    /// Method 2: `reset` — resets the push confirmation state by clearing
+    /// `last_confirmation_date_time`.
+    fn reset(&mut self) -> Result<CosemDataType, String> {
+        self.last_confirmation_date_time = CosemDataType::Null;
+        Ok(CosemDataType::Null)
+    }
+}
+
+impl InterfaceClass for PushSetup {
+    fn class_id(&self) -> u16 {
+        40
+    }
+
+    fn version(&self) -> u8 {
+        self.version
+    }
+
+    fn logical_name(&self) -> &ObisCode {
+        &self.logical_name
+    }
+
+    fn attributes(&self) -> Vec<(u8, CosemDataType)> {
+        // Attributes 1..7 are common to all versions.
+        let mut attrs = vec![
+            (1, CosemDataType::OctetString(self.logical_name.to_bytes())),
+            (2, CosemDataType::Array(self.push_object_list.clone())),
+            (3, self.send_destination_and_method.clone()),
+            (4, CosemDataType::Array(self.communication_window.clone())),
+            (5, CosemDataType::LongUnsigned(self.randomisation_start_interval)),
+            (6, CosemDataType::Unsigned(self.number_of_retries)),
+            (7, self.repetition_delay.clone()),
+        ];
+        // Attributes 8..10 were added in version 1.
+        if self.version >= 1 {
+            attrs.push((8, CosemDataType::OctetString(self.port_reference.clone())));
+            attrs.push((9, CosemDataType::Integer(self.push_client_sap)));
+            attrs.push((10, CosemDataType::Array(self.push_protection_parameters.clone())));
+        }
+        // Attributes 11..13 were added in version 2.
+        if self.version >= 2 {
+            attrs.push((11, CosemDataType::Enum(self.push_operation_method)));
+            attrs.push((12, self.confirmation_parameters.clone()));
+            attrs.push((13, self.last_confirmation_date_time.clone()));
+        }
+        attrs
+    }
+
+    fn methods(&self) -> Vec<(u8, String)> {
+        // `reset` was added in version 2.
+        if self.version >= 2 {
+            vec![(1, "push".to_string()), (2, "reset".to_string())]
+        } else {
+            vec![(1, "push".to_string())]
+        }
+    }
+
+    fn serialize_ber(&self, buf: &mut Vec<u8>) -> Result<(), BerError> {
+        let mut seq_buf = Vec::new();
+        CosemDataType::LongUnsigned(self.class_id()).serialize_ber(&mut seq_buf)?;
+        for (_, attr) in self.attributes() {
+            attr.serialize_ber(&mut seq_buf)?;
+        }
+        buf.push(0x02); // structure [2]
+        write_length(1 + self.attributes().len(), buf)?; // length = element count
+        buf.extend_from_slice(&seq_buf);
+        Ok(())
+    }
+
+    fn deserialize_ber(&mut self, data: &[u8]) -> Result<(), BerError> {
+        let (tlv, rest) = CosemDataType::deserialize_ber(data)?;
+        if !rest.is_empty() {
+            return Err(BerError::InvalidTag);
+        }
+        let seq = match tlv {
+            CosemDataType::Structure(seq) => seq,
+            _ => return Err(BerError::InvalidTag),
+        };
+        // The element count (class_id + attributes) identifies the version:
+        // 8 → v0, 11 → v1, 14 → v2.
+        self.version = match seq.len() {
+            8 => 0,
+            11 => 1,
+            14 => 2,
+            _ => return Err(BerError::InvalidLength),
+        };
+        if let CosemDataType::LongUnsigned(class_id) = seq[0] {
+            if class_id != self.class_id() {
+                return Err(BerError::InvalidValue);
+            }
+        } else {
+            return Err(BerError::InvalidTag);
+        }
+        if let CosemDataType::OctetString(obis) = &seq[1] {
+            if obis.len() == 6 {
+                self.logical_name = ObisCode::new(obis[0], obis[1], obis[2], obis[3], obis[4], obis[5]);
+            } else {
+                return Err(BerError::InvalidLength);
+            }
+        } else {
+            return Err(BerError::InvalidTag);
+        }
+        self.push_object_list = match &seq[2] {
+            CosemDataType::Array(list) => list.clone(),
+            _ => return Err(BerError::InvalidTag),
+        };
+        self.send_destination_and_method = seq[3].clone();
+        self.communication_window = match &seq[4] {
+            CosemDataType::Array(list) => list.clone(),
+            _ => return Err(BerError::InvalidTag),
+        };
+        self.randomisation_start_interval = match seq[5] {
+            CosemDataType::LongUnsigned(v) => v,
+            _ => return Err(BerError::InvalidTag),
+        };
+        self.number_of_retries = match seq[6] {
+            CosemDataType::Unsigned(v) => v,
+            _ => return Err(BerError::InvalidTag),
+        };
+        self.repetition_delay = seq[7].clone();
+        if self.version >= 1 {
+            self.port_reference = match &seq[8] {
+                CosemDataType::OctetString(v) => v.clone(),
+                _ => return Err(BerError::InvalidTag),
+            };
+            self.push_client_sap = match seq[9] {
+                CosemDataType::Integer(v) => v,
+                _ => return Err(BerError::InvalidTag),
+            };
+            self.push_protection_parameters = match &seq[10] {
+                CosemDataType::Array(list) => list.clone(),
+                _ => return Err(BerError::InvalidTag),
+            };
+        }
+        if self.version >= 2 {
+            self.push_operation_method = match seq[11] {
+                CosemDataType::Enum(v) => v,
+                _ => return Err(BerError::InvalidTag),
+            };
+            self.confirmation_parameters = seq[12].clone();
+            self.last_confirmation_date_time = seq[13].clone();
+        }
+        Ok(())
+    }
+
+    fn invoke_method(
+        &mut self,
+        method_id: u8,
+        _params: Option<CosemDataType>,
+    ) -> Result<CosemDataType, String> {
+        match method_id {
+            1 => self.push(),
+            2 if self.version >= 2 => self.reset(),
+            _ => Err(format!(
+                "Method {} not supported for Push setup version {}",
+                method_id, self.version
+            )),
+        }
+    }
+
+    fn as_any(&self) -> &dyn Any {
+        self
+    }
+}
+
+/// Writes a BER length octet (short or long form).
+fn write_length(length: usize, buf: &mut Vec<u8>) -> Result<(), BerError> {
+    if length < 128 {
+        buf.push(length as u8);
+    } else {
+        let bytes = (length as u64).to_be_bytes();
+        let first_non_zero = bytes.iter().position(|&b| b != 0).unwrap_or(7);
+        let num_octets = 8 - first_non_zero;
+        buf.push(0x80 | num_octets as u8);
+        buf.extend_from_slice(&bytes[first_non_zero..]);
+    }
+    Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn sample_versioned(version: u8) -> PushSetup {
+        PushSetup::new(PushSetupConfig {
+            version,
+            logical_name: ObisCode::new(0, 0, 25, 9, 0, 255),
+            push_object_list: vec![CosemDataType::Structure(vec![
+                CosemDataType::LongUnsigned(8),
+                CosemDataType::OctetString(vec![0, 0, 1, 0, 0, 255]),
+                CosemDataType::Integer(2),
+                CosemDataType::LongUnsigned(0),
+            ])],
+            send_destination_and_method: CosemDataType::Structure(vec![
+                CosemDataType::Enum(0),
+                CosemDataType::OctetString(b"192.168.0.1:4059".to_vec()),
+                CosemDataType::Enum(0),
+            ]),
+            communication_window: vec![],
+            randomisation_start_interval: 0,
+            number_of_retries: 3,
+            repetition_delay: CosemDataType::Structure(vec![
+                CosemDataType::LongUnsigned(30),
+                CosemDataType::LongUnsigned(240),
+                CosemDataType::LongUnsigned(0),
+            ]),
+            port_reference: vec![0, 0, 25, 0, 0, 255],
+            push_client_sap: 1,
+            push_protection_parameters: vec![],
+            push_operation_method: 0,
+            confirmation_parameters: CosemDataType::Null,
+            last_confirmation_date_time: CosemDataType::Null,
+        })
+    }
+
+    #[test]
+    fn attribute_and_method_counts_per_version() {
+        let expected = [(0u8, 7usize, 1usize), (1, 10, 1), (2, 13, 2)];
+        for (version, attr_count, method_count) in expected {
+            let obj = sample_versioned(version);
+            assert_eq!(obj.class_id(), 40);
+            assert_eq!(obj.version(), version);
+            assert_eq!(obj.attributes().len(), attr_count, "attrs for v{}", version);
+            assert_eq!(obj.methods().len(), method_count, "methods for v{}", version);
+        }
+    }
+
+    #[test]
+    fn round_trip_all_versions() {
+        for version in 0..=2u8 {
+            let obj = sample_versioned(version);
+            let mut buf = Vec::new();
+            obj.serialize_ber(&mut buf).unwrap();
+            let mut decoded = sample_versioned(0);
+            decoded.deserialize_ber(&buf).unwrap();
+            assert_eq!(decoded.version(), version);
+            assert_eq!(decoded.attributes(), obj.attributes());
+        }
+    }
+
+    #[test]
+    fn reset_clears_confirmation() {
+        let mut obj = sample_versioned(2);
+        obj.last_confirmation_date_time = CosemDataType::OctetString(vec![0x07; 12]);
+        obj.invoke_method(2, None).unwrap();
+        assert_eq!(obj.attributes()[12].1, CosemDataType::Null);
+        // `reset` is not available in versions 0 and 1.
+        let mut v1 = sample_versioned(1);
+        assert!(v1.invoke_method(2, None).is_err());
+    }
+}
