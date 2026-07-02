@@ -18,3 +18,4 @@ pub mod activity_calendar;
 pub mod register_monitor;
 pub mod single_action_schedule;
 pub mod image_transfer;
+pub mod arbitrator;
