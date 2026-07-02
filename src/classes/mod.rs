@@ -21,3 +21,4 @@ pub mod image_transfer;
 pub mod arbitrator;
 pub mod iec_hdlc_setup;
 pub mod iec_local_port_setup;
+pub mod mac_address_setup;
