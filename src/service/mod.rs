@@ -9,6 +9,7 @@
 use crate::obis::ObisCode;
 use crate::types::BerError;
 
+pub mod action;
 pub mod get;
 pub mod set;
 
