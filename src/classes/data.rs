@@ -59,8 +59,8 @@ impl InterfaceClass for Data {
         CosemDataType::LongUnsigned(self.class_id()).serialize_ber(&mut seq_buf)?;
         CosemDataType::OctetString(self.logical_name.to_bytes()).serialize_ber(&mut seq_buf)?;
         self.value.serialize_ber(&mut seq_buf)?;
-        buf.push(0xA2); // Тег STRUCTURE
-        write_length(seq_buf.len(), buf)?;
+        buf.push(0x02); // structure [2]
+        write_length(3, buf)?; // число элементов: class_id, logical_name, value
         buf.extend_from_slice(&seq_buf);
         Ok(())
     }

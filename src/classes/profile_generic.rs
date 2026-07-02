@@ -6,10 +6,13 @@ use std::any::Any;
 use std::fmt;
 use std::sync::Arc;
 
-/// Конфигурационная структура для создания объекта `ProfileGeneric`.
+/// Configuration structure used to build a `ProfileGeneric` object.
 #[derive(Clone, Serialize, Deserialize)]
 pub struct ProfileGenericConfig {
     pub logical_name: ObisCode,
+    /// Class version: 0 or 1. Version 0 additionally exposes the
+    /// `get_buffer_by_range` and `get_buffer_by_index` methods.
+    pub version: u8,
     pub buffer: Vec<CosemDataType>,
     #[serde(skip)]
     pub capture_objects: Vec<(Arc<dyn InterfaceClass + Send + Sync>, u8)>,
@@ -35,13 +38,14 @@ impl fmt::Debug for ProfileGenericConfig {
     }
 }
 
-/// Интерфейсный класс `ProfileGeneric` (class_id = 7) для хранения профилей данных,
-/// таких как нагрузочные профили или журналы событий, в соответствии с IEC 62056-6-2
-/// в библиотеке `spodes-rs`.
+/// `ProfileGeneric` interface class (class_id = 7, version = 1) for storing data
+/// profiles such as load profiles or event logs, per IEC 62056-6-2 §4.3.6 in the
+/// `spodes-rs` library.
 ///
-/// Поддерживает захват данных из указанных объектов и их атрибутов.
+/// Supports capturing data from the specified objects and their attributes.
 #[derive(Clone, Serialize, Deserialize)]
 pub struct ProfileGeneric {
+    version: u8,
     logical_name: ObisCode,
     buffer: Vec<CosemDataType>,
     #[serde(skip)]
@@ -69,15 +73,16 @@ impl fmt::Debug for ProfileGeneric {
 }
 
 impl ProfileGeneric {
-    /// Создает новый объект `ProfileGeneric` из конфигурации.
+    /// Builds a new `ProfileGeneric` object from its configuration.
     ///
     /// # Arguments
-    /// * `config` - Конфигурация для создания объекта.
+    /// * `config` - Configuration used to build the object.
     ///
     /// # Returns
-    /// Новая структура `ProfileGeneric`.
+    /// A new `ProfileGeneric` structure.
     pub fn new(config: ProfileGenericConfig) -> Self {
         ProfileGeneric {
+            version: config.version,
             logical_name: config.logical_name,
             buffer: config.buffer,
             capture_objects: config.capture_objects,
@@ -89,28 +94,29 @@ impl ProfileGeneric {
         }
     }
 
-    /// Сбрасывает буфер профиля, очищая все записи.
+    /// Resets the profile buffer, clearing all entries.
     ///
     /// # Returns
-    /// * `Ok(CosemDataType::Null)` - Если сброс прошел успешно.
-    /// * `Err(String)` - Если произошла ошибка.
+    /// * `Ok(CosemDataType::Null)` - If the reset succeeded.
+    /// * `Err(String)` - If an error occurred.
     fn reset(&mut self) -> Result<CosemDataType, String> {
         self.buffer.clear();
         self.entries_in_use = 0;
         Ok(CosemDataType::Null)
     }
 
-    /// Захватывает новую запись в буфер профиля, извлекая значения атрибутов
-    /// из объектов, указанных в `capture_objects`.
+    /// Captures a new entry into the profile buffer, reading the attribute values
+    /// from the objects listed in `capture_objects`.
+    ///
+    /// An entry holds only the values of the captured objects (a timestamp, if
+    /// needed, is provided by a `Clock` object included in `capture_objects`). For
+    /// an unsorted profile the buffer behaves as a FIFO: when full, the oldest
+    /// entry is evicted (IEC 62056-6-2, §5.2.1.2.5).
     ///
     /// # Returns
-    /// * `Ok(CosemDataType::Null)` - Если захват прошел успешно.
-    /// * `Err(String)` - Если буфер полон или атрибут не найден.
+    /// * `Ok(CosemDataType::Null)` - If the capture succeeded.
+    /// * `Err(String)` - If a captured object's attribute is not found.
     fn capture(&mut self) -> Result<CosemDataType, String> {
-        if self.entries_in_use >= self.profile_entries {
-            return Err("Buffer is full".to_string());
-        }
-
         let mut captured_values = Vec::new();
 
         for (obj, attr_id) in &self.capture_objects {
@@ -122,14 +128,71 @@ impl ProfileGeneric {
             }
         }
 
-        // Добавляем текущую метку времени
-        captured_values.push(CosemDataType::DateTime(vec![0x07, 0xE5, 0x05, 0x01, 0x02, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00])); // Пример
-
         let new_entry = CosemDataType::Structure(captured_values);
+
+        // When the buffer is full, evict the oldest entry (FIFO).
+        if self.profile_entries > 0
+            && self.entries_in_use >= self.profile_entries
+            && !self.buffer.is_empty()
+        {
+            self.buffer.remove(0);
+            self.entries_in_use -= 1;
+        }
+
         self.buffer.push(new_entry);
         self.entries_in_use += 1;
 
         Ok(CosemDataType::Null)
+    }
+
+    /// Method 3 (version 0 only): `get_buffer_by_range` — returns the buffer
+    /// entries whose sort value falls within a range (IEC 62056-6-2 §5.2.1.2.3).
+    ///
+    /// Full range filtering requires evaluating the sort object of each entry;
+    /// that ordering logic is not modelled here, so this returns the whole
+    /// buffer as a best effort.
+    fn get_buffer_by_range(&self, _params: Option<CosemDataType>) -> Result<CosemDataType, String> {
+        Ok(CosemDataType::Array(self.buffer.clone()))
+    }
+
+    /// Method 4 (version 0 only): `get_buffer_by_index` — returns the buffer
+    /// entries in the 1-based inclusive range `[from_entry, to_entry]`
+    /// (IEC 62056-6-2 §5.2.1.2.4).
+    ///
+    /// The parameter is `structure { from_entry: double-long-unsigned,
+    /// to_entry: double-long-unsigned, .. }`; when it is absent, the whole
+    /// buffer is returned.
+    fn get_buffer_by_index(&self, params: Option<CosemDataType>) -> Result<CosemDataType, String> {
+        let (from_entry, to_entry) = match params {
+            Some(CosemDataType::Structure(fields)) if fields.len() >= 2 => {
+                let from = as_u32(&fields[0]).ok_or("from_entry must be an unsigned integer")?;
+                let to = as_u32(&fields[1]).ok_or("to_entry must be an unsigned integer")?;
+                (from, to)
+            }
+            None => return Ok(CosemDataType::Array(self.buffer.clone())),
+            _ => return Err("Expected structure { from_entry, to_entry, .. }".to_string()),
+        };
+        if from_entry == 0 || to_entry < from_entry {
+            return Err("Invalid entry range (1-based, from ≤ to)".to_string());
+        }
+        let start = (from_entry - 1) as usize;
+        let end = (to_entry as usize).min(self.buffer.len());
+        let slice = if start < end {
+            self.buffer[start..end].to_vec()
+        } else {
+            Vec::new()
+        };
+        Ok(CosemDataType::Array(slice))
+    }
+}
+
+/// Reads a non-negative COSEM integer as `u32` (used for entry indices).
+fn as_u32(value: &CosemDataType) -> Option<u32> {
+    match value {
+        CosemDataType::DoubleLongUnsigned(v) => Some(*v),
+        CosemDataType::LongUnsigned(v) => Some(*v as u32),
+        CosemDataType::Unsigned(v) => Some(*v as u32),
+        _ => None,
     }
 }
 
@@ -139,7 +202,11 @@ impl InterfaceClass for ProfileGeneric {
     }
 
     fn version(&self) -> u8 {
-        0
+        // Both versions share the same attributes. In version 0 the buffer can
+        // also be read via the get_buffer_by_range/index methods; in version 1
+        // (required by СТО 34.01-5.1-006-2023, Table 7.1) those are reserved and
+        // buffer access uses selective GET instead.
+        self.version
     }
 
     fn logical_name(&self) -> &ObisCode {
@@ -154,8 +221,8 @@ impl InterfaceClass for ProfileGeneric {
                     CosemDataType::Structure(vec![
                         CosemDataType::LongUnsigned(obj.class_id()),
                         CosemDataType::OctetString(obj.logical_name().to_bytes()),
-                        CosemDataType::Integer(*attr_id as i8),
-                        CosemDataType::Integer(0), // Индекс атрибута (по умолчанию 0)
+                        CosemDataType::Integer(*attr_id as i8), // attribute_index (integer)
+                        CosemDataType::LongUnsigned(0), // data_index (long-unsigned, default 0)
                     ])
                 })
                 .collect(),
@@ -174,7 +241,17 @@ impl InterfaceClass for ProfileGeneric {
     }
 
     fn methods(&self) -> Vec<(u8, String)> {
-        vec![(1, "reset".to_string()), (2, "capture".to_string())]
+        // Version 0 additionally exposes the buffer-reading methods 3 and 4.
+        if self.version == 0 {
+            vec![
+                (1, "reset".to_string()),
+                (2, "capture".to_string()),
+                (3, "get_buffer_by_range".to_string()),
+                (4, "get_buffer_by_index".to_string()),
+            ]
+        } else {
+            vec![(1, "reset".to_string()), (2, "capture".to_string())]
+        }
     }
 
     fn serialize_ber(&self, buf: &mut Vec<u8>) -> Result<(), BerError> {
@@ -183,8 +260,8 @@ impl InterfaceClass for ProfileGeneric {
         for (_, attr) in self.attributes() {
             attr.serialize_ber(&mut seq_buf)?;
         }
-        buf.push(0xA2); // Тег STRUCTURE
-        write_length(seq_buf.len(), buf)?;
+        buf.push(0x02); // structure [2]
+        write_length(1 + self.attributes().len(), buf)?; // length = element count
         buf.extend_from_slice(&seq_buf);
         Ok(())
     }
@@ -218,7 +295,7 @@ impl InterfaceClass for ProfileGeneric {
                     return Err(BerError::InvalidTag);
                 }
                 if let CosemDataType::Array(_) = &seq[3] {
-                    // capture_objects десериализуются отдельно, если нужно
+                    // capture_objects are deserialized separately, if needed
                 } else {
                     return Err(BerError::InvalidTag);
                 }
@@ -253,12 +330,18 @@ impl InterfaceClass for ProfileGeneric {
     fn invoke_method(
         &mut self,
         method_id: u8,
-        _params: Option<CosemDataType>,
+        params: Option<CosemDataType>,
     ) -> Result<CosemDataType, String> {
         match method_id {
             1 => self.reset(),
             2 => self.capture(),
-            _ => Err(format!("Method {} not supported for ProfileGeneric class", method_id)),
+            // Methods 3 and 4 exist only in version 0.
+            3 if self.version == 0 => self.get_buffer_by_range(params),
+            4 if self.version == 0 => self.get_buffer_by_index(params),
+            _ => Err(format!(
+                "Method {} not supported for ProfileGeneric version {}",
+                method_id, self.version
+            )),
         }
     }
 
@@ -267,7 +350,7 @@ impl InterfaceClass for ProfileGeneric {
     }
 }
 
-/// Записывает длину в формате BER (короткая или длинная форма).
+/// Writes a BER length octet (short or long form).
 fn write_length(length: usize, buf: &mut Vec<u8>) -> Result<(), BerError> {
     if length < 128 {
         buf.push(length as u8);
@@ -279,4 +362,81 @@ fn write_length(length: usize, buf: &mut Vec<u8>) -> Result<(), BerError> {
         buf.extend_from_slice(&bytes[first_non_zero..]);
     }
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::interface::InterfaceClass;
+
+    fn versioned_profile(version: u8, profile_entries: u32) -> ProfileGeneric {
+        ProfileGeneric::new(ProfileGenericConfig {
+            logical_name: ObisCode::new(1, 0, 99, 1, 0, 255),
+            version,
+            buffer: vec![],
+            capture_objects: vec![],
+            capture_period: 0,
+            sort_method: 0,
+            sort_object: CosemDataType::Null,
+            entries_in_use: 0,
+            profile_entries,
+        })
+    }
+
+    fn empty_profile(profile_entries: u32) -> ProfileGeneric {
+        versioned_profile(1, profile_entries)
+    }
+
+    /// When the buffer is full, an unsorted profile evicts the oldest entry
+    /// (FIFO) instead of returning an error.
+    #[test]
+    fn capture_evicts_oldest_when_full() {
+        let mut p = empty_profile(2);
+        for _ in 0..3 {
+            p.invoke_method(2, None).expect("capture failed");
+        }
+        // Buffer and counter never exceed the capacity.
+        assert_eq!(p.attributes()[6].1, CosemDataType::DoubleLongUnsigned(2)); // entries_in_use
+        if let CosemDataType::Array(buf) = &p.attributes()[1].1 {
+            assert_eq!(buf.len(), 2);
+        } else {
+            panic!("buffer must be an array");
+        }
+    }
+
+    #[test]
+    fn reset_clears_buffer() {
+        let mut p = empty_profile(4);
+        p.invoke_method(2, None).unwrap();
+        p.invoke_method(1, None).unwrap(); // reset
+        assert_eq!(p.attributes()[6].1, CosemDataType::DoubleLongUnsigned(0));
+    }
+
+    #[test]
+    fn method_set_depends_on_version() {
+        // Version 0 exposes the two extra buffer-reading methods.
+        assert_eq!(versioned_profile(0, 4).methods().len(), 4);
+        assert_eq!(versioned_profile(1, 4).methods().len(), 2);
+        // Method 4 is available only in version 0.
+        assert!(versioned_profile(1, 4).invoke_method(4, None).is_err());
+    }
+
+    #[test]
+    fn get_buffer_by_index_slices_entries() {
+        let mut p = versioned_profile(0, 10);
+        for _ in 0..5 {
+            p.invoke_method(2, None).unwrap();
+        }
+        // Entries 2..=4 (1-based, inclusive) → 3 entries.
+        let params = CosemDataType::Structure(vec![
+            CosemDataType::DoubleLongUnsigned(2),
+            CosemDataType::DoubleLongUnsigned(4),
+        ]);
+        let result = p.invoke_method(4, Some(params)).unwrap();
+        if let CosemDataType::Array(entries) = result {
+            assert_eq!(entries.len(), 3);
+        } else {
+            panic!("get_buffer_by_index must return an array");
+        }
+    }
 }

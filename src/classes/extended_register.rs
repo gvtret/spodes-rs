@@ -144,8 +144,8 @@ impl InterfaceClass for ExtendedRegister {
         for (_, attr) in self.attributes() {
             attr.serialize_ber(&mut seq_buf)?;
         }
-        buf.push(0xA2); // Тег STRUCTURE
-        write_length(seq_buf.len(), buf)?;
+        buf.push(0x02); // structure [2]
+        write_length(1 + self.attributes().len(), buf)?; // длина = число элементов
         buf.extend_from_slice(&seq_buf);
         Ok(())
     }

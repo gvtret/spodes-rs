@@ -92,67 +92,52 @@ impl InterfaceClass for Schedule {
         for (_, attr) in self.attributes() {
             attr.serialize_ber(&mut seq_buf)?;
         }
-        seq_buf.push(0x83); // Тег BOOLEAN (исправлено с 0x01 на 0x83)
-        seq_buf.push(0x01); // Длина
-        seq_buf.push(if self.enabled { 0xFF } else { 0x00 }); // Значение enabled
-        buf.push(0xA2); // Тег STRUCTURE
-        write_length(seq_buf.len(), buf)?;
+        seq_buf.push(0x03); // boolean [3]
+        seq_buf.push(if self.enabled { 0xFF } else { 0x00 }); // значение enabled
+        buf.push(0x02); // structure [2]
+        write_length(2 + self.attributes().len(), buf)?; // число элементов: class_id + атрибуты + enabled
         buf.extend_from_slice(&seq_buf);
         Ok(())
     }
 
     fn deserialize_ber(&mut self, data: &[u8]) -> Result<(), BerError> {
         let (tlv, rest) = CosemDataType::deserialize_ber(data)?;
-        println!("Deserializing Schedule: tlv={:?}, rest={:?}", tlv, rest);
         if !rest.is_empty() {
             return Err(BerError::InvalidTag);
         }
         let seq = match tlv {
             CosemDataType::Structure(seq) => seq,
-            other => {
-                println!("Unexpected tlv type: {:?}", other);
-                return Err(BerError::InvalidTag);
-            }
+            _ => return Err(BerError::InvalidTag),
         };
-        println!("Sequence: {:?}", seq);
         if seq.len() == 4 {
             if let CosemDataType::LongUnsigned(class_id) = seq[0] {
-                println!("Class ID: {}", class_id);
                 if class_id != self.class_id() {
                     return Err(BerError::InvalidValue);
                 }
             } else {
-                println!("Invalid class_id type: {:?}", seq[0]);
                 return Err(BerError::InvalidTag);
             }
             if let CosemDataType::OctetString(obis) = &seq[1] {
-                println!("OBIS: {:?}", obis);
                 if obis.len() == 6 {
                     self.logical_name = ObisCode::new(obis[0], obis[1], obis[2], obis[3], obis[4], obis[5]);
                 } else {
                     return Err(BerError::InvalidLength);
                 }
             } else {
-                println!("Invalid logical_name type: {:?}", seq[1]);
                 return Err(BerError::InvalidTag);
             }
             if let CosemDataType::Array(entries) = &seq[2] {
-                println!("Entries: {:?}", entries);
                 self.entries = entries.clone();
             } else {
-                println!("Invalid entries type: {:?}", seq[2]);
                 return Err(BerError::InvalidTag);
             }
             if let CosemDataType::Boolean(enabled) = seq[3] {
-                println!("Enabled: {}", enabled);
                 self.enabled = enabled;
             } else {
-                println!("Invalid enabled type: {:?}", seq[3]);
                 return Err(BerError::InvalidTag);
             }
             Ok(())
         } else {
-            println!("Invalid sequence length: {}", seq.len());
             Err(BerError::InvalidLength)
         }
     }

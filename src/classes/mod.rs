@@ -8,3 +8,4 @@ pub mod register_activation;
 pub mod script_table;
 pub mod schedule;
 pub mod special_days_table;
+pub mod association_ln;

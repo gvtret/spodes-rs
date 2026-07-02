@@ -15,6 +15,8 @@ pub enum CosemDataType {
     DoubleLongUnsigned(u32),
     OctetString(Vec<u8>),
     DateTime(Vec<u8>),
+    BitString(Vec<u8>),
+    Enum(u8),
 }
 
 #[derive(Debug, PartialEq)]
@@ -26,84 +28,89 @@ pub enum BerError {
 
 impl CosemDataType {
     pub fn serialize_ber(&self, buf: &mut Vec<u8>) -> Result<(), BerError> {
+        // Кодирование типов данных по A-XDR (IEC 62056-6-2, Table 3 "Common data types").
+        // Теги — однобайтовые значения из таблицы; фиксированные скалярные типы и enum
+        // кодируются как [тег][значение] без октета длины; array/structure несут длину,
+        // равную ЧИСЛУ ЭЛЕМЕНТОВ (а не байтов).
         match self {
             CosemDataType::Null => {
-                buf.push(0x00);
-                buf.push(0x00);
+                buf.push(0x00); // null-data [0]: без длины и содержимого
                 Ok(())
             }
             CosemDataType::Array(items) => {
-                buf.push(0xA1); // Тег ARRAY
-                let mut seq_buf = Vec::new();
+                buf.push(0x01); // array [1]
+                write_length(items.len(), buf)?; // длина = число элементов
                 for item in items {
-                    item.serialize_ber(&mut seq_buf)?;
+                    item.serialize_ber(buf)?;
                 }
-                write_length(seq_buf.len(), buf)?;
-                buf.extend_from_slice(&seq_buf);
                 Ok(())
             }
             CosemDataType::Structure(items) => {
-                buf.push(0xA2); // Тег STRUCTURE
-                let mut seq_buf = Vec::new();
+                buf.push(0x02); // structure [2]
+                write_length(items.len(), buf)?; // длина = число элементов
                 for item in items {
-                    item.serialize_ber(&mut seq_buf)?;
+                    item.serialize_ber(buf)?;
                 }
-                write_length(seq_buf.len(), buf)?;
-                buf.extend_from_slice(&seq_buf);
                 Ok(())
             }
             CosemDataType::Boolean(b) => {
-                buf.push(0x83);
-                buf.push(0x01);
+                buf.push(0x03); // boolean [3]
                 buf.push(if *b { 0x01 } else { 0x00 });
                 Ok(())
             }
             CosemDataType::Integer(i) => {
-                buf.push(0x85);
-                buf.push(0x01);
+                buf.push(0x0F); // integer [15]
                 buf.push(*i as u8);
                 Ok(())
             }
             CosemDataType::Long(i) => {
-                buf.push(0x86);
-                buf.push(0x02);
+                buf.push(0x10); // long [16]
                 buf.extend_from_slice(&i.to_be_bytes());
                 Ok(())
             }
             CosemDataType::Unsigned(u) => {
-                buf.push(0x87);
-                buf.push(0x01);
+                buf.push(0x11); // unsigned [17]
                 buf.push(*u);
                 Ok(())
             }
             CosemDataType::LongUnsigned(u) => {
-                buf.push(0x88);
-                buf.push(0x02);
+                buf.push(0x12); // long-unsigned [18]
                 buf.extend_from_slice(&u.to_be_bytes());
                 Ok(())
             }
             CosemDataType::DoubleLong(i) => {
-                buf.push(0x89);
-                buf.push(0x04);
+                buf.push(0x05); // double-long [5]
                 buf.extend_from_slice(&i.to_be_bytes());
                 Ok(())
             }
             CosemDataType::DoubleLongUnsigned(u) => {
-                buf.push(0x8A);
-                buf.push(0x04);
+                buf.push(0x06); // double-long-unsigned [6]
                 buf.extend_from_slice(&u.to_be_bytes());
                 Ok(())
             }
             CosemDataType::OctetString(s) => {
-                buf.push(0x8C);
+                buf.push(0x09); // octet-string [9]
                 write_length(s.len(), buf)?;
                 buf.extend_from_slice(s);
                 Ok(())
             }
             CosemDataType::DateTime(dt) => {
-                buf.push(0x99);
+                buf.push(0x19); // date-time [25]: octet-string SIZE(12) с октетом длины
                 write_length(dt.len(), buf)?;
                 buf.extend_from_slice(dt);
+                Ok(())
+            }
+            CosemDataType::BitString(s) => {
+                buf.push(0x04); // bit-string [4]
+                // NB: по A-XDR длина bit-string задаётся в БИТАХ; здесь хранится
+                // число байт, т.к. модель типа держит сырой Vec<u8>.
+                write_length(s.len(), buf)?;
+                buf.extend_from_slice(s);
+                Ok(())
+            }
+            CosemDataType::Enum(e) => {
+                buf.push(0x16); // enum [22]
+                buf.push(*e);
                 Ok(())
             }
         }
@@ -114,89 +121,81 @@ impl CosemDataType {
             return Err(BerError::InvalidTag);
         }
         match data[0] {
-            0x00 => {
-                if data.len() >= 2 && data[1] == 0x00 {
-                    Ok((CosemDataType::Null, &data[2..]))
-                } else {
-                    Err(BerError::InvalidLength)
-                }
-            }
-            0xA1 => {
-                let (len, rest) = read_length(&data[1..])?;
-                let mut items = Vec::new();
-                let mut remaining = &rest[..len];
-                while !remaining.is_empty() {
-                    let (item, next) = CosemDataType::deserialize_ber(remaining)?;
+            0x00 => Ok((CosemDataType::Null, &data[1..])),
+            0x01 => {
+                let (count, mut rest) = read_length(&data[1..])?;
+                let mut items = Vec::with_capacity(count);
+                for _ in 0..count {
+                    let (item, next) = CosemDataType::deserialize_ber(rest)?;
                     items.push(item);
-                    remaining = next;
+                    rest = next;
                 }
-                Ok((CosemDataType::Array(items), &rest[len..]))
+                Ok((CosemDataType::Array(items), rest))
             }
-            0xA2 => {
-                let (len, rest) = read_length(&data[1..])?;
-                let mut items = Vec::new();
-                let mut remaining = &rest[..len];
-                while !remaining.is_empty() {
-                    let (item, next) = CosemDataType::deserialize_ber(remaining)?;
+            0x02 => {
+                let (count, mut rest) = read_length(&data[1..])?;
+                let mut items = Vec::with_capacity(count);
+                for _ in 0..count {
+                    let (item, next) = CosemDataType::deserialize_ber(rest)?;
                     items.push(item);
-                    remaining = next;
+                    rest = next;
                 }
-                Ok((CosemDataType::Structure(items), &rest[len..]))
+                Ok((CosemDataType::Structure(items), rest))
             }
-            0x83 => {
-                if data.len() >= 3 && data[1] == 0x01 {
-                    Ok((CosemDataType::Boolean(data[2] != 0), &data[3..]))
+            0x03 => {
+                if data.len() >= 2 {
+                    Ok((CosemDataType::Boolean(data[1] != 0), &data[2..]))
                 } else {
                     Err(BerError::InvalidLength)
                 }
             }
-            0x85 => {
-                if data.len() >= 3 && data[1] == 0x01 {
-                    Ok((CosemDataType::Integer(data[2] as i8), &data[3..]))
+            0x0F => {
+                if data.len() >= 2 {
+                    Ok((CosemDataType::Integer(data[1] as i8), &data[2..]))
                 } else {
                     Err(BerError::InvalidLength)
                 }
             }
-            0x86 => {
-                if data.len() >= 4 && data[1] == 0x02 {
-                    let value = i16::from_be_bytes([data[2], data[3]]);
-                    Ok((CosemDataType::Long(value), &data[4..]))
+            0x10 => {
+                if data.len() >= 3 {
+                    let value = i16::from_be_bytes([data[1], data[2]]);
+                    Ok((CosemDataType::Long(value), &data[3..]))
                 } else {
                     Err(BerError::InvalidLength)
                 }
             }
-            0x87 => {
-                if data.len() >= 3 && data[1] == 0x01 {
-                    Ok((CosemDataType::Unsigned(data[2]), &data[3..]))
+            0x11 => {
+                if data.len() >= 2 {
+                    Ok((CosemDataType::Unsigned(data[1]), &data[2..]))
                 } else {
                     Err(BerError::InvalidLength)
                 }
             }
-            0x88 => {
-                if data.len() >= 4 && data[1] == 0x02 {
-                    let value = u16::from_be_bytes([data[2], data[3]]);
-                    Ok((CosemDataType::LongUnsigned(value), &data[4..]))
+            0x12 => {
+                if data.len() >= 3 {
+                    let value = u16::from_be_bytes([data[1], data[2]]);
+                    Ok((CosemDataType::LongUnsigned(value), &data[3..]))
                 } else {
                     Err(BerError::InvalidLength)
                 }
             }
-            0x89 => {
-                if data.len() >= 6 && data[1] == 0x04 {
-                    let value = i32::from_be_bytes([data[2], data[3], data[4], data[5]]);
-                    Ok((CosemDataType::DoubleLong(value), &data[6..]))
+            0x05 => {
+                if data.len() >= 5 {
+                    let value = i32::from_be_bytes([data[1], data[2], data[3], data[4]]);
+                    Ok((CosemDataType::DoubleLong(value), &data[5..]))
                 } else {
                     Err(BerError::InvalidLength)
                 }
             }
-            0x8A => {
-                if data.len() >= 6 && data[1] == 0x04 {
-                    let value = u32::from_be_bytes([data[2], data[3], data[4], data[5]]);
-                    Ok((CosemDataType::DoubleLongUnsigned(value), &data[6..]))
+            0x06 => {
+                if data.len() >= 5 {
+                    let value = u32::from_be_bytes([data[1], data[2], data[3], data[4]]);
+                    Ok((CosemDataType::DoubleLongUnsigned(value), &data[5..]))
                 } else {
                     Err(BerError::InvalidLength)
                 }
             }
-            0x8C => {
+            0x09 => {
                 let (len, rest) = read_length(&data[1..])?;
                 if rest.len() >= len {
                     Ok((CosemDataType::OctetString(rest[..len].to_vec()), &rest[len..]))
@@ -204,10 +203,25 @@ impl CosemDataType {
                     Err(BerError::InvalidLength)
                 }
             }
-            0x99 => {
+            0x19 => {
                 let (len, rest) = read_length(&data[1..])?;
                 if rest.len() >= len {
                     Ok((CosemDataType::DateTime(rest[..len].to_vec()), &rest[len..]))
+                } else {
+                    Err(BerError::InvalidLength)
+                }
+            }
+            0x04 => {
+                let (len, rest) = read_length(&data[1..])?;
+                if rest.len() >= len {
+                    Ok((CosemDataType::BitString(rest[..len].to_vec()), &rest[len..]))
+                } else {
+                    Err(BerError::InvalidLength)
+                }
+            }
+            0x16 => {
+                if data.len() >= 2 {
+                    Ok((CosemDataType::Enum(data[1]), &data[2..]))
                 } else {
                     Err(BerError::InvalidLength)
                 }
@@ -283,6 +297,83 @@ impl fmt::Display for CosemDataType {
             CosemDataType::DoubleLongUnsigned(u) => write!(f, "DoubleLongUnsigned({})", u),
             CosemDataType::OctetString(s) => write!(f, "OctetString({:?})", s),
             CosemDataType::DateTime(dt) => write!(f, "DateTime({:?})", dt),
+            CosemDataType::BitString(s) => write!(f, "BitString({:?})", s),
+            CosemDataType::Enum(e) => write!(f, "Enum({})", e),
+        }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn enc(v: &CosemDataType) -> Vec<u8> {
+        let mut buf = Vec::new();
+        v.serialize_ber(&mut buf).unwrap();
+        buf
+    }
+
+    /// Эталонный вектор A-XDR из DLMS UA 1000-1 (пример кодирования context_name,
+    /// context_id(1)): structure из 7 элементов → 02 07 11 02 11 10 12 02 F4 11 05 11 08 11 01 11 01.
+    #[test]
+    fn axdr_reference_context_name() {
+        let s = CosemDataType::Structure(vec![
+            CosemDataType::Unsigned(2),
+            CosemDataType::Unsigned(16),
+            CosemDataType::LongUnsigned(756),
+            CosemDataType::Unsigned(5),
+            CosemDataType::Unsigned(8),
+            CosemDataType::Unsigned(1),
+            CosemDataType::Unsigned(1),
+        ]);
+        assert_eq!(
+            enc(&s),
+            vec![0x02, 0x07, 0x11, 0x02, 0x11, 0x10, 0x12, 0x02, 0xF4, 0x11, 0x05, 0x11, 0x08, 0x11, 0x01, 0x11, 0x01]
+        );
+    }
+
+    /// Теги простых типов по Table 3 и отсутствие октета длины у скаляров.
+    #[test]
+    fn axdr_scalar_tags() {
+        assert_eq!(enc(&CosemDataType::Null), vec![0x00]);
+        assert_eq!(enc(&CosemDataType::Boolean(true)), vec![0x03, 0x01]);
+        assert_eq!(enc(&CosemDataType::Integer(-1)), vec![0x0F, 0xFF]);
+        assert_eq!(enc(&CosemDataType::Long(-2)), vec![0x10, 0xFF, 0xFE]);
+        assert_eq!(enc(&CosemDataType::DoubleLong(1)), vec![0x05, 0x00, 0x00, 0x00, 0x01]);
+        assert_eq!(enc(&CosemDataType::DoubleLongUnsigned(1)), vec![0x06, 0x00, 0x00, 0x00, 0x01]);
+        assert_eq!(enc(&CosemDataType::Unsigned(5)), vec![0x11, 0x05]);
+        assert_eq!(enc(&CosemDataType::LongUnsigned(756)), vec![0x12, 0x02, 0xF4]);
+        assert_eq!(enc(&CosemDataType::Enum(3)), vec![0x16, 0x03]);
+        assert_eq!(enc(&CosemDataType::OctetString(vec![0xAB, 0xCD])), vec![0x09, 0x02, 0xAB, 0xCD]);
+        assert_eq!(enc(&CosemDataType::Array(vec![CosemDataType::Unsigned(1)])), vec![0x01, 0x01, 0x11, 0x01]);
+    }
+
+    #[test]
+    fn axdr_round_trip() {
+        let samples = vec![
+            CosemDataType::Null,
+            CosemDataType::Boolean(false),
+            CosemDataType::Integer(-128),
+            CosemDataType::Long(-32768),
+            CosemDataType::Unsigned(255),
+            CosemDataType::LongUnsigned(65535),
+            CosemDataType::DoubleLong(-1),
+            CosemDataType::DoubleLongUnsigned(4_000_000_000),
+            CosemDataType::Enum(7),
+            CosemDataType::OctetString(vec![1, 2, 3]),
+            CosemDataType::DateTime(vec![0x07, 0xE5, 0x05, 0x01, 0x02, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00]),
+            CosemDataType::Array(vec![CosemDataType::Unsigned(1), CosemDataType::Unsigned(2)]),
+            CosemDataType::Structure(vec![
+                CosemDataType::LongUnsigned(7),
+                CosemDataType::OctetString(vec![0, 0, 96, 1, 0, 255]),
+                CosemDataType::Array(vec![CosemDataType::Enum(1)]),
+            ]),
+        ];
+        for s in samples {
+            let bytes = enc(&s);
+            let (decoded, rest) = CosemDataType::deserialize_ber(&bytes).unwrap();
+            assert!(rest.is_empty(), "trailing bytes for {:?}", s);
+            assert_eq!(decoded, s);
         }
     }
 }

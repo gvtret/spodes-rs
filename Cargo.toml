@@ -1,18 +1,19 @@
 [package]
 name = "spodes-rs"
 version = "0.1.0"
-authors = ["Georgiy T. <tretelnitsky.george@yandex.ru>"]
+authors = ["Your Name <your.email@example.com>"]
 edition = "2021"
 description = "A Rust library implementing DLMS/COSEM interface classes according to IEC 62056-6-2."
 license = "MIT OR Apache-2.0"
 
 [dependencies]
 serde = { version = "1.0", features = ["derive"] }
-sha1 = "0.10"
+sha1 = "0.10.6"
+md-5 = "0.10"
 hmac = "0.12"
 aes-gcm = "0.10"
+aead = "0.5"
 rand = "0.9.1"
-
 
 [dev-dependencies]
 

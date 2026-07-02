@@ -8,11 +8,13 @@ use spodes_rs::classes::register_activation::{RegisterActivation, RegisterActiva
 use spodes_rs::classes::script_table::{ScriptTable, ScriptTableConfig};
 use spodes_rs::classes::schedule::{Schedule, ScheduleConfig};
 use spodes_rs::classes::special_days_table::{SpecialDaysTable, SpecialDaysTableConfig};
+use spodes_rs::classes::association_ln::{AssociationLn, AssociationLnConfig, AssociationLnVersion, AuthenticationMechanism};
 use spodes_rs::interface::InterfaceClass;
 use spodes_rs::obis::ObisCode;
 use spodes_rs::serialization::{deserialize_object, serialize_object};
 use spodes_rs::types::CosemDataType;
 use std::sync::Arc;
+use sha1::{Sha1, Digest};
 
 #[test]
 fn test_data_serialization_deserialization() {
@@ -66,6 +68,7 @@ fn test_profile_generic_serialization_deserialization() {
     
     let config = ProfileGenericConfig {
         logical_name: obis.clone(),
+        version: 1,
         buffer: buffer.clone(),
         capture_objects,
         capture_period,
@@ -79,6 +82,7 @@ fn test_profile_generic_serialization_deserialization() {
     let serialized = serialize_object(&profile).expect("Serialization failed");
     let config = ProfileGenericConfig {
         logical_name: obis,
+        version: 1,
         buffer: vec![],
         capture_objects: vec![],
         capture_period: 0,
@@ -92,7 +96,7 @@ fn test_profile_generic_serialization_deserialization() {
     
     assert_eq!(deserialized.logical_name(), profile.logical_name());
     assert_eq!(deserialized.attributes()[1].1, CosemDataType::Array(buffer));
-    assert_eq!(deserialized.attributes()[3].1, CosemDataType::DoubleLongUnsigned(capture_period as u32));
+    assert_eq!(deserialized.attributes()[3].1, CosemDataType::DoubleLongUnsigned(capture_period));
     assert_eq!(deserialized.attributes()[4].1, CosemDataType::Unsigned(sort_method));
     assert_eq!(deserialized.attributes()[5].1, sort_object);
     assert_eq!(deserialized.attributes()[6].1, CosemDataType::DoubleLongUnsigned(entries_in_use));
@@ -119,6 +123,7 @@ fn test_profile_generic_capture_method() {
     let capture_objects = vec![(Arc::new(data) as Arc<dyn InterfaceClass + Send + Sync>, 2)];
     let config = ProfileGenericConfig {
         logical_name: obis,
+        version: 1,
         buffer: vec![],
         capture_objects,
         capture_period: 3600,
@@ -144,8 +149,8 @@ fn test_clock_serialization_deserialization() {
         0x00, // Сотые доли секунды: 0
         0x00, 0x00, 0x00, // Отклонение от UTC: 0
     ]);
-    let time_zone = CosemDataType::Long(180); // +3 часа от UTC
-    let status = CosemDataType::Unsigned(1); // Действительное время
+    let time_zone = CosemDataType::Long(180);
+    let status = CosemDataType::Unsigned(1);
     let daylight_savings_begin = CosemDataType::DateTime(vec![
         0x07, 0xE5, 0x03, 0x26, // Год: 2025, Месяц: 3, День: 26
         0x00, 0x02, 0x00, 0x00, // Час: 2, Минуты: 0, Секунды: 0
@@ -156,9 +161,9 @@ fn test_clock_serialization_deserialization() {
         0x00, 0x02, 0x00, 0x00, // Час: 2, Минуты: 0, Секунды: 0
         0x00, 0x00, 0x00, 0x00,
     ]);
-    let daylight_savings_deviation = CosemDataType::Integer(60); // +1 час
+    let daylight_savings_deviation = CosemDataType::Integer(60);
     let daylight_savings_enabled = CosemDataType::Boolean(true);
-    let clock_base = CosemDataType::Unsigned(2); // Внешний источник
+    let clock_base = CosemDataType::Unsigned(2);
 
     let config = ClockConfig {
         logical_name: obis.clone(),
@@ -867,4 +872,342 @@ fn test_special_days_table_delete_method() {
     let result = special_days_table.invoke_method(2, Some(invalid_date));
     assert!(result.is_err());
     assert_eq!(result.unwrap_err(), "Invalid DateTime length");
+}
+
+#[test]
+fn test_association_ln_serialization_deserialization_version0() {
+    let obis = ObisCode::new(0, 0, 40, 0, 0, 255);
+    let object_list = vec![CosemDataType::Structure(vec![
+        CosemDataType::LongUnsigned(1),
+        CosemDataType::OctetString(vec![0, 0, 96, 1, 0, 255]),
+        CosemDataType::Integer(2),
+    ])];
+    let associated_partners_id = CosemDataType::Structure(vec![
+        CosemDataType::LongUnsigned(1), // client SAP
+        CosemDataType::LongUnsigned(1), // server SAP
+    ]);
+    let application_context_name = CosemDataType::OctetString(vec![0x09, 0x06, 0x60, 0x85, 0x74, 0x05, 0x08, 0x01, 0x01]);
+    let xdlms_context_info = CosemDataType::Structure(vec![
+        CosemDataType::DoubleLongUnsigned(0xFFFFFF),
+        CosemDataType::Unsigned(16),
+        CosemDataType::Unsigned(16),
+        CosemDataType::Unsigned(2),
+        CosemDataType::Boolean(true),
+        CosemDataType::BitString(vec![0xFF]),
+    ]);
+    let secret = CosemDataType::OctetString(vec![0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08]);
+    let association_status = CosemDataType::Enum(1);
+
+    let config = AssociationLnConfig {
+        logical_name: obis.clone(),
+        version: AssociationLnVersion::Version0,
+        object_list: object_list.clone(),
+        associated_partners_id: associated_partners_id.clone(),
+        application_context_name: application_context_name.clone(),
+        xdlms_context_info: xdlms_context_info.clone(),
+        authentication_mechanism: AuthenticationMechanism::LLS,
+        secret: secret.clone(),
+        association_status: association_status.clone(),
+        security_setup_reference: CosemDataType::Null,
+        user_list: vec![],
+        current_user: CosemDataType::Null,
+    };
+    let association_ln = AssociationLn::new(config);
+
+    let serialized = serialize_object(&association_ln).expect("Serialization failed");
+    let config = AssociationLnConfig {
+        logical_name: obis.clone(),
+        version: AssociationLnVersion::Version0,
+        object_list: vec![],
+        associated_partners_id: CosemDataType::Null,
+        application_context_name: CosemDataType::Null,
+        xdlms_context_info: CosemDataType::Null,
+        authentication_mechanism: AuthenticationMechanism::LLS,
+        secret: CosemDataType::Null,
+        association_status: CosemDataType::Null,
+        security_setup_reference: CosemDataType::Null,
+        user_list: vec![],
+        current_user: CosemDataType::Null,
+    };
+    let mut deserialized = AssociationLn::new(config);
+    deserialize_object(&mut deserialized, &serialized).expect("Deserialization failed");
+
+    assert_eq!(deserialized.logical_name(), association_ln.logical_name());
+    assert_eq!(deserialized.attributes()[1].1, CosemDataType::Array(object_list));
+    assert_eq!(deserialized.attributes()[2].1, associated_partners_id);
+    assert_eq!(deserialized.attributes()[3].1, application_context_name);
+    assert_eq!(deserialized.attributes()[4].1, xdlms_context_info);
+    assert_eq!(deserialized.attributes()[5].1, CosemDataType::OctetString(vec![0x09, 0x07, 0x60, 0x85, 0x74, 0x05, 0x08, 0x02, 0x01]));
+    assert_eq!(deserialized.attributes()[6].1, secret);
+    assert_eq!(deserialized.attributes()[7].1, association_status);
+}
+
+#[test]
+fn test_association_ln_serialization_deserialization_version1() {
+    let obis = ObisCode::new(0, 0, 40, 0, 0, 255);
+    let object_list = vec![CosemDataType::Structure(vec![
+        CosemDataType::LongUnsigned(1),
+        CosemDataType::OctetString(vec![0, 0, 96, 1, 0, 255]),
+        CosemDataType::Integer(2),
+    ])];
+    let associated_partners_id = CosemDataType::Structure(vec![
+        CosemDataType::LongUnsigned(1), // client SAP
+        CosemDataType::LongUnsigned(1), // server SAP
+    ]);
+    let application_context_name = CosemDataType::OctetString(vec![0x09, 0x06, 0x60, 0x85, 0x74, 0x05, 0x08, 0x01, 0x01]);
+    let xdlms_context_info = CosemDataType::Structure(vec![
+        CosemDataType::DoubleLongUnsigned(0xFFFFFF),
+        CosemDataType::Unsigned(16),
+        CosemDataType::Unsigned(16),
+        CosemDataType::Unsigned(2),
+        CosemDataType::Boolean(true),
+        CosemDataType::BitString(vec![0xFF]),
+    ]);
+    let secret = CosemDataType::OctetString(vec![0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08, 0x09, 0x0A, 0x0B, 0x0C, 0x0D, 0x0E, 0x0F, 0x10]);
+    let association_status = CosemDataType::Enum(1);
+    let security_setup_reference = CosemDataType::OctetString(vec![0, 0, 43, 0, 0, 255]);
+
+    let config = AssociationLnConfig {
+        logical_name: obis.clone(),
+        version: AssociationLnVersion::Version1,
+        object_list: object_list.clone(),
+        associated_partners_id: associated_partners_id.clone(),
+        application_context_name: application_context_name.clone(),
+        xdlms_context_info: xdlms_context_info.clone(),
+        authentication_mechanism: AuthenticationMechanism::HLS4SHA1,
+        secret: secret.clone(),
+        association_status: association_status.clone(),
+        security_setup_reference: security_setup_reference.clone(),
+        user_list: vec![],
+        current_user: CosemDataType::Null,
+    };
+    let association_ln = AssociationLn::new(config);
+
+    let serialized = serialize_object(&association_ln).expect("Serialization failed");
+    let config = AssociationLnConfig {
+        logical_name: obis.clone(),
+        version: AssociationLnVersion::Version1,
+        object_list: vec![],
+        associated_partners_id: CosemDataType::Null,
+        application_context_name: CosemDataType::Null,
+        xdlms_context_info: CosemDataType::Null,
+        authentication_mechanism: AuthenticationMechanism::HLS4SHA1,
+        secret: CosemDataType::Null,
+        association_status: CosemDataType::Null,
+        security_setup_reference: CosemDataType::Null,
+        user_list: vec![],
+        current_user: CosemDataType::Null,
+    };
+    let mut deserialized = AssociationLn::new(config);
+    deserialize_object(&mut deserialized, &serialized).expect("Deserialization failed");
+
+    assert_eq!(deserialized.logical_name(), association_ln.logical_name());
+    assert_eq!(deserialized.attributes()[1].1, CosemDataType::Array(object_list));
+    assert_eq!(deserialized.attributes()[2].1, associated_partners_id);
+    assert_eq!(deserialized.attributes()[3].1, application_context_name);
+    assert_eq!(deserialized.attributes()[4].1, xdlms_context_info);
+    assert_eq!(deserialized.attributes()[5].1, CosemDataType::OctetString(vec![0x09, 0x07, 0x60, 0x85, 0x74, 0x05, 0x08, 0x02, 0x04]));
+    assert_eq!(deserialized.attributes()[6].1, secret);
+    assert_eq!(deserialized.attributes()[7].1, association_status);
+    assert_eq!(deserialized.attributes()[8].1, security_setup_reference);
+}
+
+#[test]
+fn test_association_ln_lls_authentication() {
+    let obis = ObisCode::new(0, 0, 40, 0, 0, 255);
+    let secret = vec![0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08];
+    let config = AssociationLnConfig {
+        logical_name: obis,
+        version: AssociationLnVersion::Version0,
+        object_list: vec![],
+        associated_partners_id: CosemDataType::Structure(vec![CosemDataType::LongUnsigned(1), CosemDataType::LongUnsigned(1)]),
+        application_context_name: CosemDataType::OctetString(vec![0x09, 0x06, 0x60, 0x85, 0x74, 0x05, 0x08, 0x01, 0x01]),
+        xdlms_context_info: CosemDataType::Structure(vec![
+            CosemDataType::DoubleLongUnsigned(0xFFFFFF),
+            CosemDataType::Unsigned(16),
+            CosemDataType::Unsigned(16),
+            CosemDataType::Unsigned(2),
+            CosemDataType::Boolean(true),
+            CosemDataType::BitString(vec![0xFF]),
+        ]),
+        authentication_mechanism: AuthenticationMechanism::LLS,
+        secret: CosemDataType::OctetString(secret.clone()),
+        association_status: CosemDataType::Enum(1),
+        security_setup_reference: CosemDataType::Null,
+        user_list: vec![],
+        current_user: CosemDataType::Null,
+    };
+    let mut association_ln = AssociationLn::new(config);
+
+    let result = association_ln.invoke_method(1, Some(CosemDataType::OctetString(secret.clone()))).expect("LLS authentication failed");
+    assert_eq!(result, CosemDataType::Null);
+
+    let wrong_secret = vec![0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF];
+    let result = association_ln.invoke_method(1, Some(CosemDataType::OctetString(wrong_secret)));
+    assert!(result.is_err());
+    assert_eq!(result.unwrap_err(), "LLS authentication failed");
+}
+
+#[test]
+fn test_association_ln_hls4_sha1_authentication() {
+    let obis = ObisCode::new(0, 0, 40, 0, 0, 255);
+    let secret = vec![0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08, 0x09, 0x0A, 0x0B, 0x0C, 0x0D, 0x0E, 0x0F, 0x10];
+    // Pass 1: клиент прислал CtoS; Pass 2: сервер отправил StoC.
+    let ctos = vec![0x11, 0x22, 0x33, 0x44];
+    let stoc = vec![0xAA, 0xBB, 0xCC, 0xDD];
+    let config = AssociationLnConfig {
+        logical_name: obis,
+        version: AssociationLnVersion::Version1,
+        object_list: vec![],
+        associated_partners_id: CosemDataType::Structure(vec![CosemDataType::LongUnsigned(1), CosemDataType::LongUnsigned(1)]),
+        application_context_name: CosemDataType::OctetString(vec![0x09, 0x06, 0x60, 0x85, 0x74, 0x05, 0x08, 0x01, 0x01]),
+        xdlms_context_info: CosemDataType::Structure(vec![
+            CosemDataType::DoubleLongUnsigned(0xFFFFFF),
+            CosemDataType::Unsigned(16),
+            CosemDataType::Unsigned(16),
+            CosemDataType::Unsigned(2),
+            CosemDataType::Boolean(true),
+            CosemDataType::BitString(vec![0xFF]),
+        ]),
+        authentication_mechanism: AuthenticationMechanism::HLS4SHA1,
+        secret: CosemDataType::OctetString(secret.clone()),
+        association_status: CosemDataType::Enum(1),
+        security_setup_reference: CosemDataType::Null,
+        user_list: vec![],
+        current_user: CosemDataType::Null,
+    };
+    let mut association_ln = AssociationLn::new(config);
+    association_ln.set_ctos(ctos.clone());
+    association_ln.set_stoc(stoc.clone());
+
+    // Pass 3: клиент присылает f(StoC) = SHA-1(StoC ‖ secret).
+    let mut hasher = Sha1::new();
+    hasher.update(&stoc);
+    hasher.update(&secret);
+    let f_stoc = hasher.finalize().to_vec();
+
+    // Pass 4: сервер возвращает f(CtoS) = SHA-1(CtoS ‖ secret).
+    let mut hasher = Sha1::new();
+    hasher.update(&ctos);
+    hasher.update(&secret);
+    let expected_f_ctos = hasher.finalize().to_vec();
+
+    let result = association_ln.invoke_method(1, Some(CosemDataType::OctetString(f_stoc.clone()))).expect("HLS4 SHA1 authentication failed");
+    assert_eq!(result, CosemDataType::OctetString(expected_f_ctos));
+
+    // Неверное f(StoC) отклоняется.
+    let mut wrong = f_stoc;
+    wrong[0] ^= 0xFF;
+    assert!(association_ln.invoke_method(1, Some(CosemDataType::OctetString(wrong))).is_err());
+}
+
+#[test]
+fn test_association_ln_change_hls_secret() {
+    let obis = ObisCode::new(0, 0, 40, 0, 0, 255);
+    let secret = vec![0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08];
+    let config = AssociationLnConfig {
+        logical_name: obis,
+        version: AssociationLnVersion::Version0,
+        object_list: vec![],
+        associated_partners_id: CosemDataType::Structure(vec![CosemDataType::LongUnsigned(1), CosemDataType::LongUnsigned(1)]),
+        application_context_name: CosemDataType::OctetString(vec![0x09, 0x06, 0x60, 0x85, 0x74, 0x05, 0x08, 0x01, 0x01]),
+        xdlms_context_info: CosemDataType::Structure(vec![
+            CosemDataType::DoubleLongUnsigned(0xFFFFFF),
+            CosemDataType::Unsigned(16),
+            CosemDataType::Unsigned(16),
+            CosemDataType::Unsigned(2),
+            CosemDataType::Boolean(true),
+            CosemDataType::BitString(vec![0xFF]),
+        ]),
+        authentication_mechanism: AuthenticationMechanism::LLS,
+        secret: CosemDataType::OctetString(secret.clone()),
+        association_status: CosemDataType::Enum(1),
+        security_setup_reference: CosemDataType::Null,
+        user_list: vec![],
+        current_user: CosemDataType::Null,
+    };
+    let mut association_ln = AssociationLn::new(config);
+
+    let new_secret = vec![0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF];
+    let result = association_ln.invoke_method(2, Some(CosemDataType::OctetString(new_secret.clone()))).expect("Change HLS secret failed");
+    assert_eq!(result, CosemDataType::Null);
+    assert_eq!(association_ln.attributes()[6].1, CosemDataType::OctetString(new_secret));
+}
+
+#[test]
+fn test_association_ln_add_object() {
+    let obis = ObisCode::new(0, 0, 40, 0, 0, 255);
+    let config = AssociationLnConfig {
+        logical_name: obis,
+        version: AssociationLnVersion::Version1,
+        object_list: vec![],
+        associated_partners_id: CosemDataType::Structure(vec![CosemDataType::LongUnsigned(1), CosemDataType::LongUnsigned(1)]),
+        application_context_name: CosemDataType::OctetString(vec![0x09, 0x07, 0x60, 0x85, 0x74, 0x05, 0x08, 0x01, 0x01]),
+        xdlms_context_info: CosemDataType::Null,
+        authentication_mechanism: AuthenticationMechanism::HLS4SHA1,
+        secret: CosemDataType::OctetString(vec![0x01; 16]),
+        association_status: CosemDataType::Enum(1),
+        security_setup_reference: CosemDataType::OctetString(vec![0, 0, 43, 0, 0, 255]),
+        user_list: vec![],
+        current_user: CosemDataType::Null,
+    };
+    let mut association_ln = AssociationLn::new(config);
+
+    let element = CosemDataType::Structure(vec![
+        CosemDataType::LongUnsigned(1),                          // class_id
+        CosemDataType::Unsigned(0),                              // version
+        CosemDataType::OctetString(vec![0, 0, 96, 1, 0, 255]),  // logical_name
+        CosemDataType::Array(vec![]),                            // access_rights
+    ]);
+    let result = association_ln.invoke_method(3, Some(element.clone())).expect("add_object failed");
+    assert_eq!(result, CosemDataType::Null);
+    if let CosemDataType::Array(list) = &association_ln.attributes()[1].1 {
+        assert_eq!(list.len(), 1);
+        assert_eq!(list[0], element);
+    } else {
+        panic!("Expected Array for object_list");
+    }
+}
+
+#[test]
+fn test_association_ln_remove_object() {
+    let obis = ObisCode::new(0, 0, 40, 0, 0, 255);
+    let element = CosemDataType::Structure(vec![
+        CosemDataType::LongUnsigned(1),
+        CosemDataType::Unsigned(0),
+        CosemDataType::OctetString(vec![0, 0, 96, 1, 0, 255]),
+        CosemDataType::Array(vec![]),
+    ]);
+    let config = AssociationLnConfig {
+        logical_name: obis,
+        version: AssociationLnVersion::Version1,
+        object_list: vec![element.clone()],
+        associated_partners_id: CosemDataType::Structure(vec![CosemDataType::LongUnsigned(1), CosemDataType::LongUnsigned(1)]),
+        application_context_name: CosemDataType::OctetString(vec![0x09, 0x07, 0x60, 0x85, 0x74, 0x05, 0x08, 0x01, 0x01]),
+        xdlms_context_info: CosemDataType::Null,
+        authentication_mechanism: AuthenticationMechanism::HLS4SHA1,
+        secret: CosemDataType::OctetString(vec![0x01; 16]),
+        association_status: CosemDataType::Enum(1),
+        security_setup_reference: CosemDataType::OctetString(vec![0, 0, 43, 0, 0, 255]),
+        user_list: vec![],
+        current_user: CosemDataType::Null,
+    };
+    let mut association_ln = AssociationLn::new(config);
+
+    let result = association_ln.invoke_method(4, Some(element)).expect("remove_object failed");
+    assert_eq!(result, CosemDataType::Null);
+    if let CosemDataType::Array(list) = &association_ln.attributes()[1].1 {
+        assert_eq!(list.len(), 0);
+    } else {
+        panic!("Expected Array for object_list");
+    }
+
+    // Повторное удаление отсутствующего объекта — ошибка.
+    let missing = CosemDataType::Structure(vec![
+        CosemDataType::LongUnsigned(1),
+        CosemDataType::Unsigned(0),
+        CosemDataType::OctetString(vec![0, 0, 96, 1, 0, 255]),
+        CosemDataType::Array(vec![]),
+    ]);
+    assert!(association_ln.invoke_method(4, Some(missing)).is_err());
 }

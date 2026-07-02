@@ -13,6 +13,7 @@ fn main() {
     let capture_objects = vec![(Arc::new(data) as Arc<dyn InterfaceClass + Send + Sync>, 2)];
     let config = ProfileGenericConfig {
         logical_name: profile_obis.clone(),
+        version: 1,
         buffer: vec![],
         capture_objects,
         capture_period: 3600,
@@ -33,6 +34,7 @@ fn main() {
     
     let config = ProfileGenericConfig {
         logical_name: profile_obis,
+        version: 1,
         buffer: vec![],
         capture_objects: vec![],
         capture_period: 0,
