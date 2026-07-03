@@ -12,12 +12,15 @@ use crate::types::BerError;
 pub mod acse;
 pub mod action;
 pub mod ciphering;
+pub mod error;
 pub mod gbt;
 pub mod get;
+pub mod notification;
 pub mod set;
 
 /// APDU tags of the xDLMS services (LN referencing), IEC 62056-5-3 Table 60.
 pub mod tag {
+    pub const DATA_NOTIFICATION: u8 = 0x0F;
     pub const GET_REQUEST: u8 = 0xC0;
     pub const SET_REQUEST: u8 = 0xC1;
     pub const EVENT_NOTIFICATION_REQUEST: u8 = 0xC2;
@@ -25,6 +28,8 @@ pub mod tag {
     pub const GET_RESPONSE: u8 = 0xC4;
     pub const SET_RESPONSE: u8 = 0xC5;
     pub const ACTION_RESPONSE: u8 = 0xC7;
+    pub const EXCEPTION_RESPONSE: u8 = 0xD8;
+    pub const CONFIRMED_SERVICE_ERROR: u8 = 0x0E;
 }
 
 /// `Data-Access-Result` codes (IEC 62056-5-3). Returned by GET/SET and, for the
