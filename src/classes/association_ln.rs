@@ -1,6 +1,6 @@
 use crate::interface::InterfaceClass;
 use crate::obis::ObisCode;
-use crate::security::{hls, AuthMechanism};
+use crate::security::{gost3410, hls, signature, AuthMechanism, SecuritySuite};
 use crate::types::{CosemDataType, BerError};
 use serde::{Deserialize, Serialize};
 use std::any::Any;
@@ -40,6 +40,12 @@ pub struct HlsContext {
     pub authentication_key: Vec<u8>,
     /// Global key `K_EM` (64 octets, 512 bits) — Kuznyechik CMAC (mechanism 8).
     pub gost_key: Vec<u8>,
+    /// Server signing private key — ECDSA (mechanism 7, `Vec256`/`Vec384` raw
+    /// scalar) or GOST 34.10 (mechanism 10, little-endian `Vec256`).
+    pub signing_key: Vec<u8>,
+    /// Client verification public key — ECDSA (raw `x ‖ y` or SEC1) or GOST
+    /// 34.10 (`π_x(Q) ‖ π_y(Q)`, 64 octets). Signature mechanisms 7 / 10.
+    pub peer_public_key: Vec<u8>,
 }
 
 /// Configuration structure used to build an `Association LN` object.
@@ -255,9 +261,30 @@ impl AssociationLn {
                     .map_err(str::to_string)?;
                 Ok(CosemDataType::OctetString(assemble_sc_ic_mac(ctx.security_control_byte, &server_ic, &mac)))
             }
-            // Mechanisms 7/10 are signature schemes requiring a private key.
-            AuthMechanism::HlsEcdsa | AuthMechanism::HlsGostSignature => {
-                Err("signature mechanisms (7 ECDSA / 10 GOST 34.10) require a private key; not yet supported here".to_string())
+            // Mechanism 7 (ECDSA): f = SIGN(d, ST_a ‖ ST_b ‖ chal_a ‖ chal_b),
+            // hashed with the suite's SHA-256 (P-256) or SHA-384 (P-384).
+            AuthMechanism::HlsEcdsa => {
+                let ctx = self.hls_context.as_ref().ok_or("HLS context not configured for ECDSA")?;
+                let suite = SecuritySuite::from_id(ctx.security_control_byte & 0x0F)
+                    .filter(|s| s.has_public_key())
+                    .ok_or("ECDSA (mechanism 7) requires security suite 1 or 2")?;
+                let msg_c = [&ctx.client_system_title[..], &ctx.server_system_title, stoc, ctos].concat();
+                signature::ecdsa_verify(suite, &ctx.peer_public_key, &msg_c, &f_stoc)
+                    .map_err(|e| format!("HLS authentication failed: ECDSA f(StoC) invalid: {e}"))?;
+                let msg_s = [&ctx.server_system_title[..], &ctx.client_system_title, ctos, stoc].concat();
+                let sig = signature::ecdsa_sign(suite, &ctx.signing_key, &msg_s).map_err(|e| e.to_string())?;
+                Ok(CosemDataType::OctetString(sig))
+            }
+            // Mechanism 10 (GOST 34.10-2018-256): f = SIGN(d, ST_a ‖ ST_b ‖
+            // chal_a ‖ chal_b) over curve paramSetB, Streebog-256.
+            AuthMechanism::HlsGostSignature => {
+                let ctx = self.hls_context.as_ref().ok_or("HLS context not configured for GOST signature")?;
+                let msg_c = [&ctx.client_system_title[..], &ctx.server_system_title, stoc, ctos].concat();
+                gost3410::gost_verify(&ctx.peer_public_key, &msg_c, &f_stoc)
+                    .map_err(|e| format!("HLS authentication failed: GOST 34.10 f(StoC) invalid: {e:?}"))?;
+                let msg_s = [&ctx.server_system_title[..], &ctx.client_system_title, ctos, stoc].concat();
+                let sig = gost3410::gost_sign(&ctx.signing_key, &msg_s).map_err(|e| format!("GOST 34.10 signing failed: {e:?}"))?;
+                Ok(CosemDataType::OctetString(sig.to_vec()))
             }
             AuthMechanism::HlsManufacturer => {
                 Err("manufacturer-specific HLS mechanism (2) is not implemented".to_string())
@@ -852,6 +879,97 @@ mod tests {
         let mut bad = f_stoc;
         let n = bad.len();
         bad[n - 1] ^= 0x01;
+        assert!(obj.invoke_method(1, Some(CosemDataType::OctetString(bad))).is_err());
+    }
+
+    /// Mechanism 7 (ECDSA, suite 1 / P-256): four-pass signature handshake
+    /// through the association object.
+    #[test]
+    fn hls_ecdsa_four_pass_via_association() {
+        use p256::ecdsa::SigningKey;
+        let st_c = b"CLIENT01".to_vec();
+        let st_s = b"SERVER01".to_vec();
+        let stoc = vec![0xAA, 0xBB, 0xCC, 0xDD];
+        let ctos = vec![0x11, 0x22, 0x33, 0x44];
+        let d_client = hex(b"418073C239FA6125011DE4D6CD2E645780289F761BB21BFB0835CB5585E8B373");
+        let d_server = hex(b"1122334455667788112233445566778811223344556677881122334455667788");
+        let pk_client =
+            SigningKey::from_slice(&d_client).unwrap().verifying_key().to_encoded_point(false).as_bytes().to_vec();
+        let pk_server =
+            SigningKey::from_slice(&d_server).unwrap().verifying_key().to_encoded_point(false).as_bytes().to_vec();
+
+        let mut obj = sample(AssociationLnVersion::Version1);
+        obj.authentication_mechanism = AuthMechanism::HlsEcdsa;
+        obj.set_stoc(stoc.clone());
+        obj.set_ctos(ctos.clone());
+        obj.set_hls_context(HlsContext {
+            client_system_title: st_c.clone(),
+            server_system_title: st_s.clone(),
+            security_control_byte: 0x31, // suite 1 in the low nibble
+            signing_key: d_server.clone(),
+            peer_public_key: pk_client.clone(),
+            ..Default::default()
+        });
+
+        // Client's f(StoC) = SIGN(d_C, ST_C ‖ ST_S ‖ StoC ‖ CtoS).
+        let msg_c = [&st_c[..], &st_s, &stoc, &ctos].concat();
+        let f_stoc = signature::ecdsa_sign(SecuritySuite::Suite1, &d_client, &msg_c).unwrap();
+        let reply = obj
+            .invoke_method(1, Some(CosemDataType::OctetString(f_stoc.clone())))
+            .expect("ECDSA authentication should succeed");
+        // Server's f(CtoS) must verify against the server key over the swapped message.
+        let msg_s = [&st_s[..], &st_c, &ctos, &stoc].concat();
+        let sig = match reply {
+            CosemDataType::OctetString(b) => b,
+            _ => panic!("expected octet-string reply"),
+        };
+        signature::ecdsa_verify(SecuritySuite::Suite1, &pk_server, &msg_s, &sig).unwrap();
+
+        let mut bad = f_stoc;
+        bad[10] ^= 0x01;
+        assert!(obj.invoke_method(1, Some(CosemDataType::OctetString(bad))).is_err());
+    }
+
+    /// Mechanism 10 (GOST 34.10-2018-256): four-pass signature handshake through
+    /// the association object, with the A.5.3 client/server signing keys.
+    #[test]
+    fn hls_gost_signature_four_pass_via_association() {
+        let st_c = hex(b"ff00ee11dd22cc33");
+        let st_s = hex(b"bb44aa5599668877");
+        let stoc = hex(b"8899aabbccddeeff");
+        let ctos = hex(b"0011223344556677");
+        let d_client = hex(b"48494a4b4c4d4e4f4041424344454647bbbbaaaa999988884444555566667777");
+        let d_server = hex(b"58595a5b5c5d5e5f5051525354555657ffffffffeeeeeeee8888888899999999");
+        let pk_client = gost3410::public_key(&d_client).unwrap();
+        let pk_server = gost3410::public_key(&d_server).unwrap();
+
+        let mut obj = sample(AssociationLnVersion::Version1);
+        obj.authentication_mechanism = AuthMechanism::HlsGostSignature;
+        obj.set_stoc(stoc.clone());
+        obj.set_ctos(ctos.clone());
+        obj.set_hls_context(HlsContext {
+            client_system_title: st_c.clone(),
+            server_system_title: st_s.clone(),
+            signing_key: d_server.to_vec(),
+            peer_public_key: pk_client.to_vec(),
+            ..Default::default()
+        });
+
+        // Client's f(StoC) = SIGN(d_C, ST_C ‖ ST_S ‖ StoC ‖ CtoS).
+        let msg_c = [&st_c[..], &st_s, &stoc, &ctos].concat();
+        let f_stoc = gost3410::gost_sign(&d_client, &msg_c).unwrap().to_vec();
+        let reply = obj
+            .invoke_method(1, Some(CosemDataType::OctetString(f_stoc.clone())))
+            .expect("GOST 34.10 authentication should succeed");
+        let msg_s = [&st_s[..], &st_c, &ctos, &stoc].concat();
+        let sig = match reply {
+            CosemDataType::OctetString(b) => b,
+            _ => panic!("expected octet-string reply"),
+        };
+        gost3410::gost_verify(&pk_server, &msg_s, &sig).unwrap();
+
+        let mut bad = f_stoc;
+        bad[10] ^= 0x01;
         assert!(obj.invoke_method(1, Some(CosemDataType::OctetString(bad))).is_err());
     }
 
