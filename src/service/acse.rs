@@ -15,6 +15,22 @@ use super::ServiceError;
 pub const AARQ_TAG: u8 = 0x60;
 /// AARE APDU tag ([APPLICATION 1], constructed).
 pub const AARE_TAG: u8 = 0x61;
+/// RLRQ APDU tag ([APPLICATION 2], constructed).
+pub const RLRQ_TAG: u8 = 0x62;
+/// RLRE APDU tag ([APPLICATION 3], constructed).
+pub const RLRE_TAG: u8 = 0x63;
+
+/// Release-request/response reason values (ACSE field [0]).
+pub mod release_reason {
+    /// Normal release (both RLRQ and RLRE).
+    pub const NORMAL: u8 = 0;
+    /// Urgent (RLRQ only; not used in DLMS/COSEM).
+    pub const URGENT: u8 = 1;
+    /// Not-finished (RLRE only).
+    pub const NOT_FINISHED: u8 = 1;
+    /// User-defined.
+    pub const USER_DEFINED: u8 = 30;
+}
 
 /// Association result (AARE field [2]).
 pub mod result {
@@ -194,6 +210,71 @@ impl AssociationResponse {
             }
         }
         Ok(resp)
+    }
+}
+
+/// An RLRQ (association release request) or RLRE (release response) APDU. Both
+/// share the same shape: an optional reason and optional user-information (which
+/// carries a ciphered InitiateRequest/Response when the AA used ciphering).
+#[derive(Debug, Clone, PartialEq)]
+pub struct ReleaseRequest {
+    /// Release reason (see [`release_reason`]).
+    pub reason: Option<u8>,
+    /// User-information: the xDLMS InitiateRequest APDU (opaque), if any.
+    pub user_information: Option<Vec<u8>>,
+}
+
+/// An RLRE (association release response) APDU.
+pub type ReleaseResponse = ReleaseRequest;
+
+impl ReleaseRequest {
+    /// Encodes the RLRQ APDU (tag [`RLRQ_TAG`]).
+    pub fn encode_rlrq(&self) -> Vec<u8> {
+        self.encode(RLRQ_TAG)
+    }
+
+    /// Encodes the RLRE APDU (tag [`RLRE_TAG`]).
+    pub fn encode_rlre(&self) -> Vec<u8> {
+        self.encode(RLRE_TAG)
+    }
+
+    fn encode(&self, apdu_tag: u8) -> Vec<u8> {
+        let mut content = Vec::new();
+        // [0] reason (IMPLICIT ENUMERATED → primitive context tag 0x80).
+        if let Some(reason) = self.reason {
+            content.extend_from_slice(&[0x80, 0x01, reason]);
+        }
+        // [30] user-information (OCTET STRING carrying the InitiateRequest/Response).
+        if let Some(info) = &self.user_information {
+            ber_tlv(0xBE, &octet_string(info), &mut content);
+        }
+        let mut apdu = vec![apdu_tag];
+        push_length(content.len(), &mut apdu);
+        apdu.extend_from_slice(&content);
+        apdu
+    }
+
+    /// Decodes an RLRQ APDU.
+    pub fn decode_rlrq(bytes: &[u8]) -> Result<ReleaseRequest, ServiceError> {
+        Self::decode(bytes, RLRQ_TAG)
+    }
+
+    /// Decodes an RLRE APDU.
+    pub fn decode_rlre(bytes: &[u8]) -> Result<ReleaseResponse, ServiceError> {
+        Self::decode(bytes, RLRE_TAG)
+    }
+
+    fn decode(bytes: &[u8], apdu_tag: u8) -> Result<ReleaseRequest, ServiceError> {
+        let content = outer_content(bytes, apdu_tag)?;
+        let mut req = ReleaseRequest { reason: None, user_information: None };
+        for (tag, value) in TlvIter::new(content) {
+            match tag {
+                0x80 => req.reason = Some(*value.last().ok_or(ServiceError::Truncated)?),
+                0xBE => req.user_information = Some(parse_octet_string(value)?),
+                _ => {}
+            }
+        }
+        Ok(req)
     }
 }
 
@@ -379,6 +460,25 @@ mod tests {
         let encoded = aare.encode();
         assert_eq!(encoded[0], AARE_TAG);
         assert_eq!(AssociationResponse::decode(&encoded).unwrap(), aare);
+    }
+
+    #[test]
+    fn rlrq_normal_round_trips() {
+        let rlrq = ReleaseRequest { reason: Some(release_reason::NORMAL), user_information: None };
+        // 62 03 80 01 00.
+        assert_eq!(rlrq.encode_rlrq(), vec![0x62, 0x03, 0x80, 0x01, 0x00]);
+        assert_eq!(ReleaseRequest::decode_rlrq(&rlrq.encode_rlrq()).unwrap(), rlrq);
+    }
+
+    #[test]
+    fn rlre_with_user_information_round_trips() {
+        let rlre = ReleaseResponse {
+            reason: Some(release_reason::NORMAL),
+            user_information: Some(vec![0x08, 0x00, 0x06, 0x5F, 0x1F, 0x04, 0x00, 0x00, 0x7E, 0x1F, 0x04, 0xB0]),
+        };
+        let bytes = rlre.encode_rlre();
+        assert_eq!(bytes[0], RLRE_TAG);
+        assert_eq!(ReleaseResponse::decode_rlre(&bytes).unwrap(), rlre);
     }
 
     #[test]
