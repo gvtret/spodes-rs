@@ -14,6 +14,7 @@
 //! The four-pass HLS handshake computations live in [`hls`].
 
 pub mod hls;
+pub mod signature;
 
 /// A DLMS/COSEM security suite (IEC 62056-5-3, 5.3.7).
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]

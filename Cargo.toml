@@ -14,6 +14,9 @@ sha2 = "0.10"
 streebog = "0.10"
 kuznyechik = "0.8"
 cmac = "0.7"
+p256 = { version = "0.13", features = ["ecdsa"] }
+p384 = { version = "0.13", features = ["ecdsa"] }
+ecdsa = "0.16"
 hmac = "0.12"
 aes-gcm = "0.10"
 aead = "0.5"
