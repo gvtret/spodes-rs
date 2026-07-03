@@ -24,3 +24,8 @@ pub mod transport;
 /// Application-layer xDLMS services (GET/SET/ACTION) and association
 /// establishment (AARQ/AARE), per IEC 62056-5-3, using LN referencing.
 pub mod service;
+
+/// Security model: security suites (0/1/2), security policy (protection level)
+/// and the HLS/LLS authentication mechanisms (0..10), including the GOST profile
+/// of Р 1323565.1.
+pub mod security;
