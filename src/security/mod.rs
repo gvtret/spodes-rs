@@ -115,7 +115,7 @@ impl SecurityPolicy {
 ///
 /// Mechanisms 0..7 are defined by IEC 62056-5-3 / the DLMS Green Book;
 /// mechanisms 8..10 are the Russian GOST profile of Р 1323565.1, §7.5.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 pub enum AuthMechanism {
     /// (0) No authentication (lowest level security).
     None,

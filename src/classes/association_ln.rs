@@ -1,10 +1,9 @@
 use crate::interface::InterfaceClass;
 use crate::obis::ObisCode;
+use crate::security::{hls, AuthMechanism};
 use crate::types::{CosemDataType, BerError};
 use serde::{Deserialize, Serialize};
 use std::any::Any;
-use sha1::{Sha1, Digest};
-use md5::Md5;
 use aes_gcm::{Aes128Gcm, Aes256Gcm, KeyInit, Nonce};
 use aead::Aead;
 use rand::Rng;
@@ -17,35 +16,30 @@ pub enum AssociationLnVersion {
     Version2,
 }
 
-/// Authentication mechanisms.
-#[derive(Clone, Serialize, Deserialize, Debug, PartialEq)]
-pub enum AuthenticationMechanism {
-    LLS,       // Low Level Security (password)
-    HLS3MD5,   // High Level Security with MD5
-    HLS4SHA1,  // High Level Security with SHA-1
-    HLS5GMAC,  // High Level Security with GMAC
-}
+/// The authentication mechanism (mechanism_id 0..10), unified with the
+/// crate-wide security model. See [`crate::security::AuthMechanism`].
+pub use crate::security::AuthMechanism as AuthenticationMechanism;
 
-/// Cryptographic material for HLS mechanism 5 (GMAC), required to compute and
-/// verify `f(challenge)` per IEC 62056-5-3, Table 32.
-///
-/// `f(challenge) = SC ‖ IC ‖ GMAC(SC ‖ AK ‖ challenge)`, where GMAC is the
-/// AES-GCM tag (truncated to 12 octets) with key `EK`, initialization vector
-/// `IV = system_title ‖ IC` and empty plaintext.
-#[derive(Clone, Serialize, Deserialize, Debug)]
-pub struct GmacContext {
-    /// Security control byte (SC).
-    pub security_control_byte: u8,
-    /// Block cipher encryption key (EK), 16 or 32 octets.
-    pub encryption_key: Vec<u8>,
-    /// Authentication key (AK); part of the additional authenticated data.
-    pub authentication_key: Vec<u8>,
-    /// Server System-Title (8 octets) — used for the IV when producing `f(CtoS)`.
-    pub server_system_title: Vec<u8>,
-    /// Server invocation counter (IC); part of the IV and carried in `f(CtoS)`.
-    pub server_invocation_counter: u32,
-    /// Client System-Title (8 octets) — used for the IV when verifying `f(StoC)`.
+/// Cryptographic material for the HLS handshake, shared by the mechanisms that
+/// need more than the plain secret: GMAC (5), SHA-256 (6), Kuznyechik CMAC (8)
+/// and Streebog (9). Fields not relevant to the negotiated mechanism may stay
+/// empty (see [`Default`]).
+#[derive(Clone, Serialize, Deserialize, Debug, Default)]
+pub struct HlsContext {
+    /// Client System-Title (8 octets).
     pub client_system_title: Vec<u8>,
+    /// Server System-Title (8 octets).
+    pub server_system_title: Vec<u8>,
+    /// Security control byte (SC) — GMAC / CMAC.
+    pub security_control_byte: u8,
+    /// Server invocation counter (IC) — carried in `f(CtoS)` for GMAC / CMAC.
+    pub server_invocation_counter: u32,
+    /// Block cipher encryption key (EK), 16 or 32 octets — GMAC (mechanism 5).
+    pub encryption_key: Vec<u8>,
+    /// Authentication key (AK) — GMAC (mechanism 5).
+    pub authentication_key: Vec<u8>,
+    /// Global key `K_EM` (64 octets, 512 bits) — Kuznyechik CMAC (mechanism 8).
+    pub gost_key: Vec<u8>,
 }
 
 /// Configuration structure used to build an `Association LN` object.
@@ -89,9 +83,10 @@ pub struct AssociationLn {
     /// Server-to-client challenge (StoC) sent in the AARE (Pass 2).
     #[serde(skip)]
     stoc: Option<Vec<u8>>,
-    /// Cryptographic material for HLS-GMAC (mechanism 5). Not needed for mechanisms 3/4.
+    /// Cryptographic material for the HLS handshake (mechanisms 5/6/8/9).
+    /// Not needed for the plain-hash mechanisms 3/4.
     #[serde(skip)]
-    gmac_context: Option<GmacContext>,
+    hls_context: Option<HlsContext>,
 }
 
 impl AssociationLn {
@@ -111,7 +106,7 @@ impl AssociationLn {
             current_user: config.current_user,
             ctos: None,
             stoc: None,
-            gmac_context: None,
+            hls_context: None,
         }
     }
 
@@ -134,9 +129,9 @@ impl AssociationLn {
         stoc
     }
 
-    /// Sets the cryptographic material for HLS-GMAC (mechanism 5).
-    pub fn set_gmac_context(&mut self, ctx: GmacContext) {
-        self.gmac_context = Some(ctx);
+    /// Sets the cryptographic material for the HLS handshake (mechanisms 5/6/8/9).
+    pub fn set_hls_context(&mut self, ctx: HlsContext) {
+        self.hls_context = Some(ctx);
     }
 
     /// Method 2: `change_HLS_secret` — replaces the secret (password/key).
@@ -161,16 +156,17 @@ impl AssociationLn {
     /// Requires `StoC` (Pass 2) and `CtoS` (Pass 1) to be set beforehand via
     /// [`AssociationLn::set_stoc`]/[`AssociationLn::generate_stoc`] and
     /// [`AssociationLn::set_ctos`]. For mechanism 5 (GMAC), also
-    /// [`AssociationLn::set_gmac_context`].
+    /// [`AssociationLn::set_hls_context`].
     fn reply_to_hls_authentication(&self, data: CosemDataType) -> Result<CosemDataType, String> {
         let f_stoc = match data {
             CosemDataType::OctetString(bytes) => bytes,
             _ => return Err("Expected octet-string for f(StoC)".to_string()),
         };
+        let mechanism = self.authentication_mechanism;
 
         // LLS does not use the four-pass reply_to_HLS: the secret is compared
         // directly (compatible with the LLS password carried in the AARQ).
-        if self.authentication_mechanism == AuthenticationMechanism::LLS {
+        if mechanism == AuthMechanism::Lls {
             return match &self.secret {
                 CosemDataType::OctetString(secret) if secret == &f_stoc => Ok(CosemDataType::Null),
                 _ => Err("LLS authentication failed".to_string()),
@@ -180,28 +176,46 @@ impl AssociationLn {
         let stoc = self.stoc.as_ref().ok_or("StoC challenge not set (Pass 2 missing)")?;
         let ctos = self.ctos.as_ref().ok_or("CtoS challenge not set (Pass 1 missing)")?;
 
-        match self.authentication_mechanism {
-            AuthenticationMechanism::HLS3MD5 | AuthenticationMechanism::HLS4SHA1 => {
-                let secret = match &self.secret {
-                    CosemDataType::OctetString(s) => s,
-                    _ => return Err("HLS secret must be an octet-string".to_string()),
-                };
-                let expected = hls_hash(&self.authentication_mechanism, stoc, secret);
+        match mechanism {
+            // Mechanisms 3/4: f(challenge) = HASH(challenge ‖ secret).
+            AuthMechanism::HlsMd5 | AuthMechanism::HlsSha1 => {
+                let secret = self.secret_bytes()?;
+                let expected = hls::hash_legacy(mechanism, stoc, secret).unwrap();
                 if expected != f_stoc {
                     return Err("HLS authentication failed: f(StoC) mismatch".to_string());
                 }
-                Ok(CosemDataType::OctetString(hls_hash(
-                    &self.authentication_mechanism,
-                    ctos,
-                    secret,
-                )))
+                Ok(CosemDataType::OctetString(hls::hash_legacy(mechanism, ctos, secret).unwrap()))
             }
-            AuthenticationMechanism::HLS5GMAC => {
-                let ctx = self
-                    .gmac_context
-                    .as_ref()
-                    .ok_or("GMAC context not configured for HLS mechanism 5")?;
-                // f(StoC) = SC(1) ‖ IC(4) ‖ T(12); the client IC/System-Title form the IV.
+            // Mechanisms 6/9: f = HASH(secret ‖ ST_a ‖ ST_b ‖ chal_a ‖ chal_b).
+            AuthMechanism::HlsSha256 | AuthMechanism::HlsGostStreebog => {
+                let secret = self.secret_bytes()?;
+                let ctx = self.hls_context.as_ref().ok_or("HLS context (system titles) not set")?;
+                let expected = hls::hash_with_titles(
+                    mechanism,
+                    secret,
+                    &ctx.client_system_title,
+                    &ctx.server_system_title,
+                    stoc,
+                    ctos,
+                )
+                .unwrap();
+                if expected != f_stoc {
+                    return Err("HLS authentication failed: f(StoC) mismatch".to_string());
+                }
+                let f_ctos = hls::hash_with_titles(
+                    mechanism,
+                    secret,
+                    &ctx.server_system_title,
+                    &ctx.client_system_title,
+                    ctos,
+                    stoc,
+                )
+                .unwrap();
+                Ok(CosemDataType::OctetString(f_ctos))
+            }
+            // Mechanism 5: f = SC ‖ IC ‖ GMAC(SC ‖ AK ‖ challenge), 12-octet tag.
+            AuthMechanism::HlsGmac => {
+                let ctx = self.hls_context.as_ref().ok_or("HLS context not configured for GMAC")?;
                 if f_stoc.len() != 17 {
                     return Err("f(StoC) must be 17 octets (SC ‖ IC ‖ 12-octet tag)".to_string());
                 }
@@ -209,25 +223,55 @@ impl AssociationLn {
                 if sc != ctx.security_control_byte {
                     return Err("f(StoC) security control byte mismatch".to_string());
                 }
-                let client_ic = &f_stoc[1..5];
-                let client_iv = build_iv(&ctx.client_system_title, client_ic)?;
+                let client_iv = build_iv(&ctx.client_system_title, &f_stoc[1..5])?;
                 let aad_stoc = [&[sc][..], &ctx.authentication_key, stoc].concat();
-                let expected_tag = gmac_tag(&ctx.encryption_key, &client_iv, &aad_stoc)?;
-                if expected_tag != f_stoc[5..17] {
+                if gmac_tag(&ctx.encryption_key, &client_iv, &aad_stoc)? != f_stoc[5..17] {
                     return Err("HLS authentication failed: GMAC f(StoC) mismatch".to_string());
                 }
-                // f(CtoS) = SC ‖ IC_server ‖ GMAC(SC ‖ AK ‖ CtoS), server IV.
                 let server_ic = ctx.server_invocation_counter.to_be_bytes();
                 let server_iv = build_iv(&ctx.server_system_title, &server_ic)?;
                 let aad_ctos = [&[ctx.security_control_byte][..], &ctx.authentication_key, ctos].concat();
                 let tag = gmac_tag(&ctx.encryption_key, &server_iv, &aad_ctos)?;
-                let mut f_ctos = Vec::with_capacity(17);
-                f_ctos.push(ctx.security_control_byte);
-                f_ctos.extend_from_slice(&server_ic);
-                f_ctos.extend_from_slice(&tag);
-                Ok(CosemDataType::OctetString(f_ctos))
+                Ok(CosemDataType::OctetString(assemble_sc_ic_mac(ctx.security_control_byte, &server_ic, &tag)))
             }
-            AuthenticationMechanism::LLS => unreachable!("LLS handled above"),
+            // Mechanism 8 (GOST): f = SC ‖ IC ‖ KUZN_CMAC(LSB256(K_EM), IV ‖ SC ‖ chal_a ‖ chal_b).
+            AuthMechanism::HlsGostCmac => {
+                let ctx = self.hls_context.as_ref().ok_or("HLS context not configured for GOST CMAC")?;
+                if f_stoc.len() != 21 {
+                    return Err("f(StoC) must be 21 octets (SC ‖ IC ‖ 16-octet MAC)".to_string());
+                }
+                let sc = f_stoc[0];
+                if sc != ctx.security_control_byte {
+                    return Err("f(StoC) security control byte mismatch".to_string());
+                }
+                let client_iv = build_iv(&ctx.client_system_title, &f_stoc[1..5])?;
+                let expected = hls::gost_cmac(&ctx.gost_key, &client_iv, sc, stoc, ctos).map_err(str::to_string)?;
+                if expected != f_stoc[5..21] {
+                    return Err("HLS authentication failed: GOST CMAC f(StoC) mismatch".to_string());
+                }
+                let server_ic = ctx.server_invocation_counter.to_be_bytes();
+                let server_iv = build_iv(&ctx.server_system_title, &server_ic)?;
+                let mac = hls::gost_cmac(&ctx.gost_key, &server_iv, ctx.security_control_byte, ctos, stoc)
+                    .map_err(str::to_string)?;
+                Ok(CosemDataType::OctetString(assemble_sc_ic_mac(ctx.security_control_byte, &server_ic, &mac)))
+            }
+            // Mechanisms 7/10 are signature schemes requiring a private key.
+            AuthMechanism::HlsEcdsa | AuthMechanism::HlsGostSignature => {
+                Err("signature mechanisms (7 ECDSA / 10 GOST 34.10) require a private key; not yet supported here".to_string())
+            }
+            AuthMechanism::HlsManufacturer => {
+                Err("manufacturer-specific HLS mechanism (2) is not implemented".to_string())
+            }
+            AuthMechanism::None => Err("mechanism 0 does not use HLS authentication".to_string()),
+            AuthMechanism::Lls => unreachable!("LLS handled above"),
+        }
+    }
+
+    /// Returns the secret as octet-string bytes, or an error.
+    fn secret_bytes(&self) -> Result<&[u8], String> {
+        match &self.secret {
+            CosemDataType::OctetString(s) => Ok(s),
+            _ => Err("HLS secret must be an octet-string".to_string()),
         }
     }
 
@@ -294,24 +338,14 @@ fn user_id(entry: &CosemDataType) -> Option<u8> {
     None
 }
 
-/// Computes `HASH(challenge ‖ secret)` for HLS mechanisms 3 (MD5) and 4 (SHA-1)
-/// per IEC 62056-5-3, Table 32. Not called for other mechanisms.
-fn hls_hash(mechanism: &AuthenticationMechanism, challenge: &[u8], secret: &[u8]) -> Vec<u8> {
-    match mechanism {
-        AuthenticationMechanism::HLS3MD5 => {
-            let mut h = Md5::new();
-            h.update(challenge);
-            h.update(secret);
-            h.finalize().to_vec()
-        }
-        _ => {
-            // SHA-1 (mechanism 4) is the only remaining hash mechanism.
-            let mut h = Sha1::new();
-            h.update(challenge);
-            h.update(secret);
-            h.finalize().to_vec()
-        }
-    }
+/// Assembles the `SC ‖ IC ‖ MAC` response used by the GMAC (5) and GOST CMAC (8)
+/// mechanisms.
+fn assemble_sc_ic_mac(security_control: u8, invocation_counter: &[u8], mac: &[u8]) -> Vec<u8> {
+    let mut out = Vec::with_capacity(1 + invocation_counter.len() + mac.len());
+    out.push(security_control);
+    out.extend_from_slice(invocation_counter);
+    out.extend_from_slice(mac);
+    out
 }
 
 /// Builds the 12-octet initialization vector `IV = system_title (8) ‖ IC (4)`.
@@ -475,10 +509,10 @@ impl InterfaceClass for AssociationLn {
         self.application_context_name = seq[4].clone();
         self.xdlms_context_info = seq[5].clone();
         self.authentication_mechanism = match &seq[6] {
-            CosemDataType::OctetString(mech) if mech.ends_with(&[0x01]) => AuthenticationMechanism::LLS,
-            CosemDataType::OctetString(mech) if mech.ends_with(&[0x03]) => AuthenticationMechanism::HLS3MD5,
-            CosemDataType::OctetString(mech) if mech.ends_with(&[0x04]) => AuthenticationMechanism::HLS4SHA1,
-            CosemDataType::OctetString(mech) if mech.ends_with(&[0x05]) => AuthenticationMechanism::HLS5GMAC,
+            CosemDataType::OctetString(mech) => {
+                let id = *mech.last().ok_or(BerError::InvalidLength)?;
+                AuthMechanism::from_id(id).ok_or(BerError::InvalidValue)?
+            }
             _ => return Err(BerError::InvalidTag),
         };
         self.secret = seq[7].clone();
@@ -537,15 +571,10 @@ impl AssociationLn {
     /// (BER: tag 0x09, length 0x07, 7 value bytes). See DLMS UA 1000-1, 11.4 and
     /// IEC 62056-5-3, Table 65 (mechanism_id: LLS=1, MD5=3, SHA-1=4, GMAC=5).
     fn authentication_mechanism_name(&self) -> CosemDataType {
-        let mechanism_id = match self.authentication_mechanism {
-            AuthenticationMechanism::LLS => 0x01,
-            AuthenticationMechanism::HLS3MD5 => 0x03,
-            AuthenticationMechanism::HLS4SHA1 => 0x04,
-            AuthenticationMechanism::HLS5GMAC => 0x05,
-        };
-        CosemDataType::OctetString(vec![
-            0x09, 0x07, 0x60, 0x85, 0x74, 0x05, 0x08, 0x02, mechanism_id,
-        ])
+        let oid = self.authentication_mechanism.oid();
+        let mut value = vec![0x09, 0x07];
+        value.extend_from_slice(&oid);
+        CosemDataType::OctetString(value)
     }
 }
 
@@ -565,6 +594,7 @@ fn write_length(length: usize, buf: &mut Vec<u8>) -> Result<(), BerError> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use sha1::{Sha1, Digest};
 
     fn sample(version: AssociationLnVersion) -> AssociationLn {
         AssociationLn::new(AssociationLnConfig {
@@ -577,7 +607,7 @@ mod tests {
             ]),
             application_context_name: CosemDataType::OctetString(vec![0x09, 0x07, 0x60, 0x85, 0x74, 0x05, 0x08, 0x01, 0x01]),
             xdlms_context_info: CosemDataType::Null,
-            authentication_mechanism: AuthenticationMechanism::HLS4SHA1,
+            authentication_mechanism: AuthenticationMechanism::HlsSha1,
             secret: CosemDataType::OctetString(b"12345678".to_vec()),
             association_status: CosemDataType::Enum(0),
             security_setup_reference: CosemDataType::OctetString(vec![0, 0, 43, 0, 0, 255]),
@@ -721,16 +751,17 @@ mod tests {
         let expected_f_ctos = hex(b"1001234567FE1466AFB3DBCD4F9389E2B7");
 
         let mut obj = sample(AssociationLnVersion::Version1);
-        obj.authentication_mechanism = AuthenticationMechanism::HLS5GMAC;
+        obj.authentication_mechanism = AuthenticationMechanism::HlsGmac;
         obj.set_stoc(stoc);
         obj.set_ctos(ctos);
-        obj.set_gmac_context(GmacContext {
+        obj.set_hls_context(HlsContext {
             security_control_byte: 0x10,
             encryption_key: ek,
             authentication_key: ak,
             server_system_title: server_st,
             server_invocation_counter: 0x01234567,
             client_system_title: client_st,
+            ..Default::default()
         });
 
         let reply = obj
@@ -744,6 +775,98 @@ mod tests {
         assert!(obj
             .invoke_method(1, Some(CosemDataType::OctetString(bad)))
             .is_err());
+    }
+
+    /// Mechanisms 6 (SHA-256) and 9 (Streebog): four-pass handshake through the
+    /// association object, using the unified security model.
+    #[test]
+    fn hls_sha256_and_streebog_four_pass_via_association() {
+        for mech in [AuthMechanism::HlsSha256, AuthMechanism::HlsGostStreebog] {
+            let secret = b"0123456789abcdef".to_vec(); // >= 128 bits
+            let st_c = b"CLIENT01".to_vec();
+            let st_s = b"SERVER01".to_vec();
+            let stoc = vec![0xAA, 0xBB, 0xCC, 0xDD];
+            let ctos = vec![0x11, 0x22, 0x33, 0x44];
+            let mut obj = sample(AssociationLnVersion::Version1);
+            obj.authentication_mechanism = mech;
+            obj.secret = CosemDataType::OctetString(secret.clone());
+            obj.set_stoc(stoc.clone());
+            obj.set_ctos(ctos.clone());
+            obj.set_hls_context(HlsContext {
+                client_system_title: st_c.clone(),
+                server_system_title: st_s.clone(),
+                ..Default::default()
+            });
+            let f_stoc = hls::hash_with_titles(mech, &secret, &st_c, &st_s, &stoc, &ctos).unwrap();
+            let expected = hls::hash_with_titles(mech, &secret, &st_s, &st_c, &ctos, &stoc).unwrap();
+            let reply = obj
+                .invoke_method(1, Some(CosemDataType::OctetString(f_stoc.clone())))
+                .expect("HLS hash authentication should succeed");
+            assert_eq!(reply, CosemDataType::OctetString(expected));
+            let mut bad = f_stoc;
+            bad[0] ^= 0xFF;
+            assert!(obj.invoke_method(1, Some(CosemDataType::OctetString(bad))).is_err());
+        }
+    }
+
+    /// Mechanism 8 (GOST HLS CMAC, Kuznyechik): four-pass handshake through the
+    /// association object.
+    #[test]
+    fn hls_gost_cmac_four_pass_via_association() {
+        let k_em = hex(b"000102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f202122232425262728292a2b2c2d2e2f303132333435363738393a3b3c3d3e3f");
+        let st_c = hex(b"4d4d4d0000000001");
+        let st_s = hex(b"4d4d4d0000bc614e");
+        let stoc = hex(b"8899aabbccddeeff");
+        let ctos = hex(b"0011223344556677");
+        let sc = 0x30u8;
+        let client_ic = 0x0000_0001u32;
+        let server_ic = 0x0123_4567u32;
+
+        let mut obj = sample(AssociationLnVersion::Version1);
+        obj.authentication_mechanism = AuthMechanism::HlsGostCmac;
+        obj.set_stoc(stoc.clone());
+        obj.set_ctos(ctos.clone());
+        obj.set_hls_context(HlsContext {
+            client_system_title: st_c.clone(),
+            server_system_title: st_s.clone(),
+            security_control_byte: sc,
+            server_invocation_counter: server_ic,
+            gost_key: k_em.clone(),
+            ..Default::default()
+        });
+
+        // Client's f(StoC) = SC ‖ IC_C ‖ KUZN_CMAC(K_EM, IV_C ‖ SC ‖ StoC ‖ CtoS).
+        let iv_c = [&st_c[..], &client_ic.to_be_bytes()].concat();
+        let mac_c = hls::gost_cmac(&k_em, &iv_c, sc, &stoc, &ctos).unwrap();
+        let f_stoc = assemble_sc_ic_mac(sc, &client_ic.to_be_bytes(), &mac_c);
+
+        let iv_s = [&st_s[..], &server_ic.to_be_bytes()].concat();
+        let mac_s = hls::gost_cmac(&k_em, &iv_s, sc, &ctos, &stoc).unwrap();
+        let expected = assemble_sc_ic_mac(sc, &server_ic.to_be_bytes(), &mac_s);
+
+        let reply = obj
+            .invoke_method(1, Some(CosemDataType::OctetString(f_stoc.clone())))
+            .expect("GOST CMAC authentication should succeed");
+        assert_eq!(reply, CosemDataType::OctetString(expected));
+
+        let mut bad = f_stoc;
+        let n = bad.len();
+        bad[n - 1] ^= 0x01;
+        assert!(obj.invoke_method(1, Some(CosemDataType::OctetString(bad))).is_err());
+    }
+
+    /// Every mechanism id round-trips through attribute 6 (mechanism-name OID).
+    #[test]
+    fn mechanism_name_oid_covers_all_ids() {
+        for id in 0..=10u8 {
+            let mut obj = sample(AssociationLnVersion::Version0);
+            obj.authentication_mechanism = AuthMechanism::from_id(id).unwrap();
+            if let CosemDataType::OctetString(oid) = obj.authentication_mechanism_name() {
+                assert_eq!(oid, vec![0x09, 0x07, 0x60, 0x85, 0x74, 0x05, 0x08, 0x02, id]);
+            } else {
+                panic!("mechanism name must be an octet-string");
+            }
+        }
     }
 
     /// Parses an ASCII-hex string into a byte vector (for test vectors).
