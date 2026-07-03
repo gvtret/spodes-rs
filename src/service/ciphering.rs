@@ -101,6 +101,30 @@ pub struct SecurityContext {
 }
 
 impl SecurityContext {
+    /// Builds a context for a given protection level and security suite,
+    /// validating that the encryption key length matches the suite
+    /// (16 octets for suites 0/1, 32 for suite 2) and deriving the security
+    /// control byte from the policy and the suite id.
+    pub fn for_suite(
+        policy: crate::security::SecurityPolicy,
+        suite: crate::security::SecuritySuite,
+        encryption_key: Vec<u8>,
+        authentication_key: Vec<u8>,
+        system_title: Vec<u8>,
+        invocation_counter: u32,
+    ) -> Result<SecurityContext, CipherError> {
+        if encryption_key.len() != suite.aes_key_len() {
+            return Err(CipherError::InvalidKey);
+        }
+        Ok(SecurityContext {
+            security_control: policy.security_control_byte(suite),
+            encryption_key,
+            authentication_key,
+            system_title,
+            invocation_counter,
+        })
+    }
+
     fn authentication(&self) -> bool {
         self.security_control & security_control::AUTHENTICATION != 0
     }
@@ -357,6 +381,46 @@ mod tests {
         let n = apdu.len();
         apdu[n - 1] ^= 0x01; // corrupt the tag
         assert_eq!(unprotect(&mut ctx(), &apdu), Err(CipherError::AuthenticationFailed));
+    }
+
+    #[test]
+    fn for_suite_validates_key_length_and_builds_sc() {
+        use crate::security::{SecurityPolicy, SecuritySuite};
+        // Suite 2 requires a 32-octet key; a 16-octet one is rejected.
+        assert_eq!(
+            SecurityContext::for_suite(
+                SecurityPolicy::AuthenticationEncryption,
+                SecuritySuite::Suite2,
+                vec![0u8; 16],
+                vec![0u8; 16],
+                vec![0u8; 8],
+                0,
+            )
+            .unwrap_err(),
+            CipherError::InvalidKey
+        );
+        // Suite 0 authenticated encryption → SC = 0x30.
+        let ctx = SecurityContext::for_suite(
+            SecurityPolicy::AuthenticationEncryption,
+            SecuritySuite::Suite0,
+            vec![0u8; 16],
+            vec![0u8; 16],
+            vec![0u8; 8],
+            0,
+        )
+        .unwrap();
+        assert_eq!(ctx.security_control, 0x30);
+        // Suite 2 encryption-only → SC = 0x22.
+        let ctx2 = SecurityContext::for_suite(
+            SecurityPolicy::Encryption,
+            SecuritySuite::Suite2,
+            vec![0u8; 32],
+            vec![0u8; 32],
+            vec![0u8; 8],
+            0,
+        )
+        .unwrap();
+        assert_eq!(ctx2.security_control, 0x22);
     }
 
     #[test]
