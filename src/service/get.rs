@@ -18,12 +18,14 @@ use super::{tag, AttributeDescriptor, ServiceError};
 mod request_type {
     pub const NORMAL: u8 = 1;
     pub const NEXT: u8 = 2;
+    pub const WITH_LIST: u8 = 3;
 }
 
 /// Response-type octets of the GET service.
 mod response_type {
     pub const NORMAL: u8 = 1;
     pub const WITH_DATABLOCK: u8 = 2;
+    pub const WITH_LIST: u8 = 3;
 }
 
 /// Optional selective-access parameters attached to an attribute descriptor.
@@ -78,6 +80,12 @@ pub enum GetRequest {
         invoke_id_and_priority: u8,
         block_number: u32,
     },
+    /// GET-REQUEST-WITH-LIST: read several attributes in one request.
+    WithList {
+        invoke_id_and_priority: u8,
+        /// Each entry is an attribute descriptor with optional selective access.
+        attributes: Vec<(AttributeDescriptor, Option<AccessSelection>)>,
+    },
 }
 
 impl GetRequest {
@@ -95,6 +103,15 @@ impl GetRequest {
                 buf.push(request_type::NEXT);
                 buf.push(*invoke_id_and_priority);
                 buf.extend_from_slice(&block_number.to_be_bytes());
+            }
+            GetRequest::WithList { invoke_id_and_priority, attributes } => {
+                buf.push(request_type::WITH_LIST);
+                buf.push(*invoke_id_and_priority);
+                push_length(attributes.len(), &mut buf);
+                for (attribute, access_selection) in attributes {
+                    attribute.encode(&mut buf);
+                    AccessSelection::encode_into(access_selection, &mut buf)?;
+                }
             }
         }
         Ok(buf)
@@ -119,6 +136,19 @@ impl GetRequest {
                 let b = bytes.get(3..7).ok_or(ServiceError::Truncated)?;
                 let block_number = u32::from_be_bytes([b[0], b[1], b[2], b[3]]);
                 Ok(GetRequest::Next { invoke_id_and_priority, block_number })
+            }
+            request_type::WITH_LIST => {
+                let (count, header) = read_length(&bytes[3..])?;
+                let mut pos = 3 + header;
+                let mut attributes = Vec::with_capacity(count);
+                for _ in 0..count {
+                    let (attribute, n) = AttributeDescriptor::decode(&bytes[pos..])?;
+                    pos += n;
+                    let (access_selection, m) = AccessSelection::decode_from(&bytes[pos..])?;
+                    pos += m;
+                    attributes.push((attribute, access_selection));
+                }
+                Ok(GetRequest::WithList { invoke_id_and_priority, attributes })
             }
             other => Err(ServiceError::UnexpectedType(other)),
         }
@@ -148,6 +178,11 @@ pub enum GetResponse {
         block_number: u32,
         /// Raw data of this block, or a data-access-result code on failure.
         raw_data: Result<Vec<u8>, u8>,
+    },
+    /// GET-RESPONSE-WITH-LIST: one result per requested attribute.
+    WithList {
+        invoke_id_and_priority: u8,
+        results: Vec<GetDataResult>,
     },
 }
 
@@ -184,6 +219,23 @@ impl GetResponse {
                     Err(code) => {
                         buf.push(0x01);
                         buf.push(*code);
+                    }
+                }
+            }
+            GetResponse::WithList { invoke_id_and_priority, results } => {
+                buf.push(response_type::WITH_LIST);
+                buf.push(*invoke_id_and_priority);
+                push_length(results.len(), &mut buf);
+                for result in results {
+                    match result {
+                        GetDataResult::Data(data) => {
+                            buf.push(0x00);
+                            data.serialize_ber(&mut buf)?;
+                        }
+                        GetDataResult::AccessResult(code) => {
+                            buf.push(0x01);
+                            buf.push(*code);
+                        }
                     }
                 }
             }
@@ -229,6 +281,28 @@ impl GetResponse {
                     other => return Err(ServiceError::UnexpectedType(other)),
                 };
                 Ok(GetResponse::WithDataBlock { invoke_id_and_priority, last_block, block_number, raw_data })
+            }
+            response_type::WITH_LIST => {
+                let (count, header) = read_length(&bytes[3..])?;
+                let mut pos = 3 + header;
+                let mut results = Vec::with_capacity(count);
+                for _ in 0..count {
+                    let choice = *bytes.get(pos).ok_or(ServiceError::Truncated)?;
+                    pos += 1;
+                    match choice {
+                        0x00 => {
+                            let (data, rest) = CosemDataType::deserialize_ber(&bytes[pos..])?;
+                            pos = bytes.len() - rest.len();
+                            results.push(GetDataResult::Data(data));
+                        }
+                        0x01 => {
+                            results.push(GetDataResult::AccessResult(*bytes.get(pos).ok_or(ServiceError::Truncated)?));
+                            pos += 1;
+                        }
+                        other => return Err(ServiceError::UnexpectedType(other)),
+                    }
+                }
+                Ok(GetResponse::WithList { invoke_id_and_priority, results })
             }
             other => Err(ServiceError::UnexpectedType(other)),
         }
@@ -313,6 +387,36 @@ mod tests {
         };
         let bytes = resp.encode().unwrap();
         assert_eq!(bytes, vec![0xC4, 0x01, 0xC1, 0x01, 0x04]);
+        assert_eq!(GetResponse::decode(&bytes).unwrap(), resp);
+    }
+
+    #[test]
+    fn get_request_with_list_round_trips() {
+        let req = GetRequest::WithList {
+            invoke_id_and_priority: 0xC1,
+            attributes: vec![
+                (AttributeDescriptor::new(1, ObisCode::new(0, 0, 0x80, 0, 0, 0xFF), 2), None),
+                (AttributeDescriptor::new(8, ObisCode::new(0, 0, 1, 0, 0, 0xFF), 2), None),
+            ],
+        };
+        let bytes = req.encode().unwrap();
+        // C0 03 C1 02 <attr1 9> 00 <attr2 9> 00.
+        assert_eq!(bytes[..4], [0xC0, 0x03, 0xC1, 0x02]);
+        assert_eq!(GetRequest::decode(&bytes).unwrap(), req);
+    }
+
+    #[test]
+    fn get_response_with_list_round_trips() {
+        let resp = GetResponse::WithList {
+            invoke_id_and_priority: 0xC1,
+            results: vec![
+                GetDataResult::Data(CosemDataType::LongUnsigned(0x1234)),
+                GetDataResult::AccessResult(super::super::data_access_result::OBJECT_UNDEFINED),
+            ],
+        };
+        let bytes = resp.encode().unwrap();
+        // C4 03 C1 02 00 <12 12 34> 01 04.
+        assert_eq!(bytes, vec![0xC4, 0x03, 0xC1, 0x02, 0x00, 0x12, 0x12, 0x34, 0x01, 0x04]);
         assert_eq!(GetResponse::decode(&bytes).unwrap(), resp);
     }
 

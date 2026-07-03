@@ -14,11 +14,12 @@
 use crate::types::CosemDataType;
 
 use super::get::GetDataResult;
-use super::{tag, DataBlockSa, MethodDescriptor, ServiceError};
+use super::{push_length, read_length, tag, DataBlockSa, MethodDescriptor, ServiceError};
 
 mod request_type {
     pub const NORMAL: u8 = 1;
     pub const NEXT_PBLOCK: u8 = 2;
+    pub const WITH_LIST: u8 = 3;
     pub const WITH_FIRST_PBLOCK: u8 = 4;
     pub const WITH_PBLOCK: u8 = 6;
 }
@@ -26,6 +27,7 @@ mod request_type {
 mod response_type {
     pub const NORMAL: u8 = 1;
     pub const WITH_PBLOCK: u8 = 2;
+    pub const WITH_LIST: u8 = 3;
     pub const NEXT_PBLOCK: u8 = 4;
 }
 
@@ -55,6 +57,14 @@ pub enum ActionRequest {
     WithPblock {
         invoke_id_and_priority: u8,
         datablock: DataBlockSa,
+    },
+    /// ACTION-REQUEST-WITH-LIST: invoke several methods in one request. The
+    /// invocation-parameters list holds one `Data` per method (`Null` when a
+    /// method takes no parameters).
+    WithList {
+        invoke_id_and_priority: u8,
+        methods: Vec<MethodDescriptor>,
+        parameters: Vec<CosemDataType>,
     },
 }
 
@@ -90,6 +100,18 @@ impl ActionRequest {
                 buf.push(request_type::WITH_PBLOCK);
                 buf.push(*invoke_id_and_priority);
                 datablock.encode(&mut buf);
+            }
+            ActionRequest::WithList { invoke_id_and_priority, methods, parameters } => {
+                buf.push(request_type::WITH_LIST);
+                buf.push(*invoke_id_and_priority);
+                push_length(methods.len(), &mut buf);
+                for method in methods {
+                    method.encode(&mut buf);
+                }
+                push_length(parameters.len(), &mut buf);
+                for data in parameters {
+                    data.serialize_ber(&mut buf)?;
+                }
             }
         }
         Ok(buf)
@@ -132,6 +154,25 @@ impl ActionRequest {
                 let (datablock, _) = DataBlockSa::decode(&bytes[3..])?;
                 Ok(ActionRequest::WithPblock { invoke_id_and_priority, datablock })
             }
+            request_type::WITH_LIST => {
+                let (count, header) = read_length(&bytes[3..])?;
+                let mut pos = 3 + header;
+                let mut methods = Vec::with_capacity(count);
+                for _ in 0..count {
+                    let (method, n) = MethodDescriptor::decode(&bytes[pos..])?;
+                    pos += n;
+                    methods.push(method);
+                }
+                let (pcount, pheader) = read_length(&bytes[pos..])?;
+                pos += pheader;
+                let mut parameters = Vec::with_capacity(pcount);
+                for _ in 0..pcount {
+                    let (data, rest) = CosemDataType::deserialize_ber(&bytes[pos..])?;
+                    pos = bytes.len() - rest.len();
+                    parameters.push(data);
+                }
+                Ok(ActionRequest::WithList { invoke_id_and_priority, methods, parameters })
+            }
             other => Err(ServiceError::UnexpectedType(other)),
         }
     }
@@ -155,6 +196,12 @@ pub enum ActionResponse {
     NextPblock {
         invoke_id_and_priority: u8,
         block_number: u32,
+    },
+    /// ACTION-RESPONSE-WITH-LIST: one action-result (plus optional return data)
+    /// per invoked method.
+    WithList {
+        invoke_id_and_priority: u8,
+        results: Vec<(u8, Option<GetDataResult>)>,
     },
 }
 
@@ -190,6 +237,27 @@ impl ActionResponse {
                 buf.push(response_type::NEXT_PBLOCK);
                 buf.push(*invoke_id_and_priority);
                 buf.extend_from_slice(&block_number.to_be_bytes());
+            }
+            ActionResponse::WithList { invoke_id_and_priority, results } => {
+                buf.push(response_type::WITH_LIST);
+                buf.push(*invoke_id_and_priority);
+                push_length(results.len(), &mut buf);
+                for (result, return_parameters) in results {
+                    buf.push(*result);
+                    match return_parameters {
+                        None => buf.push(0x00),
+                        Some(GetDataResult::Data(data)) => {
+                            buf.push(0x01);
+                            buf.push(0x00);
+                            data.serialize_ber(&mut buf)?;
+                        }
+                        Some(GetDataResult::AccessResult(code)) => {
+                            buf.push(0x01);
+                            buf.push(0x01);
+                            buf.push(*code);
+                        }
+                    }
+                }
             }
         }
         Ok(buf)
@@ -233,6 +301,40 @@ impl ActionResponse {
                     invoke_id_and_priority,
                     block_number: u32::from_be_bytes([b[0], b[1], b[2], b[3]]),
                 })
+            }
+            response_type::WITH_LIST => {
+                let (count, header) = read_length(&bytes[3..])?;
+                let mut pos = 3 + header;
+                let mut results = Vec::with_capacity(count);
+                for _ in 0..count {
+                    let result = *bytes.get(pos).ok_or(ServiceError::Truncated)?;
+                    pos += 1;
+                    let flag = *bytes.get(pos).ok_or(ServiceError::Truncated)?;
+                    pos += 1;
+                    let return_parameters = match flag {
+                        0x00 => None,
+                        0x01 => {
+                            let choice = *bytes.get(pos).ok_or(ServiceError::Truncated)?;
+                            pos += 1;
+                            match choice {
+                                0x00 => {
+                                    let (data, rest) = CosemDataType::deserialize_ber(&bytes[pos..])?;
+                                    pos = bytes.len() - rest.len();
+                                    Some(GetDataResult::Data(data))
+                                }
+                                0x01 => {
+                                    let code = *bytes.get(pos).ok_or(ServiceError::Truncated)?;
+                                    pos += 1;
+                                    Some(GetDataResult::AccessResult(code))
+                                }
+                                other => return Err(ServiceError::UnexpectedType(other)),
+                            }
+                        }
+                        other => return Err(ServiceError::UnexpectedType(other)),
+                    };
+                    results.push((result, return_parameters));
+                }
+                Ok(ActionResponse::WithList { invoke_id_and_priority, results })
             }
             other => Err(ServiceError::UnexpectedType(other)),
         }
@@ -299,6 +401,34 @@ mod tests {
         let bytes = resp.encode().unwrap();
         // C7 01 C1 00 01 00 <11 07>.
         assert_eq!(bytes, vec![0xC7, 0x01, 0xC1, 0x00, 0x01, 0x00, 0x11, 0x07]);
+        assert_eq!(ActionResponse::decode(&bytes).unwrap(), resp);
+    }
+
+    #[test]
+    fn action_request_with_list_round_trips() {
+        let req = ActionRequest::WithList {
+            invoke_id_and_priority: 0xC1,
+            methods: vec![method(), MethodDescriptor::new(70, ObisCode::new(0, 0, 96, 3, 10, 255), 2)],
+            parameters: vec![CosemDataType::Integer(0), CosemDataType::Null],
+        };
+        let bytes = req.encode().unwrap();
+        // C3 03 C1 02 <method1> <method2> 02 <0F 00> <00>.
+        assert_eq!(bytes[..4], [0xC3, 0x03, 0xC1, 0x02]);
+        assert_eq!(ActionRequest::decode(&bytes).unwrap(), req);
+    }
+
+    #[test]
+    fn action_response_with_list_round_trips() {
+        let resp = ActionResponse::WithList {
+            invoke_id_and_priority: 0xC1,
+            results: vec![
+                (data_access_result::SUCCESS, None),
+                (data_access_result::SUCCESS, Some(GetDataResult::Data(CosemDataType::Unsigned(7)))),
+            ],
+        };
+        let bytes = resp.encode().unwrap();
+        // C7 03 C1 02 00 00 00 01 00 <11 07>.
+        assert_eq!(bytes, vec![0xC7, 0x03, 0xC1, 0x02, 0x00, 0x00, 0x00, 0x01, 0x00, 0x11, 0x07]);
         assert_eq!(ActionResponse::decode(&bytes).unwrap(), resp);
     }
 
