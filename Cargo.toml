@@ -1,10 +1,15 @@
 [package]
 name = "spodes-rs"
 version = "0.1.0"
-authors = ["Your Name <your.email@example.com>"]
+authors = ["trgv <trgv@tavrida.com>"]
 edition = "2021"
-description = "A Rust library implementing DLMS/COSEM interface classes according to IEC 62056-6-2."
+rust-version = "1.74"
+description = "A pure-Rust DLMS/COSEM stack: interface classes, transport, xDLMS services and security (IEC 62056 and the СТО 34.01-5.1-006-2023 / Р 1323565.1 GOST profiles)."
 license = "MIT OR Apache-2.0"
+repository = "https://github.com/gvtret/spodes-rs"
+readme = "README.md"
+keywords = ["dlms", "cosem", "iec62056", "metering", "gost"]
+categories = ["encoding", "embedded", "network-programming"]
 
 [dependencies]
 serde = { version = "1.0", features = ["derive"] }
