@@ -70,6 +70,16 @@ pub fn metrological_firmware_checksum() -> ObisCode {
 
 // --- Meter management lists ------------------------------------------------
 
+/// Configured meter list (§10.2, `0.0.94.7.128.255`, class Data).
+pub fn meter_list() -> ObisCode {
+    ObisCode::new(0, 0, 94, 7, 128, 255)
+}
+
+/// Direct-channel table (§10.3, `0.0.94.7.129.255`, class Data).
+pub fn direct_channel_table() -> ObisCode {
+    ObisCode::new(0, 0, 94, 7, 129, 255)
+}
+
 /// Discovered-meters list (§10.5, `0.0.94.7.131.255`, Profile generic).
 pub fn discovered_meters() -> ObisCode {
     ObisCode::new(0, 0, 94, 7, 131, 255)

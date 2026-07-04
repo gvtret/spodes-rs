@@ -12,5 +12,6 @@
 pub mod access_policy;
 pub mod discovered;
 pub mod journals;
+pub mod meter;
 pub mod nameplate;
 pub mod obis;
