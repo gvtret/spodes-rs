@@ -20,6 +20,8 @@ pub const GENERAL_GLO_CIPHERING_TAG: u8 = 0xDB;
 pub const GENERAL_DED_CIPHERING_TAG: u8 = 0xDC;
 /// general-ciphering APDU tag ([221]).
 pub const GENERAL_CIPHERING_TAG: u8 = 0xDD;
+/// general-signing APDU tag ([223]).
+pub const GENERAL_SIGNING_TAG: u8 = 0xDF;
 
 /// A general-glo-ciphering or general-ded-ciphering APDU.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -121,6 +123,72 @@ impl GeneralCiphering {
     }
 }
 
+/// A general-signing APDU ([223]): the address-carrying fields of a
+/// general-ciphering APDU followed by the (optionally protected) content and its
+/// digital signature (IEC 62056-5-3, 5.7.2.5 / DLMS Green Book 9.2.7.2.5).
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct GeneralSigning {
+    /// Transaction-id identifying the exchange between the two parties.
+    pub transaction_id: Vec<u8>,
+    /// System-title of the originator.
+    pub originator_system_title: Vec<u8>,
+    /// System-title of the recipient (empty for broadcast).
+    pub recipient_system_title: Vec<u8>,
+    /// Optional date-time (empty octet-string when unused).
+    pub date_time: Vec<u8>,
+    /// Optional other-information (empty octet-string when unused).
+    pub other_information: Vec<u8>,
+    /// The signed content: a plain or ciphered xDLMS APDU.
+    pub content: Vec<u8>,
+    /// The digital signature over the content (ECDSA `r ‖ s` or GOST 34.10).
+    pub signature: Vec<u8>,
+}
+
+impl GeneralSigning {
+    /// Encodes the APDU.
+    pub fn encode(&self) -> Vec<u8> {
+        let mut buf = vec![GENERAL_SIGNING_TAG];
+        push_octet_string(&self.transaction_id, &mut buf);
+        push_octet_string(&self.originator_system_title, &mut buf);
+        push_octet_string(&self.recipient_system_title, &mut buf);
+        push_octet_string(&self.date_time, &mut buf);
+        push_octet_string(&self.other_information, &mut buf);
+        push_octet_string(&self.content, &mut buf);
+        push_octet_string(&self.signature, &mut buf);
+        buf
+    }
+
+    /// Decodes the APDU.
+    pub fn decode(bytes: &[u8]) -> Result<GeneralSigning, ServiceError> {
+        if bytes.first() != Some(&GENERAL_SIGNING_TAG) {
+            return Err(ServiceError::UnexpectedTag(*bytes.first().unwrap_or(&0)));
+        }
+        let mut pos = 1;
+        let (transaction_id, n) = take_octet_string(&bytes[pos..])?;
+        pos += n;
+        let (originator_system_title, n) = take_octet_string(&bytes[pos..])?;
+        pos += n;
+        let (recipient_system_title, n) = take_octet_string(&bytes[pos..])?;
+        pos += n;
+        let (date_time, n) = take_octet_string(&bytes[pos..])?;
+        pos += n;
+        let (other_information, n) = take_octet_string(&bytes[pos..])?;
+        pos += n;
+        let (content, n) = take_octet_string(&bytes[pos..])?;
+        pos += n;
+        let (signature, _) = take_octet_string(&bytes[pos..])?;
+        Ok(GeneralSigning {
+            transaction_id,
+            originator_system_title,
+            recipient_system_title,
+            date_time,
+            other_information,
+            content,
+            signature,
+        })
+    }
+}
+
 /// Writes an A-XDR octet-string: `<length> <bytes>`.
 fn push_octet_string(bytes: &[u8], buf: &mut Vec<u8>) {
     push_length(bytes.len(), buf);
@@ -177,6 +245,23 @@ mod tests {
         // DD 08 <tx-id> 08 <orig> 08 <recip> 00 00 00 07 <content>.
         assert_eq!(bytes[0], 0xDD);
         assert_eq!(GeneralCiphering::decode(&bytes).unwrap(), apdu);
+    }
+
+    #[test]
+    fn general_signing_round_trips() {
+        let apdu = GeneralSigning {
+            transaction_id: vec![0x01, 0x23, 0x45, 0x67, 0x89, 0x01, 0x23, 0x45],
+            originator_system_title: vec![0x4D, 0x4D, 0x4D, 0x00, 0x00, 0x00, 0x00, 0x01],
+            recipient_system_title: vec![0x4D, 0x4D, 0x4D, 0x00, 0x00, 0xBC, 0x61, 0x4E],
+            date_time: Vec::new(),
+            other_information: Vec::new(),
+            content: vec![0xC4, 0x01, 0xC1, 0x00, 0x12, 0x12, 0x34],
+            signature: vec![0xAB; 64],
+        };
+        let bytes = apdu.encode();
+        // DF <tx> <orig> <recip> 00 00 <content> 40 <64-octet signature>.
+        assert_eq!(bytes[0], 0xDF);
+        assert_eq!(GeneralSigning::decode(&bytes).unwrap(), apdu);
     }
 
     #[test]
