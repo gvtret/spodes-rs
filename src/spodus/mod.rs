@@ -16,3 +16,4 @@ pub mod meter;
 pub mod nameplate;
 pub mod node;
 pub mod obis;
+pub mod proxy;
