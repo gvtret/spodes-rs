@@ -16,6 +16,7 @@ pub mod error;
 pub mod gbt;
 pub mod general_ciphering;
 pub mod get;
+pub mod initiate;
 pub mod notification;
 pub mod set;
 
