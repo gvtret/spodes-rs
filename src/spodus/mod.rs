@@ -21,6 +21,7 @@ pub mod nameplate;
 pub mod node;
 pub mod obis;
 mod profile;
+pub mod profile_filter;
 pub mod proxy;
 pub mod push;
 pub mod records;
