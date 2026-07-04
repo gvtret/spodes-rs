@@ -10,13 +10,19 @@ While the crate is at `0.x`, minor releases may contain breaking changes.
 
 ### Added
 
-- **СПОДУС / ИВКЭ concentrator** (`spodus` module, СТО 34.01-5.1-013-2023): the
-  ИВКЭ information model (nameplate §10.14, configured meter list §10.2,
-  discovered-meters list §10.5, access policies §10.6, direct-channel table
-  §10.3, data-exchange-status §10.9 and event §10.13 journals), the
-  `Concentrator` upstream server, downstream `poll_meter` aggregation and the
-  `MeterProxy` transparent pass-through by `direct_id`. Example:
-  `spodus_concentrator`.
+- **СПОДУС / ИВКЭ concentrator** (`spodus` module, СТО 34.01-5.1-013-2023): a
+  fully working ИВКЭ implementing the complete Appendix-A object catalogue —
+  nameplate (§10.14) and its profile, configured meter list (§10.2),
+  direct-channel table (§10.3), channel list (§10.4), discovered meters (§10.5),
+  access policies (§10.6), data-exchange tasks (§10.7), meter status table
+  (§10.8), data-exchange-status (§10.9), correction (§10.10), numeric (§10.11)
+  and event (§10.13) journals, incoming-events table (§8.5.10), notifications
+  (§8.5), the time-delta and discrete-inputs objects, the standard Clock /
+  SAP-assignment / Security-setup / Association-LN objects, and the two new
+  СПОДУС classes **Table manager (8200)** and **Profile data filter (8201)**.
+  Plus the `Concentrator` upstream server, downstream `poll_meter` aggregation
+  and the `MeterProxy` transparent pass-through by `direct_id`. Example:
+  `spodus_concentrator`; regression test: `tests/spodus_integration.rs`.
 
 ## [0.1.0] - 2026-07-04
 

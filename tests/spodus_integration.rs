@@ -9,8 +9,9 @@ use std::io;
 use spodes_rs::classes::data::Data;
 use spodes_rs::obis::ObisCode;
 use spodes_rs::server::RequestDispatcher;
+use spodes_rs::service::action::{ActionRequest, ActionResponse};
 use spodes_rs::service::get::{GetDataResult, GetRequest, GetResponse};
-use spodes_rs::service::{invoke_id_and_priority, AttributeDescriptor};
+use spodes_rs::service::{invoke_id_and_priority, AttributeDescriptor, MethodDescriptor};
 use spodes_rs::session::ClientSession;
 use spodes_rs::spodus::collect::poll_meter;
 use spodes_rs::spodus::meter::{MeterChannel, MeterDescriptor};
@@ -113,6 +114,39 @@ fn ivke_binds_three_meters_end_to_end() {
             result: GetDataResult::Data(CosemDataType::OctetString(b"IVKE-0001".to_vec())),
         }
     );
+
+    // The full Appendix-A catalogue is served: the passport, meter-interaction
+    // and journal profiles are all readable, and a standard object (the Clock)
+    // is present.
+    for code in [
+        obis::nameplate_profile(),
+        obis::channel_list(),
+        obis::meter_status_table(),
+        obis::exchange_status_journal(),
+        obis::numeric_meter_journal(),
+    ] {
+        assert!(matches!(
+            get(&mut dispatcher, 7, code, 2),
+            GetResponse::Normal { result: GetDataResult::Data(CosemDataType::Array(_)), .. }
+        ));
+    }
+    assert!(matches!(
+        get(&mut dispatcher, 8, ObisCode::new(0, 0, 1, 0, 0, 255), 1),
+        GetResponse::Normal { result: GetDataResult::Data(_), .. }
+    ));
+
+    // Group operation (class 8200): the Table manager reports the meter count.
+    let action = ActionRequest::Normal {
+        invoke_id_and_priority: invoke_id_and_priority(1, true, true),
+        method: MethodDescriptor::new(8200, obis::meter_list(), 3),
+        parameters: None,
+    };
+    let ActionResponse::Normal { return_parameters: Some(GetDataResult::Data(count)), .. } =
+        ActionResponse::decode(&dispatcher.dispatch(&action.encode().unwrap()).unwrap()).unwrap()
+    else {
+        panic!("table manager count");
+    };
+    assert_eq!(count, CosemDataType::Unsigned(3));
 
     // Pass-through: reach each meter directly and read its energy.
     let mut proxy = MeterProxy::new(node.direct_channels.clone());
