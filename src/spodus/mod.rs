@@ -10,6 +10,7 @@
 //! ([`crate::server`]) and the client session ([`crate::session`]).
 
 pub mod access_policy;
+pub mod collect;
 pub mod discovered;
 pub mod journals;
 pub mod meter;
