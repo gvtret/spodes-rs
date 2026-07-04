@@ -82,6 +82,11 @@ pub fn access_policies() -> ObisCode {
 
 // --- Journals (§10.9, §10.13) ----------------------------------------------
 
+/// Meter data-exchange-status journal (§10.9, `0.0.94.7.135.255`, Profile generic).
+pub fn exchange_status_journal() -> ObisCode {
+    ObisCode::new(0, 0, 94, 7, 135, 255)
+}
+
 /// Parameter-programming event log (§10.13, `0.0.96.11.3.255`).
 pub fn parameter_programming_log() -> ObisCode {
     ObisCode::new(0, 0, 96, 11, 3, 255)
