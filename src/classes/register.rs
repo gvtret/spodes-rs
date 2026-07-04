@@ -4,9 +4,8 @@ use crate::types::{CosemDataType, BerError};
 use serde::{Deserialize, Serialize};
 use std::any::Any;
 
-/// Интерфейсный класс `Register` (class_id = 3) для хранения текущего значения
-/// измеряемой величины и связанной с ней единицы измерения,
-/// в соответствии с IEC 62056-6-2 в библиотеке `spodes-rs`.
+/// The `Register` interface class (class_id = 3): the current value of a
+/// measured quantity and its associated unit, per IEC 62056-6-2.
 #[derive(Clone, Serialize, Deserialize, Debug)]
 pub struct Register {
     logical_name: ObisCode,
@@ -15,15 +14,15 @@ pub struct Register {
 }
 
 impl Register {
-    /// Создает новый объект `Register`.
+    /// Creates a new `Register` object.
     ///
     /// # Arguments
-    /// * `logical_name` - OBIS-код объекта.
-    /// * `value` - Текущее значение (например, CosemDataType::DoubleLong).
-    /// * `scaler_unit` - Единица измерения и масштаб (CosemDataType::OctetString).
+    /// * `logical_name` - The object's OBIS code.
+    /// * `value` - The current value (e.g. CosemDataType::DoubleLong).
+    /// * `scaler_unit` - The unit and scaler (CosemDataType::OctetString).
     ///
     /// # Returns
-    /// Новая структура `Register`.
+    /// A new `Register`.
     pub fn new(logical_name: ObisCode, value: CosemDataType, scaler_unit: CosemDataType) -> Self {
         Register {
             logical_name,
@@ -32,11 +31,11 @@ impl Register {
         }
     }
 
-    /// Сбрасывает значение регистра до 0.
+    /// Resets the register value to 0.
     ///
     /// # Returns
-    /// * `Ok(CosemDataType::Null)` - Если сброс прошел успешно.
-    /// * `Err(String)` - Если тип значения не поддерживает сброс.
+    /// * `Ok(CosemDataType::Null)` - On successful reset.
+    /// * `Err(String)` - If the value type does not support reset.
     fn reset(&mut self) -> Result<CosemDataType, String> {
         match &self.value {
             CosemDataType::Integer(_) => {
@@ -100,7 +99,7 @@ impl InterfaceClass for Register {
             attr.serialize_ber(&mut seq_buf)?;
         }
         buf.push(0x02); // structure [2]
-        write_length(1 + self.attributes().len(), buf)?; // длина = число элементов
+        write_length(1 + self.attributes().len(), buf)?; // length = element count
         buf.extend_from_slice(&seq_buf);
         Ok(())
     }
@@ -151,7 +150,7 @@ impl InterfaceClass for Register {
     }
 }
 
-/// Записывает длину в формате BER (короткая или длинная форма).
+/// Writes a length in BER (short or long form).
 fn write_length(length: usize, buf: &mut Vec<u8>) -> Result<(), BerError> {
     if length < 128 {
         buf.push(length as u8);

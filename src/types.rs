@@ -28,18 +28,18 @@ pub enum BerError {
 
 impl CosemDataType {
     pub fn serialize_ber(&self, buf: &mut Vec<u8>) -> Result<(), BerError> {
-        // Кодирование типов данных по A-XDR (IEC 62056-6-2, Table 3 "Common data types").
-        // Теги — однобайтовые значения из таблицы; фиксированные скалярные типы и enum
-        // кодируются как [тег][значение] без октета длины; array/structure несут длину,
-        // равную ЧИСЛУ ЭЛЕМЕНТОВ (а не байтов).
+        // A-XDR encoding of the common data types (IEC 62056-6-2, Table 3).
+        // Tags are the one-octet values from the table; fixed scalar types and
+        // enums are encoded as [tag][value] with no length octet; array/structure
+        // carry a length equal to the ELEMENT COUNT (not the byte count).
         match self {
             CosemDataType::Null => {
-                buf.push(0x00); // null-data [0]: без длины и содержимого
+                buf.push(0x00); // null-data [0]: no length and no content
                 Ok(())
             }
             CosemDataType::Array(items) => {
                 buf.push(0x01); // array [1]
-                write_length(items.len(), buf)?; // длина = число элементов
+                write_length(items.len(), buf)?; // length = element count
                 for item in items {
                     item.serialize_ber(buf)?;
                 }
@@ -47,7 +47,7 @@ impl CosemDataType {
             }
             CosemDataType::Structure(items) => {
                 buf.push(0x02); // structure [2]
-                write_length(items.len(), buf)?; // длина = число элементов
+                write_length(items.len(), buf)?; // length = element count
                 for item in items {
                     item.serialize_ber(buf)?;
                 }
@@ -95,15 +95,15 @@ impl CosemDataType {
                 Ok(())
             }
             CosemDataType::DateTime(dt) => {
-                buf.push(0x19); // date-time [25]: octet-string SIZE(12) с октетом длины
+                buf.push(0x19); // date-time [25]: octet-string SIZE(12) with a length octet
                 write_length(dt.len(), buf)?;
                 buf.extend_from_slice(dt);
                 Ok(())
             }
             CosemDataType::BitString(s) => {
                 buf.push(0x04); // bit-string [4]
-                // NB: по A-XDR длина bit-string задаётся в БИТАХ; здесь хранится
-                // число байт, т.к. модель типа держит сырой Vec<u8>.
+                // NB: in A-XDR the bit-string length is given in BITS; here the
+                // byte count is stored, since the type model holds a raw Vec<u8>.
                 write_length(s.len(), buf)?;
                 buf.extend_from_slice(s);
                 Ok(())
@@ -313,8 +313,8 @@ mod tests {
         buf
     }
 
-    /// Эталонный вектор A-XDR из DLMS UA 1000-1 (пример кодирования context_name,
-    /// context_id(1)): structure из 7 элементов → 02 07 11 02 11 10 12 02 F4 11 05 11 08 11 01 11 01.
+    /// Reference A-XDR vector from DLMS UA 1000-1 (context_name encoding example,
+    /// context_id(1)): a 7-element structure → 02 07 11 02 11 10 12 02 F4 11 05 11 08 11 01 11 01.
     #[test]
     fn axdr_reference_context_name() {
         let s = CosemDataType::Structure(vec![
@@ -332,7 +332,7 @@ mod tests {
         );
     }
 
-    /// Теги простых типов по Table 3 и отсутствие октета длины у скаляров.
+    /// Simple-type tags per Table 3, and the absence of a length octet on scalars.
     #[test]
     fn axdr_scalar_tags() {
         assert_eq!(enc(&CosemDataType::Null), vec![0x00]);

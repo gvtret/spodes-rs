@@ -4,7 +4,7 @@ use crate::types::{CosemDataType, BerError};
 use serde::{Deserialize, Serialize};
 use std::any::Any;
 
-/// Конфигурационная структура для создания объекта `DemandRegister`.
+/// Configuration used to build a `DemandRegister` object.
 #[derive(Clone, Serialize, Deserialize, Debug)]
 pub struct DemandRegisterConfig {
     pub logical_name: ObisCode,
@@ -18,9 +18,9 @@ pub struct DemandRegisterConfig {
     pub number_of_periods: CosemDataType,
 }
 
-/// Интерфейсный класс `DemandRegister` (class_id = 5) для управления измеряемыми
-/// величинами спроса, такими как максимальная мощность за период, с поддержкой
-/// периодов измерения и времени захвата, в соответствии с IEC 62056-6-2 в библиотеке `spodes-rs`.
+/// The `DemandRegister` interface class (class_id = 5) managing measured demand
+/// quantities such as the maximum power over a period, with support for
+/// measurement periods and capture time, per IEC 62056-6-2.
 #[derive(Clone, Serialize, Deserialize, Debug)]
 pub struct DemandRegister {
     logical_name: ObisCode,
@@ -35,13 +35,13 @@ pub struct DemandRegister {
 }
 
 impl DemandRegister {
-    /// Создает новый объект `DemandRegister` из конфигурации.
+    /// Creates a new `DemandRegister` object from its configuration.
     ///
     /// # Arguments
-    /// * `config` - Конфигурация для создания объекта.
+    /// * `config` - The configuration used to build the object.
     ///
     /// # Returns
-    /// Новая структура `DemandRegister`.
+    /// A new `DemandRegister`.
     pub fn new(config: DemandRegisterConfig) -> Self {
         DemandRegister {
             logical_name: config.logical_name,
@@ -56,12 +56,12 @@ impl DemandRegister {
         }
     }
 
-    /// Сбрасывает значения `current_average_value` и `last_average_value` до 0,
-    /// очищает статус, время захвата и время начала текущего периода.
+    /// Resets `current_average_value` and `last_average_value` to 0, and clears
+    /// the status, capture time and current-period start time.
     ///
     /// # Returns
-    /// * `Ok(CosemDataType::Null)` - Если сброс прошел успешно.
-    /// * `Err(String)` - Если тип значения не поддерживает сброс.
+    /// * `Ok(CosemDataType::Null)` - On successful reset.
+    /// * `Err(String)` - If the value type does not support reset.
     fn reset(&mut self) -> Result<CosemDataType, String> {
         match &self.current_average_value {
             CosemDataType::Integer(_) => {
@@ -96,17 +96,17 @@ impl DemandRegister {
         Ok(CosemDataType::Null)
     }
 
-    /// Переходит к следующему периоду измерения, перемещая `current_average_value`
-    /// в `last_average_value`, сбрасывая `current_average_value`, обновляя статус
-    /// и время захвата, а также устанавливая новое время начала периода.
+    /// Advances to the next measurement period, moving `current_average_value`
+    /// into `last_average_value`, resetting `current_average_value`, updating the
+    /// status and capture time, and setting a new period start time.
     ///
     /// # Returns
-    /// * `Ok(CosemDataType::Null)` - Если переход прошел успешно.
-    /// * `Err(String)` - Если тип значения не поддерживает сброс.
+    /// * `Ok(CosemDataType::Null)` - On a successful transition.
+    /// * `Err(String)` - If the value type does not support reset.
     fn next_period(&mut self) -> Result<CosemDataType, String> {
-        // Перемещаем текущее значение в последнее
+        // Move the current value into the last value.
         self.last_average_value = self.current_average_value.clone();
-        // Сбрасываем текущее значение
+        // Reset the current value.
         match &self.current_average_value {
             CosemDataType::Integer(_) => self.current_average_value = CosemDataType::Integer(0),
             CosemDataType::Long(_) => self.current_average_value = CosemDataType::Long(0),
@@ -116,15 +116,15 @@ impl DemandRegister {
             CosemDataType::DoubleLongUnsigned(_) => self.current_average_value = CosemDataType::DoubleLongUnsigned(0),
             _ => return Err("Unsupported value type for next_period".to_string()),
         }
-        // Обновляем статус (например, 1 означает успешное измерение)
+        // Update the status (1 means a successful measurement).
         self.status = CosemDataType::Unsigned(1);
-        // Обновляем время захвата и начала текущего периода (пример: 2025-05-01 00:00:00)
+        // Update the capture and current-period start time (example: 2025-05-01 00:00:00).
         let new_time = CosemDataType::DateTime(vec![
-            0x07, 0xE5, 0x05, 0x01, // Год: 2025, Месяц: 5, День: 1
-            0x02, // День недели: вторник
-            0x00, 0x00, 0x00, // Час: 0, Минуты: 0, Секунды: 0
-            0x00, // Сотые доли секунды: 0
-            0x00, 0x00, 0x00, // Отклонение от UTC: 0
+            0x07, 0xE5, 0x05, 0x01, // year 2025, month 5, day 1
+            0x02, // day of week: Tuesday
+            0x00, 0x00, 0x00, // hour 0, minute 0, second 0
+            0x00, // hundredths of a second: 0
+            0x00, 0x00, 0x00, // deviation from UTC: 0
         ]);
         self.capture_time = new_time.clone();
         self.start_time_current = new_time;
@@ -170,7 +170,7 @@ impl InterfaceClass for DemandRegister {
             attr.serialize_ber(&mut seq_buf)?;
         }
         buf.push(0x02); // structure [2]
-        write_length(1 + self.attributes().len(), buf)?; // длина = число элементов
+        write_length(1 + self.attributes().len(), buf)?; // length = element count
         buf.extend_from_slice(&seq_buf);
         Ok(())
     }
@@ -230,7 +230,7 @@ impl InterfaceClass for DemandRegister {
     }
 }
 
-/// Записывает длину в формате BER (короткая или длинная форма).
+/// Writes a length in BER (short or long form).
 fn write_length(length: usize, buf: &mut Vec<u8>) -> Result<(), BerError> {
     if length < 128 {
         buf.push(length as u8);

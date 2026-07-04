@@ -4,15 +4,15 @@ use crate::types::{CosemDataType, BerError};
 use serde::{Deserialize, Serialize};
 use std::any::Any;
 
-/// Конфигурационная структура для создания объекта `SpecialDaysTable`.
+/// Configuration used to build a `SpecialDaysTable` object.
 #[derive(Clone, Serialize, Deserialize, Debug)]
 pub struct SpecialDaysTableConfig {
     pub logical_name: ObisCode,
     pub entries: Vec<CosemDataType>,
 }
 
-/// Интерфейсный класс `SpecialDaysTable` (class_id = 11, version = 0) для управления списком особых дней,
-/// в соответствии с IEC 62056-6-2:2019.
+/// The `SpecialDaysTable` interface class (class_id = 11, version = 0) managing a
+/// list of special days, per IEC 62056-6-2:2019.
 #[derive(Clone, Serialize, Deserialize, Debug)]
 pub struct SpecialDaysTable {
     logical_name: ObisCode,
@@ -84,7 +84,7 @@ impl InterfaceClass for SpecialDaysTable {
             attr.serialize_ber(&mut seq_buf)?;
         }
         buf.push(0x02); // structure [2]
-        write_length(1 + self.attributes().len(), buf)?; // длина = число элементов
+        write_length(1 + self.attributes().len(), buf)?; // length = element count
         buf.extend_from_slice(&seq_buf);
         Ok(())
     }

@@ -4,9 +4,9 @@ use crate::types::{CosemDataType, BerError};
 use serde::{Deserialize, Serialize};
 use std::any::Any;
 
-/// Интерфейсный класс `ExtendedRegister` (class_id = 4) для хранения текущего значения
-/// измеряемой величины с дополнительными метаданными, такими как статус и время захвата,
-/// в соответствии с IEC 62056-6-2 в библиотеке `spodes-rs`.
+/// The `ExtendedRegister` interface class (class_id = 4): the current value of a
+/// measured quantity with extra metadata such as status and capture time, per
+/// IEC 62056-6-2.
 #[derive(Clone, Serialize, Deserialize, Debug)]
 pub struct ExtendedRegister {
     logical_name: ObisCode,
@@ -17,17 +17,17 @@ pub struct ExtendedRegister {
 }
 
 impl ExtendedRegister {
-    /// Создает новый объект `ExtendedRegister`.
+    /// Creates a new `ExtendedRegister` object.
     ///
     /// # Arguments
-    /// * `logical_name` - OBIS-код объекта.
-    /// * `value` - Текущее значение (например, CosemDataType::DoubleLong).
-    /// * `scaler_unit` - Единица измерения и масштаб (CosemDataType::OctetString).
-    /// * `status` - Статус измерения (например, CosemDataType::Unsigned).
-    /// * `capture_time` - Время захвата значения (CosemDataType::DateTime).
+    /// * `logical_name` - The object's OBIS code.
+    /// * `value` - The current value (e.g. CosemDataType::DoubleLong).
+    /// * `scaler_unit` - The unit and scaler (CosemDataType::OctetString).
+    /// * `status` - The measurement status (e.g. CosemDataType::Unsigned).
+    /// * `capture_time` - The value capture time (CosemDataType::DateTime).
     ///
     /// # Returns
-    /// Новая структура `ExtendedRegister`.
+    /// A new `ExtendedRegister`.
     pub fn new(
         logical_name: ObisCode,
         value: CosemDataType,
@@ -44,11 +44,11 @@ impl ExtendedRegister {
         }
     }
 
-    /// Сбрасывает значение регистра до 0 и очищает статус и время захвата.
+    /// Resets the register value to 0 and clears the status and capture time.
     ///
     /// # Returns
-    /// * `Ok(CosemDataType::Null)` - Если сброс прошел успешно.
-    /// * `Err(String)` - Если тип значения не поддерживает сброс.
+    /// * `Ok(CosemDataType::Null)` - On successful reset.
+    /// * `Err(String)` - If the value type does not support reset.
     fn reset(&mut self) -> Result<CosemDataType, String> {
         match &self.value {
             CosemDataType::Integer(_) => {
@@ -91,21 +91,21 @@ impl ExtendedRegister {
         }
     }
 
-    /// Захватывает текущее значение, обновляя статус и время захвата.
+    /// Captures the current value, updating the status and capture time.
     ///
     /// # Returns
-    /// * `Ok(CosemDataType::Null)` - Если захват прошел успешно.
-    /// * `Err(String)` - Если произошла ошибка.
+    /// * `Ok(CosemDataType::Null)` - On a successful capture.
+    /// * `Err(String)` - On error.
     fn capture(&mut self) -> Result<CosemDataType, String> {
-        // Обновляем статус (например, предполагаем, что 1 означает успешное измерение)
+        // Update the status (here 1 is assumed to mean a successful measurement).
         self.status = CosemDataType::Unsigned(1);
-        // Устанавливаем время захвата (пример: 2025-05-01 00:00:00)
+        // Set the capture time (example: 2025-05-01 00:00:00).
         self.capture_time = CosemDataType::DateTime(vec![
-            0x07, 0xE5, 0x05, 0x01, // Год: 2025, Месяц: 5, День: 1
-            0x02, // День недели: вторник
-            0x00, 0x00, 0x00, // Час: 0, Минуты: 0, Секунды: 0
-            0x00, // Сотые доли секунды: 0
-            0x00, 0x00, 0x00, // Отклонение от UTC: 0
+            0x07, 0xE5, 0x05, 0x01, // year 2025, month 5, day 1
+            0x02, // day of week: Tuesday
+            0x00, 0x00, 0x00, // hour 0, minute 0, second 0
+            0x00, // hundredths of a second: 0
+            0x00, 0x00, 0x00, // deviation from UTC: 0
         ]);
         Ok(CosemDataType::Null)
     }
@@ -145,7 +145,7 @@ impl InterfaceClass for ExtendedRegister {
             attr.serialize_ber(&mut seq_buf)?;
         }
         buf.push(0x02); // structure [2]
-        write_length(1 + self.attributes().len(), buf)?; // длина = число элементов
+        write_length(1 + self.attributes().len(), buf)?; // length = element count
         buf.extend_from_slice(&seq_buf);
         Ok(())
     }
@@ -201,7 +201,7 @@ impl InterfaceClass for ExtendedRegister {
     }
 }
 
-/// Записывает длину в формате BER (короткая или длинная форма).
+/// Writes a length in BER (short or long form).
 fn write_length(length: usize, buf: &mut Vec<u8>) -> Result<(), BerError> {
     if length < 128 {
         buf.push(length as u8);

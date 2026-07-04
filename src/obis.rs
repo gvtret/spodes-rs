@@ -1,8 +1,8 @@
 use serde::{Deserialize, Serialize};
 use std::fmt;
 
-/// Структура для представления OBIS-кода (Object Identification System),
-/// используемого в COSEM для идентификации объектов.
+/// An OBIS code (Object Identification System) used by COSEM to identify
+/// objects. It is the six-octet `a.b.c.d.e.f` value group.
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]
 pub struct ObisCode {
     a: u8,
@@ -14,21 +14,21 @@ pub struct ObisCode {
 }
 
 impl ObisCode {
-    /// Создает новый OBIS-код из шести компонентов.
+    /// Creates a new OBIS code from its six components.
     ///
     /// # Arguments
-    /// * `a`, `b`, `c`, `d`, `e`, `f` - Компоненты OBIS-кода.
+    /// * `a`, `b`, `c`, `d`, `e`, `f` - The OBIS code components.
     ///
     /// # Returns
-    /// Новая структура `ObisCode`.
+    /// A new `ObisCode`.
     pub fn new(a: u8, b: u8, c: u8, d: u8, e: u8, f: u8) -> Self {
         ObisCode { a, b, c, d, e, f }
     }
 
-    /// Возвращает OBIS-код в виде массива байтов.
+    /// Returns the OBIS code as a byte vector.
     ///
     /// # Returns
-    /// Вектор из шести байтов, представляющий OBIS-код.
+    /// A six-byte vector representing the OBIS code.
     pub fn to_bytes(&self) -> Vec<u8> {
         vec![self.a, self.b, self.c, self.d, self.e, self.f]
     }

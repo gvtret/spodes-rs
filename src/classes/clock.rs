@@ -4,7 +4,7 @@ use crate::types::{CosemDataType, BerError};
 use serde::{Deserialize, Serialize};
 use std::any::Any;
 
-/// Конфигурационная структура для создания объекта `Clock`.
+/// Configuration used to build a `Clock` object.
 #[derive(Clone, Serialize, Deserialize, Debug)]
 pub struct ClockConfig {
     pub logical_name: ObisCode,
@@ -18,8 +18,8 @@ pub struct ClockConfig {
     pub clock_base: CosemDataType,
 }
 
-/// Интерфейсный класс `Clock` (class_id = 8) для управления временем и датой
-/// в соответствии с IEC 62056-6-2 в библиотеке `spodes-rs`.
+/// The `Clock` interface class (class_id = 8) managing time and date
+/// per IEC 62056-6-2.
 #[derive(Clone, Serialize, Deserialize, Debug)]
 pub struct Clock {
     logical_name: ObisCode,
@@ -34,13 +34,13 @@ pub struct Clock {
 }
 
 impl Clock {
-    /// Создает новый объект `Clock` из конфигурации.
+    /// Creates a new `Clock` object from its configuration.
     ///
     /// # Arguments
-    /// * `config` - Конфигурация для создания объекта.
+    /// * `config` - The configuration used to build the object.
     ///
     /// # Returns
-    /// Новая структура `Clock`.
+    /// A new `Clock`.
     pub fn new(config: ClockConfig) -> Self {
         Clock {
             logical_name: config.logical_name,
@@ -55,12 +55,12 @@ impl Clock {
         }
     }
 
-    /// Настраивает время на ближайшую четверть часа (0, 15, 30, 45 минуты).
+    /// Adjusts the time to the nearest quarter hour (minute 0, 15, 30 or 45).
     fn adjust_to_quarter(&mut self) -> Result<CosemDataType, String> {
         if let CosemDataType::DateTime(mut dt) = self.time.clone() {
             if dt.len() == 12 {
                 let minutes = dt[6] as u32;
-                // Округляем до ближайшей четверти часа (0, 15, 30, 45)
+                // Round to the nearest quarter hour (0, 15, 30, 45).
                 let new_minutes = if minutes < 8 {
                     0
                 } else if minutes < 23 {
@@ -71,8 +71,8 @@ impl Clock {
                     45
                 };
                 dt[6] = new_minutes as u8;
-                dt[7] = 0; // Обнуляем секунды
-                dt[8] = 0; // Обнуляем сотые доли секунды
+                dt[7] = 0; // clear seconds
+                dt[8] = 0; // clear hundredths of a second
                 self.time = CosemDataType::DateTime(dt);
                 return Ok(CosemDataType::Null);
             }
@@ -80,12 +80,12 @@ impl Clock {
         Err("Invalid DateTime format".to_string())
     }
 
-    /// Настраивает время на ближайшую минуту.
+    /// Adjusts the time to the nearest minute.
     fn adjust_to_minute(&mut self) -> Result<CosemDataType, String> {
         if let CosemDataType::DateTime(mut dt) = self.time.clone() {
             if dt.len() == 12 {
-                dt[7] = 0; // Обнуляем секунды
-                dt[8] = 0; // Обнуляем сотые доли секунды
+                dt[7] = 0; // clear seconds
+                dt[8] = 0; // clear hundredths of a second
                 self.time = CosemDataType::DateTime(dt);
                 return Ok(CosemDataType::Null);
             }
@@ -93,7 +93,7 @@ impl Clock {
         Err("Invalid DateTime format".to_string())
     }
 
-    /// Устанавливает предустановленное время.
+    /// Sets a preset time.
     fn adjust_to_preset_time(&mut self, params: Option<CosemDataType>) -> Result<CosemDataType, String> {
         if let Some(CosemDataType::DateTime(dt)) = params {
             if dt.len() == 12 {
@@ -104,9 +104,9 @@ impl Clock {
         Err("Invalid DateTime parameter".to_string())
     }
 
-    /// Предварительная настройка времени (заглушка).
+    /// Preset-time adjustment (stub).
     fn preset_adjusting_time(&mut self) -> Result<CosemDataType, String> {
-        // Реализация зависит от требований, пока заглушка
+        // Implementation is requirement-specific; a stub for now.
         Ok(CosemDataType::Null)
     }
 }
@@ -154,7 +154,7 @@ impl InterfaceClass for Clock {
             attr.serialize_ber(&mut seq_buf)?;
         }
         buf.push(0x02); // structure [2]
-        write_length(1 + self.attributes().len(), buf)?; // длина = число элементов
+        write_length(1 + self.attributes().len(), buf)?; // length = element count
         buf.extend_from_slice(&seq_buf);
         Ok(())
     }
@@ -216,7 +216,7 @@ impl InterfaceClass for Clock {
     }
 }
 
-/// Записывает длину в формате BER (короткая или длинная форма).
+/// Writes a length in BER (short or long form).
 fn write_length(length: usize, buf: &mut Vec<u8>) -> Result<(), BerError> {
     if length < 128 {
         buf.push(length as u8);

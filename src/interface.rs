@@ -2,46 +2,45 @@ use crate::obis::ObisCode;
 use crate::types::{BerError, CosemDataType};
 use std::any::Any;
 
-/// Трейт, определяющий общий интерфейс для всех интерфейсных классов COSEM,
-/// описанных в IEC 62056-6-2.
+/// The trait shared by every COSEM interface class defined in IEC 62056-6-2.
 ///
-/// Каждый класс должен предоставлять информацию о своем идентификаторе,
-/// версии, логическом имени (OBIS-коде), атрибутах и методах, а также
-/// поддерживать сериализацию/десериализацию в формате BER и вызов методов.
+/// Each class exposes its class id, version, logical name (OBIS code),
+/// attributes and methods, and supports BER serialization/deserialization and
+/// method invocation.
 pub trait InterfaceClass: Any {
-    /// Возвращает идентификатор класса (class_id) согласно IEC 62056-6-2.
+    /// Returns the class id (`class_id`) as defined in IEC 62056-6-2.
     fn class_id(&self) -> u16;
 
-    /// Возвращает версию класса.
+    /// Returns the class version.
     fn version(&self) -> u8;
 
-    /// Возвращает логическое имя объекта (OBIS-код).
+    /// Returns the object's logical name (OBIS code).
     fn logical_name(&self) -> &ObisCode;
 
-    /// Возвращает список атрибутов класса с их идентификаторами и значениями.
+    /// Returns the class attributes as `(attribute_id, value)` pairs.
     fn attributes(&self) -> Vec<(u8, CosemDataType)>;
 
-    /// Возвращает список методов класса с их идентификаторами и именами.
+    /// Returns the class methods as `(method_id, name)` pairs.
     fn methods(&self) -> Vec<(u8, String)>;
 
-    /// Сериализует объект в формат BER.
+    /// Serializes the object into BER.
     ///
     /// # Arguments
-    /// * `buf` - Буфер для записи сериализованных данных.
+    /// * `buf` - The buffer the serialized bytes are appended to.
     ///
     /// # Returns
-    /// * `Ok(())` - Если сериализация прошла успешно.
-    /// * `Err(BerError)` - Если произошла ошибка сериализации.
+    /// * `Ok(())` - On success.
+    /// * `Err(BerError)` - On a serialization error.
     fn serialize_ber(&self, buf: &mut Vec<u8>) -> Result<(), BerError>;
 
-    /// Десериализует объект из данных в формате BER.
+    /// Deserializes the object from BER data.
     ///
     /// # Arguments
-    /// * `data` - Входные данные в формате BER.
+    /// * `data` - The input BER bytes.
     ///
     /// # Returns
-    /// * `Ok(())` - Если десериализация прошла успешно.
-    /// * `Err(BerError)` - Если произошла ошибка десериализации.
+    /// * `Ok(())` - On success.
+    /// * `Err(BerError)` - On a deserialization error.
     fn deserialize_ber(&mut self, data: &[u8]) -> Result<(), BerError>;
 
     /// Writes the value of a writable attribute. The default implementation
@@ -59,21 +58,21 @@ pub trait InterfaceClass: Any {
         Err("attribute is not writable".to_string())
     }
 
-    /// Вызывает метод объекта с указанным идентификатором.
+    /// Invokes the object method with the given id.
     ///
     /// # Arguments
-    /// * `method_id` - Идентификатор метода.
-    /// * `params` - Опциональные параметры метода в формате `CosemDataType`.
+    /// * `method_id` - The method id.
+    /// * `params` - Optional method parameters as a `CosemDataType`.
     ///
     /// # Returns
-    /// * `Ok(CosemDataType)` - Результат выполнения метода.
-    /// * `Err(String)` - Описание ошибки, если метод не поддерживается.
+    /// * `Ok(CosemDataType)` - The method result.
+    /// * `Err(String)` - An error description if the method is not supported.
     fn invoke_method(
         &mut self,
         method_id: u8,
         params: Option<CosemDataType>,
     ) -> Result<CosemDataType, String>;
 
-    /// Возвращает объект как `dyn Any` для динамической диспетчеризации.
+    /// Returns the object as `dyn Any` for dynamic downcasting.
     fn as_any(&self) -> &dyn Any;
 }

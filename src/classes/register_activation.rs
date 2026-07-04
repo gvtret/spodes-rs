@@ -4,7 +4,7 @@ use crate::types::{CosemDataType, BerError};
 use serde::{Deserialize, Serialize};
 use std::any::Any;
 
-/// Конфигурационная структура для создания объекта `RegisterActivation`.
+/// Configuration used to build a `RegisterActivation` object.
 #[derive(Clone, Serialize, Deserialize, Debug)]
 pub struct RegisterActivationConfig {
     pub logical_name: ObisCode,
@@ -13,8 +13,8 @@ pub struct RegisterActivationConfig {
     pub active_mask: CosemDataType,
 }
 
-/// Интерфейсный класс `RegisterActivation` (class_id = 6) для управления активацией
-/// регистров, таких как тарифные регистры, в соответствии с IEC 62056-6-2 в библиотеке `spodes-rs`.
+/// The `RegisterActivation` interface class (class_id = 6) managing the
+/// activation of registers such as tariff registers, per IEC 62056-6-2.
 #[derive(Clone, Serialize, Deserialize, Debug)]
 pub struct RegisterActivation {
     logical_name: ObisCode,
@@ -24,13 +24,13 @@ pub struct RegisterActivation {
 }
 
 impl RegisterActivation {
-    /// Создает новый объект `RegisterActivation` из конфигурации.
+    /// Creates a new `RegisterActivation` object from its configuration.
     ///
     /// # Arguments
-    /// * `config` - Конфигурация для создания объекта.
+    /// * `config` - The configuration used to build the object.
     ///
     /// # Returns
-    /// Новая структура `RegisterActivation`.
+    /// A new `RegisterActivation`.
     pub fn new(config: RegisterActivationConfig) -> Self {
         RegisterActivation {
             logical_name: config.logical_name,
@@ -40,19 +40,19 @@ impl RegisterActivation {
         }
     }
 
-    /// Добавляет новую маску активации в `mask_list`.
+    /// Adds a new activation mask to `mask_list`.
     ///
     /// # Arguments
-    /// * `params` - Параметр типа `CosemDataType::Structure` (mask_name, register_indices).
+    /// * `params` - A `CosemDataType::Structure` (mask_name, register_indices).
     ///
     /// # Returns
-    /// * `Ok(CosemDataType::Null)` - Если маска добавлена успешно.
-    /// * `Err(String)` - Если параметр неверный или маска уже существует.
+    /// * `Ok(CosemDataType::Null)` - If the mask was added.
+    /// * `Err(String)` - If the parameter is invalid or the mask already exists.
     fn add_mask(&mut self, params: Option<CosemDataType>) -> Result<CosemDataType, String> {
         if let Some(CosemDataType::Structure(mask_data)) = params {
             if mask_data.len() == 2 {
                 if let CosemDataType::OctetString(mask_name) = &mask_data[0] {
-                    // Проверяем, не существует ли уже маска с таким именем
+                    // Check whether a mask with this name already exists.
                     for existing_mask in &self.mask_list {
                         if let CosemDataType::Structure(existing_data) = existing_mask {
                             if let CosemDataType::OctetString(existing_name) = &existing_data[0] {
@@ -70,14 +70,14 @@ impl RegisterActivation {
         Err("Invalid mask parameter".to_string())
     }
 
-    /// Удаляет маску активации из `mask_list` по имени.
+    /// Removes an activation mask from `mask_list` by name.
     ///
     /// # Arguments
-    /// * `params` - Параметр типа `CosemDataType::OctetString` (имя маски).
+    /// * `params` - A `CosemDataType::OctetString` (the mask name).
     ///
     /// # Returns
-    /// * `Ok(CosemDataType::Null)` - Если маска удалена успешно.
-    /// * `Err(String)` - Если маска не найдена или параметр неверный.
+    /// * `Ok(CosemDataType::Null)` - If the mask was removed.
+    /// * `Err(String)` - If the mask was not found or the parameter is invalid.
     fn delete_mask(&mut self, params: Option<CosemDataType>) -> Result<CosemDataType, String> {
         if let Some(CosemDataType::OctetString(mask_name)) = params {
             let initial_len = self.mask_list.len();
@@ -90,7 +90,7 @@ impl RegisterActivation {
                 true
             });
             if self.mask_list.len() < initial_len {
-                // Если текущая активная маска была удалена, сбрасываем active_mask
+                // If the currently active mask was removed, clear active_mask.
                 if let CosemDataType::OctetString(active_mask_name) = &self.active_mask {
                     if active_mask_name == &mask_name {
                         self.active_mask = CosemDataType::Null;
@@ -137,7 +137,7 @@ impl InterfaceClass for RegisterActivation {
             attr.serialize_ber(&mut seq_buf)?;
         }
         buf.push(0x02); // structure [2]
-        write_length(1 + self.attributes().len(), buf)?; // длина = число элементов
+        write_length(1 + self.attributes().len(), buf)?; // length = element count
         buf.extend_from_slice(&seq_buf);
         Ok(())
     }
@@ -200,7 +200,7 @@ impl InterfaceClass for RegisterActivation {
     }
 }
 
-/// Записывает длину в формате BER (короткая или длинная форма).
+/// Writes a length in BER (short or long form).
 fn write_length(length: usize, buf: &mut Vec<u8>) -> Result<(), BerError> {
     if length < 128 {
         buf.push(length as u8);

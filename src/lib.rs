@@ -1,20 +1,50 @@
-/// Библиотека `spodes-rs` для работы с объектами COSEM (Companion Specification for Energy Metering)
-/// в соответствии со стандартами IEC 62056-6-2 и СТО 34.01-5.1-006-2023.
-///
-/// Предоставляет реализацию интерфейсных классов, типов данных, OBIS-кодов,
-/// а также механизмы сериализации/десериализации в формате BER.
+//! `spodes-rs` — a pure-Rust implementation of the DLMS/COSEM stack for
+//! electricity metering, following IEC 62056 (the DLMS Green Book) and the
+//! Russian companion profiles СТО 34.01-5.1-006-2023 and Р 1323565.1.
+//!
+//! The crate is organised as a layered stack that can be used piecemeal or as a
+//! whole:
+//!
+//! * [`types`] — the COSEM data types and their A-XDR (BER) serialization.
+//! * [`obis`] — OBIS object identification codes.
+//! * [`interface`] / [`classes`] — the COSEM interface classes (Data, Register,
+//!   Clock, Profile generic, Association LN, Security setup, …).
+//! * [`transport`] — the physical-medium abstraction and the HDLC and wrapper
+//!   data-link sub-layers (IEC 62056-46 / IEC 62056-47).
+//! * [`service`] — the application-layer xDLMS services (GET/SET/ACTION,
+//!   notifications, association and ciphering APDUs), using LN referencing.
+//! * [`security`] — the security model: suites (0/1/2, and the GOST suite 9),
+//!   protection policy, the authentication mechanisms (0..10) and the ECDH/GOST
+//!   key-agreement primitives.
+//! * [`session`] — a blocking client-side driver, and [`server`] — a
+//!   request dispatcher for the server side.
+//!
+//! # Example
+//!
+//! ```
+//! use spodes_rs::classes::data::Data;
+//! use spodes_rs::interface::InterfaceClass;
+//! use spodes_rs::obis::ObisCode;
+//! use spodes_rs::types::CosemDataType;
+//!
+//! let object = Data::new(ObisCode::new(0, 0, 0x80, 0, 0, 0xFF), CosemDataType::LongUnsigned(0x1234));
+//! assert_eq!(object.class_id(), 1);
+//! ```
+
+/// COSEM data types and their BER (A-XDR) serialization.
 pub mod types;
 
-/// Модуль для работы с OBIS-кодами (Object Identification System).
+/// OBIS object identification codes.
 pub mod obis;
 
-/// Модуль, определяющий трейт `InterfaceClass` для интерфейсных классов COSEM.
+/// The [`InterfaceClass`](interface::InterfaceClass) trait shared by all COSEM
+/// interface classes.
 pub mod interface;
 
-/// Модуль, содержащий реализации интерфейсных классов COSEM (например, `Data`, `Register`).
+/// Implementations of the COSEM interface classes (Data, Register, Clock, …).
 pub mod classes;
 
-/// Модуль для сериализации и десериализации объектов в формате BER.
+/// BER serialization and deserialization helpers.
 pub mod serialization;
 
 /// Transport layer: physical-medium abstraction and the HDLC and wrapper

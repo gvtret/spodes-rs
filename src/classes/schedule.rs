@@ -4,7 +4,7 @@ use crate::types::{CosemDataType, BerError};
 use serde::{Deserialize, Serialize};
 use std::any::Any;
 
-/// Конфигурационная структура для создания объекта `Schedule`.
+/// Configuration used to build a `Schedule` object.
 #[derive(Clone, Serialize, Deserialize, Debug)]
 pub struct ScheduleConfig {
     pub logical_name: ObisCode,
@@ -12,24 +12,23 @@ pub struct ScheduleConfig {
     pub enabled: bool,
 }
 
-/// Интерфейсный класс `Schedule` (class_id = 10) для управления расписаниями,
-/// определяющими временные точки для выполнения действий, в соответствии с IEC 62056-6-2
-/// в библиотеке `spodes-rs`.
+/// The `Schedule` interface class (class_id = 10) managing schedules that
+/// define the times at which actions run, per IEC 62056-6-2.
 #[derive(Clone, Serialize, Deserialize, Debug)]
 pub struct Schedule {
     logical_name: ObisCode,
     entries: Vec<CosemDataType>, // Array of Structure (time, action)
-    enabled: bool, // Состояние расписания (включено/выключено)
+    enabled: bool, // schedule state (enabled/disabled)
 }
 
 impl Schedule {
-    /// Создает новый объект `Schedule` из конфигурации.
+    /// Creates a new `Schedule` object from its configuration.
     ///
     /// # Arguments
-    /// * `config` - Конфигурация для создания объекта.
+    /// * `config` - The configuration used to build the object.
     ///
     /// # Returns
-    /// Новая структура `Schedule`.
+    /// A new `Schedule`.
     pub fn new(config: ScheduleConfig) -> Self {
         Schedule {
             logical_name: config.logical_name,
@@ -38,25 +37,25 @@ impl Schedule {
         }
     }
 
-    /// Включает расписание.
+    /// Enables the schedule.
     ///
     /// # Returns
-    /// * `Ok(CosemDataType::Null)` - Если расписание включено успешно.
+    /// * `Ok(CosemDataType::Null)` - If the schedule was enabled.
     fn enable(&mut self) -> Result<CosemDataType, String> {
         self.enabled = true;
         Ok(CosemDataType::Null)
     }
 
-    /// Выключает расписание.
+    /// Disables the schedule.
     ///
     /// # Returns
-    /// * `Ok(CosemDataType::Null)` - Если расписание выключено успешно.
+    /// * `Ok(CosemDataType::Null)` - If the schedule was disabled.
     fn disable(&mut self) -> Result<CosemDataType, String> {
         self.enabled = false;
         Ok(CosemDataType::Null)
     }
 
-    /// Возвращает состояние расписания (включено/выключено).
+    /// Returns the schedule state (enabled/disabled).
     pub fn is_enabled(&self) -> bool {
         self.enabled
     }
@@ -93,9 +92,9 @@ impl InterfaceClass for Schedule {
             attr.serialize_ber(&mut seq_buf)?;
         }
         seq_buf.push(0x03); // boolean [3]
-        seq_buf.push(if self.enabled { 0xFF } else { 0x00 }); // значение enabled
+        seq_buf.push(if self.enabled { 0xFF } else { 0x00 }); // enabled value
         buf.push(0x02); // structure [2]
-        write_length(2 + self.attributes().len(), buf)?; // число элементов: class_id + атрибуты + enabled
+        write_length(2 + self.attributes().len(), buf)?; // element count: class_id + attributes + enabled
         buf.extend_from_slice(&seq_buf);
         Ok(())
     }
@@ -159,7 +158,7 @@ impl InterfaceClass for Schedule {
     }
 }
 
-/// Записывает длину в формате BER (короткая или длинная форма).
+/// Writes a length in BER (short or long form).
 fn write_length(length: usize, buf: &mut Vec<u8>) -> Result<(), BerError> {
     if length < 128 {
         buf.push(length as u8);

@@ -4,9 +4,8 @@ use crate::types::{BerError, CosemDataType};
 use serde::{Deserialize, Serialize};
 use std::any::Any;
 
-/// Интерфейсный класс `Data` (class_id = 1) для хранения простых данных,
-/// таких как идентификаторы или статические параметры, в соответствии
-/// с IEC 62056-6-2.
+/// The `Data` interface class (class_id = 1) holding simple data such as
+/// identifiers or static parameters, per IEC 62056-6-2.
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct Data {
     logical_name: ObisCode,
@@ -14,14 +13,14 @@ pub struct Data {
 }
 
 impl Data {
-    /// Создает новый объект `Data`.
+    /// Creates a new `Data` object.
     ///
     /// # Arguments
-    /// * `logical_name` - OBIS-код объекта.
-    /// * `value` - Значение объекта в формате `CosemDataType`.
+    /// * `logical_name` - The object's OBIS code.
+    /// * `value` - The object value as a `CosemDataType`.
     ///
     /// # Returns
-    /// Новая структура `Data`.
+    /// A new `Data`.
     pub fn new(logical_name: ObisCode, value: CosemDataType) -> Self {
         Data {
             logical_name,
@@ -60,7 +59,7 @@ impl InterfaceClass for Data {
         CosemDataType::OctetString(self.logical_name.to_bytes()).serialize_ber(&mut seq_buf)?;
         self.value.serialize_ber(&mut seq_buf)?;
         buf.push(0x02); // structure [2]
-        write_length(3, buf)?; // число элементов: class_id, logical_name, value
+        write_length(3, buf)?; // element count: class_id, logical_name, value
         buf.extend_from_slice(&seq_buf);
         Ok(())
     }
@@ -108,7 +107,7 @@ impl InterfaceClass for Data {
     }
 }
 
-/// Записывает длину в формате BER (короткая или длинная форма).
+/// Writes a length in BER (short or long form).
 fn write_length(length: usize, buf: &mut Vec<u8>) -> Result<(), BerError> {
     if length < 128 {
         buf.push(length as u8);

@@ -4,16 +4,16 @@ use crate::types::{CosemDataType, BerError};
 use serde::{Deserialize, Serialize};
 use std::any::Any;
 
-/// Конфигурационная структура для создания объекта `ScriptTable`.
+/// Configuration used to build a `ScriptTable` object.
 #[derive(Clone, Serialize, Deserialize, Debug)]
 pub struct ScriptTableConfig {
     pub logical_name: ObisCode,
     pub scripts: Vec<CosemDataType>,
 }
 
-/// Интерфейсный класс `ScriptTable` (class_id = 9) для управления скриптами,
-/// определяющими действия в системе учета энергии, в соответствии с IEC 62056-6-2
-/// в библиотеке `spodes-rs`.
+/// The `ScriptTable` interface class (class_id = 9) managing scripts that
+/// define actions in the metering system, per IEC 62056-6-2.
+//
 #[derive(Clone, Serialize, Deserialize, Debug)]
 pub struct ScriptTable {
     logical_name: ObisCode,
@@ -21,13 +21,13 @@ pub struct ScriptTable {
 }
 
 impl ScriptTable {
-    /// Создает новый объект `ScriptTable` из конфигурации.
+    /// Creates a new `ScriptTable` object from its configuration.
     ///
     /// # Arguments
-    /// * `config` - Конфигурация для создания объекта.
+    /// * `config` - The configuration used to build the object.
     ///
     /// # Returns
-    /// Новая структура `ScriptTable`.
+    /// A new `ScriptTable`.
     pub fn new(config: ScriptTableConfig) -> Self {
         ScriptTable {
             logical_name: config.logical_name,
@@ -35,14 +35,14 @@ impl ScriptTable {
         }
     }
 
-    /// Выполняет скрипт по указанному идентификатору.
+    /// Executes the script with the given id.
     ///
     /// # Arguments
-    /// * `params` - Параметр типа `CosemDataType::LongUnsigned` (идентификатор скрипта).
+    /// * `params` - A `CosemDataType::LongUnsigned` (the script id).
     ///
     /// # Returns
-    /// * `Ok(CosemDataType::Null)` - Если скрипт найден и выполнен успешно.
-    /// * `Err(String)` - Если скрипт не найден или параметр неверный.
+    /// * `Ok(CosemDataType::Null)` - If the script was found and executed.
+    /// * `Err(String)` - If the script was not found or the parameter is invalid.
     fn execute(&mut self, params: Option<CosemDataType>) -> Result<CosemDataType, String> {
         if let Some(CosemDataType::LongUnsigned(script_id)) = params {
             for script in &self.scripts {
@@ -50,8 +50,8 @@ impl ScriptTable {
                     if script_data.len() == 2 {
                         if let CosemDataType::LongUnsigned(id) = script_data[0] {
                             if id == script_id {
-                                // Здесь должна быть логика выполнения действия (script_data[1]).
-                                // Для примера возвращаем успех, предполагая, что действие выполнено.
+                                // The action execution logic (script_data[1]) would go here.
+                                // For the example we return success, assuming the action ran.
                                 return Ok(CosemDataType::Null);
                             }
                         }
@@ -95,7 +95,7 @@ impl InterfaceClass for ScriptTable {
             attr.serialize_ber(&mut seq_buf)?;
         }
         buf.push(0x02); // structure [2]
-        write_length(1 + self.attributes().len(), buf)?; // длина = число элементов
+        write_length(1 + self.attributes().len(), buf)?; // length = element count
         buf.extend_from_slice(&seq_buf);
         Ok(())
     }
@@ -151,7 +151,7 @@ impl InterfaceClass for ScriptTable {
     }
 }
 
-/// Записывает длину в формате BER (короткая или длинная форма).
+/// Writes a length in BER (short or long form).
 fn write_length(length: usize, buf: &mut Vec<u8>) -> Result<(), BerError> {
     if length < 128 {
         buf.push(length as u8);
