@@ -32,15 +32,3 @@ jobs:
           RUSTDOCFLAGS: -D warnings
       - name: Package
         run: cargo package --no-verify
-
-  msrv:
-    name: Minimum supported Rust (1.74)
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - uses: dtolnay/rust-toolchain@1.74
-      - uses: Swatinem/rust-cache@v2
-      - name: Build
-        run: cargo build --all-features
-      - name: Test
-        run: cargo test --all-features

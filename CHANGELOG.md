@@ -36,7 +36,7 @@ Initial release: a full DLMS/COSEM stack for IEC 62056 and the Russian
   validated byte-for-byte against the reference vectors of the standards.
 - **Drivers** — a blocking client `ClientSession` and a server-side
   `RequestDispatcher` (with GET segmentation and SET reassembly).
-- **Tooling** — GitHub Actions CI (fmt, clippy, test, doc, MSRV, package) and a
+- **Tooling** — GitHub Actions CI (fmt, clippy, test, doc, package) and a
   tag-triggered release workflow; dual MIT / Apache-2.0 license.
 
 [Unreleased]: https://github.com/gvtret/spodes-rs/compare/v0.1.0...HEAD
