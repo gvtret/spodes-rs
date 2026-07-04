@@ -144,6 +144,61 @@ pub fn agree_key(
     Ok(key)
 }
 
+/// Derives the ephemeral public key (`FE2OS(x) ‖ FE2OS(y)`) from an ephemeral
+/// private key on the suite's curve, for embedding as key-ciphered-data.
+pub fn public_key(suite: SecuritySuite, private_key: &[u8]) -> Result<Vec<u8>, AgreementError> {
+    // The SEC1 uncompressed encoding is `0x04 ‖ x ‖ y`; DLMS wants `x ‖ y`.
+    match suite {
+        SecuritySuite::Suite1 => {
+            let sk = p256::SecretKey::from_slice(private_key).map_err(|_| AgreementError::InvalidPrivateKey)?;
+            Ok(sk.public_key().to_sec1_bytes()[1..].to_vec())
+        }
+        SecuritySuite::Suite2 => {
+            let sk = p384::SecretKey::from_slice(private_key).map_err(|_| AgreementError::InvalidPrivateKey)?;
+            Ok(sk.public_key().to_sec1_bytes()[1..].to_vec())
+        }
+        SecuritySuite::Suite0 => Err(AgreementError::UnsupportedSuite),
+    }
+}
+
+/// The originator side of a One-Pass Diffie-Hellman agreed-key exchange
+/// (C(1e, 1s), IEC 62056-5-3 Annex C.2).
+///
+/// The originator holds an ephemeral key pair and the recipient's static public
+/// key. It returns the derived AES session key and its ephemeral public key
+/// (`FE2OS(x) ‖ FE2OS(y)`), which the caller embeds as the `key-ciphered-data`
+/// of an agreed-key general-ciphering APDU so the recipient can derive the same
+/// key. `party_u_info` / `party_v_info` are the KDF system-titles and must match
+/// on both sides.
+pub fn originator_agree(
+    suite: SecuritySuite,
+    ephemeral_private: &[u8],
+    recipient_static_public: &[u8],
+    algorithm_id: &[u8],
+    party_u_info: &[u8],
+    party_v_info: &[u8],
+) -> Result<(Vec<u8>, Vec<u8>), AgreementError> {
+    let ephemeral_public = public_key(suite, ephemeral_private)?;
+    let key = agree_key(suite, ephemeral_private, recipient_static_public, algorithm_id, party_u_info, party_v_info)?;
+    Ok((key, ephemeral_public))
+}
+
+/// The recipient side of a One-Pass Diffie-Hellman agreed-key exchange.
+///
+/// The recipient holds a static private key and receives the originator's
+/// ephemeral public key (the `key-ciphered-data`). It derives the same session
+/// key. `party_u_info` / `party_v_info` must be identical to the originator's.
+pub fn recipient_agree(
+    suite: SecuritySuite,
+    recipient_static_private: &[u8],
+    ephemeral_public: &[u8],
+    algorithm_id: &[u8],
+    party_u_info: &[u8],
+    party_v_info: &[u8],
+) -> Result<Vec<u8>, AgreementError> {
+    agree_key(suite, recipient_static_private, ephemeral_public, algorithm_id, party_u_info, party_v_info)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -211,5 +266,89 @@ mod tests {
     #[test]
     fn suite0_has_no_agreement() {
         assert_eq!(ecdh(SecuritySuite::Suite0, &[0u8; 32], &[0u8; 64]), Err(AgreementError::UnsupportedSuite));
+    }
+
+    #[test]
+    fn one_pass_agreement_derives_shared_key() {
+        // The client (originator) holds an ephemeral key pair; the server
+        // (recipient) holds a static key pair.
+        let ephemeral = hb("47DAB03842E5B6E74828EF4F449B378D7DD1A5DAE1FFCA5AE0B0BE0AD18EC57E");
+        let server_static = hb("AE55414FFE079F9FC95649536BD1C2B5653D200813727E07D501A8B550C69207");
+        let server_public = public_key(SecuritySuite::Suite1, &server_static).unwrap();
+        let alg_id = hb("60857405080300");
+        let sys_c = hb("4D4D4D0000BC614E");
+        let sys_s = hb("4D4D4D0000000001");
+
+        let (client_key, ephemeral_public) =
+            originator_agree(SecuritySuite::Suite1, &ephemeral, &server_public, &alg_id, &sys_c, &sys_s).unwrap();
+        let server_key =
+            recipient_agree(SecuritySuite::Suite1, &server_static, &ephemeral_public, &alg_id, &sys_c, &sys_s).unwrap();
+
+        // Both sides derive the same AES-128 session key.
+        assert_eq!(client_key, server_key);
+        assert_eq!(client_key.len(), 16);
+    }
+
+    #[test]
+    fn agreed_key_is_usable_for_apdu_ciphering() {
+        use crate::security::SecurityPolicy;
+        use crate::service::ciphering::{self, glo, SecurityContext};
+        use crate::service::general_ciphering::{GeneralCiphering, KeyInfo};
+
+        let ephemeral = hb("47DAB03842E5B6E74828EF4F449B378D7DD1A5DAE1FFCA5AE0B0BE0AD18EC57E");
+        let server_static = hb("AE55414FFE079F9FC95649536BD1C2B5653D200813727E07D501A8B550C69207");
+        let server_public = public_key(SecuritySuite::Suite1, &server_static).unwrap();
+        let alg_id = hb("60857405080300");
+        let sys_c = vec![0x4D, 0x4D, 0x4D, 0x00, 0x00, 0xBC, 0x61, 0x4E];
+        let sys_s = vec![0x4D, 0x4D, 0x4D, 0x00, 0x00, 0x00, 0x00, 0x01];
+
+        // Client derives the session key and advertises its ephemeral key in an
+        // agreed-key general-ciphering APDU.
+        let (client_key, ephemeral_public) =
+            originator_agree(SecuritySuite::Suite1, &ephemeral, &server_public, &alg_id, &sys_c, &sys_s).unwrap();
+        let carrier = GeneralCiphering {
+            transaction_id: vec![0x01; 8],
+            originator_system_title: sys_c.clone(),
+            recipient_system_title: sys_s.clone(),
+            date_time: Vec::new(),
+            other_information: Vec::new(),
+            key_info: KeyInfo::AgreedKey { key_parameters: vec![0x01], key_ciphered_data: ephemeral_public },
+            ciphered_content: Vec::new(),
+        };
+
+        // Server parses the APDU, extracts the ephemeral key and derives the
+        // same session key.
+        let parsed = GeneralCiphering::decode(&carrier.encode()).unwrap();
+        let KeyInfo::AgreedKey { key_ciphered_data, .. } = &parsed.key_info else {
+            panic!("expected agreed-key");
+        };
+        let server_key =
+            recipient_agree(SecuritySuite::Suite1, &server_static, key_ciphered_data, &alg_id, &sys_c, &sys_s).unwrap();
+        assert_eq!(client_key, server_key);
+
+        // The agreed key protects and unprotects an APDU end to end (client
+        // system-title in the IV on both directions of this exchange).
+        let client_ctx = SecurityContext::for_suite(
+            SecurityPolicy::AuthenticationEncryption,
+            SecuritySuite::Suite1,
+            client_key,
+            vec![0x11; 16],
+            sys_c.clone(),
+            1,
+        )
+        .unwrap();
+        let plaintext = vec![0xC4, 0x01, 0xC1, 0x00, 0x12, 0x12, 0x34];
+        let protected = ciphering::protect(&client_ctx, glo::GET_RESPONSE, &plaintext).unwrap();
+        let mut server_ctx = SecurityContext::for_suite(
+            SecurityPolicy::AuthenticationEncryption,
+            SecuritySuite::Suite1,
+            server_key,
+            vec![0x11; 16],
+            sys_c,
+            0,
+        )
+        .unwrap();
+        let (_, recovered) = ciphering::unprotect(&mut server_ctx, &protected).unwrap();
+        assert_eq!(recovered, plaintext);
     }
 }
