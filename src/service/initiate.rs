@@ -245,7 +245,7 @@ mod tests {
             response_allowed: true,
             proposed_quality_of_service: None,
             proposed_dlms_version: 6,
-            proposed_conformance: 0x00_007E_1F & 0xFFFFFF, // 0x007E1F
+            proposed_conformance: 0x007E1F,
             client_max_receive_pdu_size: 0x04B0,
         };
         let bytes = req.encode();
