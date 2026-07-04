@@ -6,9 +6,12 @@
 //! as an octet-string.
 
 use crate::classes::data::Data;
+use crate::classes::profile_generic::ProfileGeneric;
+use crate::interface::InterfaceClass;
 use crate::types::CosemDataType;
 
 use super::obis;
+use super::profile::reference_profile;
 
 /// The ИВКЭ passport data (§10.14).
 #[derive(Clone, Debug, Default)]
@@ -55,6 +58,16 @@ impl Nameplate {
             ),
         ]
     }
+
+    /// Builds the passport-data reference profile (§10.14, `0.0.94.7.0.255`,
+    /// IC 7 v1): one row aggregating every passport parameter, with the
+    /// individual passport OBIS codes as the columns.
+    pub fn profile(&self) -> ProfileGeneric {
+        let objects = self.objects();
+        let columns: Vec<_> = objects.iter().map(|o| o.logical_name().clone()).collect();
+        let row = objects.iter().map(|o| o.attributes()[1].1.clone()).collect();
+        reference_profile(obis::nameplate_profile(), &columns, vec![CosemDataType::Structure(row)])
+    }
 }
 
 #[cfg(test)]
@@ -88,5 +101,24 @@ mod tests {
         // Production year is a long-unsigned.
         let year = objects.iter().find(|o| o.logical_name() == &obis::production_year()).unwrap();
         assert_eq!(year.attributes()[1].1, CosemDataType::LongUnsigned(2026));
+    }
+
+    #[test]
+    fn nameplate_profile_aggregates_passport() {
+        let plate = Nameplate { serial_number: "IVKE-0001".to_string(), production_year: 2026, ..Default::default() };
+        let profile = plate.profile();
+        assert_eq!(profile.class_id(), 7);
+        assert_eq!(profile.version(), 1);
+        assert_eq!(profile.logical_name(), &obis::nameplate_profile());
+
+        let attrs = profile.attributes();
+        // One row with the ten passport values; ten capture columns.
+        let CosemDataType::Array(rows) = &attrs[1].1 else { panic!("buffer array") };
+        assert_eq!(rows.len(), 1);
+        let CosemDataType::Structure(values) = &rows[0] else { panic!("row structure") };
+        assert_eq!(values.len(), 10);
+        assert_eq!(values[0], CosemDataType::OctetString(b"IVKE-0001".to_vec()));
+        let CosemDataType::Array(caps) = &attrs[2].1 else { panic!("capture array") };
+        assert_eq!(caps.len(), 10);
     }
 }

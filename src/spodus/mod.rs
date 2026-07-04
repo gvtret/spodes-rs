@@ -15,6 +15,7 @@ pub mod collect;
 pub mod discovered;
 pub mod journals;
 pub mod meter;
+pub mod misc;
 pub mod nameplate;
 pub mod node;
 pub mod obis;

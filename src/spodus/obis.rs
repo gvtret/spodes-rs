@@ -18,6 +18,21 @@ pub fn ivke_logical_name() -> ObisCode {
 
 // --- Nameplate / passport data (§10.14, class Data) ------------------------
 
+/// Passport-data reference profile (§10.14, `0.0.94.7.0.255`, Profile generic).
+pub fn nameplate_profile() -> ObisCode {
+    ObisCode::new(0, 0, 94, 7, 0, 255)
+}
+
+/// Time-difference-with-meters delta (`0.0.94.7.141.255`, class Data, unsigned).
+pub fn time_delta() -> ObisCode {
+    ObisCode::new(0, 0, 94, 7, 141, 255)
+}
+
+/// Discrete-inputs state bitmask (`0.0.96.3.1.255`, class Data, long-unsigned).
+pub fn discrete_inputs() -> ObisCode {
+    ObisCode::new(0, 0, 96, 3, 1, 255)
+}
+
 /// ИВКЭ serial number (`0.0.96.1.0.255`).
 pub fn serial_number() -> ObisCode {
     ObisCode::new(0, 0, 96, 1, 0, 255)
