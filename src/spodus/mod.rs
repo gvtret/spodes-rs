@@ -25,4 +25,5 @@ pub mod proxy;
 pub mod push;
 pub mod records;
 pub mod status;
+pub mod table_manager;
 pub mod tasks;
