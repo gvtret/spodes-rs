@@ -14,4 +14,5 @@ pub mod discovered;
 pub mod journals;
 pub mod meter;
 pub mod nameplate;
+pub mod node;
 pub mod obis;
