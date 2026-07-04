@@ -20,3 +20,4 @@ pub mod node;
 pub mod obis;
 mod profile;
 pub mod proxy;
+pub mod status;

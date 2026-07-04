@@ -97,9 +97,29 @@ pub fn access_policies() -> ObisCode {
 
 // --- Journals (§10.9, §10.13) ----------------------------------------------
 
+/// Meter status table (§10.8, `0.0.94.7.134.255`, Profile generic).
+pub fn meter_status_table() -> ObisCode {
+    ObisCode::new(0, 0, 94, 7, 134, 255)
+}
+
 /// Meter data-exchange-status journal (§10.9, `0.0.94.7.135.255`, Profile generic).
 pub fn exchange_status_journal() -> ObisCode {
     ObisCode::new(0, 0, 94, 7, 135, 255)
+}
+
+/// Object-correction journal (§10.10, `0.0.94.7.136.255`, Profile generic).
+pub fn object_correction_journal() -> ObisCode {
+    ObisCode::new(0, 0, 94, 7, 136, 255)
+}
+
+/// Numeric meter journal (§10.11, `0.0.94.7.137.255`, Profile generic).
+pub fn numeric_meter_journal() -> ObisCode {
+    ObisCode::new(0, 0, 94, 7, 137, 255)
+}
+
+/// Incoming-events table (§8.5.10, `0.0.94.7.140.255`, Profile generic).
+pub fn incoming_events_table() -> ObisCode {
+    ObisCode::new(0, 0, 94, 7, 140, 255)
 }
 
 /// Parameter-programming event log (§10.13, `0.0.96.11.3.255`).
