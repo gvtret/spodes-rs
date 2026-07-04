@@ -14,8 +14,8 @@ sha2 = "0.10"
 streebog = "0.10"
 kuznyechik = "0.8"
 cmac = "0.7"
-p256 = { version = "0.13", features = ["ecdsa"] }
-p384 = { version = "0.13", features = ["ecdsa"] }
+p256 = { version = "0.13", features = ["ecdsa", "ecdh"] }
+p384 = { version = "0.13", features = ["ecdsa", "ecdh"] }
 ecdsa = "0.16"
 num-bigint = "0.4"
 num-integer = "0.1"

@@ -13,6 +13,7 @@
 //!
 //! The four-pass HLS handshake computations live in [`hls`].
 
+pub mod agreement;
 pub mod gost3410;
 pub mod hls;
 pub mod signature;
