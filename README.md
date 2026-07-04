@@ -88,6 +88,33 @@ cargo run --example hls_handshake
 The per-class examples (`data_usage`, `register_usage`, `clock_usage`, …) show
 how to build and serialize individual COSEM objects.
 
+## СПОДУС — ИВКЭ concentrator
+
+The [`spodus`](src/spodus) module implements the СПОДУС profile
+(СТО 34.01-5.1-013-2023): a data-concentrator (ИВКЭ) that speaks СПОДЭС as a
+DLMS client to the meters, aggregates their data, and serves it upstream to the
+head-end (ИВК) as a DLMS server, with transparent pass-through to an individual
+meter by its `direct_id`.
+
+The **complete Appendix-A object model** is provided: the nameplate (§10.14) and
+its profile, configured meter list (§10.2), direct-channel table (§10.3),
+channel list (§10.4), discovered meters (§10.5), access policies (§10.6),
+data-exchange tasks (§10.7), meter status table (§10.8), the exchange-status
+(§10.9), correction (§10.10), numeric (§10.11) and event (§10.13) journals, the
+incoming-events table (§8.5.10), the notification objects (§8.5), the time-delta
+and discrete-inputs objects, the standard Clock / SAP-assignment / Security-setup
+/ Association-LN objects, and the two new СПОДУС classes **Table manager (8200)**
+and **Profile data filter (8201)**. On top of it: the [`Concentrator`](src/spodus/node.rs)
+upstream server (serving the full catalogue), downstream `poll_meter` aggregation
+and the `MeterProxy` pass-through. See `cargo run --example spodus_concentrator`
+and the `tests/spodus_integration.rs` regression test.
+
+**Scope note:** this is the COSEM object model and its behaviour, exercised over
+an in-memory transport. A deployable ИВКЭ additionally needs the physical
+transport binding (HDLC/TCP, ports 4059/4065, §8), the operational collection
+loop (§6: meter configuration, scheduled polling, task execution, time sync) and
+real association/security configuration — these are outside the current scope.
+
 ## Standards
 
 - IEC 62056-5-3 (DLMS/COSEM application layer, the "Green Book")

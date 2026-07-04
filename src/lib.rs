@@ -67,3 +67,7 @@ pub mod session;
 /// Server-side request dispatcher: routes incoming GET/SET/ACTION APDUs to the
 /// addressed COSEM object and returns the response APDU.
 pub mod server;
+
+/// СПОДУС — the ИВКЭ concentrator/gateway information model
+/// (СТО 34.01-5.1-013-2023): meter aggregation upstream and pass-through access.
+pub mod spodus;
