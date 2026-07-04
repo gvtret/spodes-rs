@@ -21,6 +21,7 @@ pub mod node;
 pub mod obis;
 mod profile;
 pub mod proxy;
+pub mod push;
 pub mod records;
 pub mod status;
 pub mod tasks;

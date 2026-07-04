@@ -11,6 +11,23 @@ pub fn sap_assignment() -> ObisCode {
     ObisCode::new(0, 0, 41, 0, 0, 255)
 }
 
+// --- Notifications (§8.5) --------------------------------------------------
+
+/// Push setup object (`0.0.25.9.0.255`, IC 40 v2).
+pub fn push_setup() -> ObisCode {
+    ObisCode::new(0, 0, 25, 9, 0, 255)
+}
+
+/// Event push-message object (§8.5.11, `0.0.96.50.0.255`, class Data).
+pub fn event_message() -> ObisCode {
+    ObisCode::new(0, 0, 96, 50, 0, 255)
+}
+
+/// Push-message filter mask (`0.0.97.98.10.255`, class Data).
+pub fn push_mask() -> ObisCode {
+    ObisCode::new(0, 0, 97, 98, 10, 255)
+}
+
 /// ИВКЭ logical name (`0.0.42.0.0.255`).
 pub fn ivke_logical_name() -> ObisCode {
     ObisCode::new(0, 0, 42, 0, 0, 255)
