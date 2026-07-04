@@ -9,4 +9,5 @@
 //! object classes ([`crate::classes`]), the server dispatcher
 //! ([`crate::server`]) and the client session ([`crate::session`]).
 
+pub mod nameplate;
 pub mod obis;
