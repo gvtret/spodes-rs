@@ -1,9 +1,9 @@
 //! A server-side request dispatcher (IEC 62056-5-3 / IEC 62056-53 server CF).
 //!
-//! [`RequestDispatcher`] holds a set of COSEM interface objects and turns an
+//! [`crate::server::RequestDispatcher`] holds a set of COSEM interface objects and turns an
 //! incoming GET / SET / ACTION request APDU into the matching response APDU by
 //! routing it to the addressed object: GET reads an attribute, SET writes one
-//! (via [`InterfaceClass::set_attribute`]), ACTION invokes a method. Objects are
+//! (via [`crate::interface::InterfaceClass::set_attribute`]), ACTION invokes a method. Objects are
 //! addressed by their (class-id, logical-name) pair; an unknown address yields a
 //! `object-undefined` data-access-result rather than an error.
 //!

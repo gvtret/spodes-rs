@@ -1,10 +1,10 @@
 //! General ciphering APDUs (IEC 62056-5-3, 5.7.2): the address-carrying wrappers
 //! that transport a protected xDLMS APDU independently of the service.
 //!
-//! * general-glo-ciphering ([219], 0xDB) and general-ded-ciphering ([220], 0xDC)
+//! * general-glo-ciphering (`[219]`, 0xDB) and general-ded-ciphering (`[220]`, 0xDC)
 //!   prepend the originator system-title to a ciphered-service octet-string
 //!   (`SC ‖ IC ‖ ciphertext ‖ tag`, produced by [`super::ciphering`]).
-//! * general-ciphering ([221], 0xDD) additionally carries the transaction-id,
+//! * general-ciphering (`[221]`, 0xDD) additionally carries the transaction-id,
 //!   both system-titles, date-time and other-information.
 //!
 //! This module only frames the APDU; the authenticated encryption itself is done
@@ -14,13 +14,13 @@
 
 use super::{push_length, read_length, ServiceError};
 
-/// general-glo-ciphering APDU tag ([219]).
+/// general-glo-ciphering APDU tag (`[219]`).
 pub const GENERAL_GLO_CIPHERING_TAG: u8 = 0xDB;
-/// general-ded-ciphering APDU tag ([220]).
+/// general-ded-ciphering APDU tag (`[220]`).
 pub const GENERAL_DED_CIPHERING_TAG: u8 = 0xDC;
-/// general-ciphering APDU tag ([221]).
+/// general-ciphering APDU tag (`[221]`).
 pub const GENERAL_CIPHERING_TAG: u8 = 0xDD;
-/// general-signing APDU tag ([223]).
+/// general-signing APDU tag (`[223]`).
 pub const GENERAL_SIGNING_TAG: u8 = 0xDF;
 
 /// The `key-info` field of a general-ciphering APDU (IEC 62056-5-3, 5.7.2.4).
@@ -32,7 +32,7 @@ pub const GENERAL_SIGNING_TAG: u8 = 0xDF;
 pub enum KeyInfo {
     /// No key-info: the recipient already holds the symmetric key.
     None,
-    /// Agreed-key ([2]): an EC key-agreement scheme derives the session key.
+    /// Agreed-key (`[2]`): an EC key-agreement scheme derives the session key.
     AgreedKey {
         /// Key-parameters: the one-octet key-agreement scheme id (01 = ephemeral
         /// unified, 02 = static unified, …).
@@ -46,7 +46,7 @@ pub enum KeyInfo {
 /// A general-glo-ciphering or general-ded-ciphering APDU.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct GeneralGloDedCiphering {
-    /// `true` for general-ded-ciphering ([220]), `false` for the glo variant.
+    /// `true` for general-ded-ciphering (`[220]`), `false` for the glo variant.
     pub dedicated: bool,
     /// System-title of the originator (usually 8 octets).
     pub system_title: Vec<u8>,
@@ -78,7 +78,7 @@ impl GeneralGloDedCiphering {
     }
 }
 
-/// A general-ciphering APDU ([221]).
+/// A general-ciphering APDU (`[221]`).
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct GeneralCiphering {
     /// Transaction-id identifying the exchange between the two parties.
@@ -172,7 +172,7 @@ impl GeneralCiphering {
     }
 }
 
-/// A general-signing APDU ([223]): the address-carrying fields of a
+/// A general-signing APDU (`[223]`): the address-carrying fields of a
 /// general-ciphering APDU followed by the (optionally protected) content and its
 /// digital signature (IEC 62056-5-3, 5.7.2.5 / DLMS Green Book 9.2.7.2.5).
 #[derive(Debug, Clone, PartialEq, Eq)]

@@ -20,7 +20,7 @@ pub const RLRQ_TAG: u8 = 0x62;
 /// RLRE APDU tag ([APPLICATION 3], constructed).
 pub const RLRE_TAG: u8 = 0x63;
 
-/// Release-request/response reason values (ACSE field [0]).
+/// Release-request/response reason values (ACSE field `[0]`).
 pub mod release_reason {
     /// Normal release (both RLRQ and RLRE).
     pub const NORMAL: u8 = 0;
@@ -32,7 +32,7 @@ pub mod release_reason {
     pub const USER_DEFINED: u8 = 30;
 }
 
-/// Association result (AARE field [2]).
+/// Association result (AARE field `[2]`).
 pub mod result {
     pub const ACCEPTED: u8 = 0;
     pub const REJECTED_PERMANENT: u8 = 1;
@@ -84,22 +84,22 @@ impl AssociationRequest {
     /// Encodes the AARQ APDU.
     pub fn encode(&self) -> Vec<u8> {
         let mut content = Vec::new();
-        // [1] application-context-name (OBJECT IDENTIFIER).
+        // `[1]` application-context-name (OBJECT IDENTIFIER).
         ber_tlv(0xA1, &object_identifier(&OID_PREFIX_APP_CONTEXT, self.application_context), &mut content);
-        // [6] calling-AP-title (OCTET STRING) — only with ciphering.
+        // `[6]` calling-AP-title (OCTET STRING) — only with ciphering.
         if let Some(title) = &self.calling_ap_title {
             ber_tlv(0xA6, &octet_string(title), &mut content);
         }
-        // Authentication functional unit ([10], [11], [12]) — for LLS/HLS.
+        // Authentication functional unit (`[10]`, `[11]`, `[12]`) — for LLS/HLS.
         if let Some(mech) = self.mechanism_name {
-            // [10] sender-acse-requirements: BIT STRING { authentication(0) }.
+            // `[10]` sender-acse-requirements: BIT STRING { authentication(0) }.
             content.extend_from_slice(&[0x8A, 0x02, 0x07, 0x80]);
-            // [11] mechanism-name (OBJECT IDENTIFIER, IMPLICIT → raw 7 octets).
+            // `[11]` mechanism-name (OBJECT IDENTIFIER, IMPLICIT → raw 7 octets).
             content.push(0x8B);
             let oid = raw_oid(&OID_PREFIX_MECHANISM, mech);
             push_length(oid.len(), &mut content);
             content.extend_from_slice(&oid);
-            // [12] calling-authentication-value (EXPLICIT CHOICE charstring [0]).
+            // `[12]` calling-authentication-value (EXPLICIT CHOICE charstring `[0]`).
             if let Some(auth) = &self.calling_authentication_value {
                 let mut inner = vec![0x80];
                 push_length(auth.len(), &mut inner);
@@ -107,7 +107,7 @@ impl AssociationRequest {
                 ber_tlv(0xAC, &inner, &mut content);
             }
         }
-        // [30] user-information (OCTET STRING carrying the InitiateRequest).
+        // `[30]` user-information (OCTET STRING carrying the InitiateRequest).
         ber_tlv(0xBE, &octet_string(&self.user_information), &mut content);
 
         let mut apdu = vec![AARQ_TAG];
@@ -161,24 +161,24 @@ impl AssociationResponse {
     /// Encodes the AARE APDU.
     pub fn encode(&self) -> Vec<u8> {
         let mut content = Vec::new();
-        // [1] application-context-name.
+        // `[1]` application-context-name.
         ber_tlv(0xA1, &object_identifier(&OID_PREFIX_APP_CONTEXT, self.application_context), &mut content);
-        // [2] result (INTEGER).
+        // `[2]` result (INTEGER).
         ber_tlv(0xA2, &[0x02, 0x01, self.result], &mut content);
-        // [3] result-source-diagnostic (CHOICE acse-service-user [1]).
+        // `[3]` result-source-diagnostic (CHOICE acse-service-user `[1]`).
         ber_tlv(0xA3, &[0xA1, 0x03, 0x02, 0x01, self.diagnostic], &mut content);
-        // [4] responding-AP-title (OCTET STRING) — with ciphering.
+        // `[4]` responding-AP-title (OCTET STRING) — with ciphering.
         if let Some(title) = &self.responding_ap_title {
             ber_tlv(0xA4, &octet_string(title), &mut content);
         }
-        // [10] responding-authentication-value (EXPLICIT CHOICE charstring [0]) — HLS.
+        // `[10]` responding-authentication-value (EXPLICIT CHOICE charstring `[0]`) — HLS.
         if let Some(auth) = &self.responding_authentication_value {
             let mut inner = vec![0x80];
             push_length(auth.len(), &mut inner);
             inner.extend_from_slice(auth);
             ber_tlv(0xAA, &inner, &mut content);
         }
-        // [30] user-information.
+        // `[30]` user-information.
         ber_tlv(0xBE, &octet_string(&self.user_information), &mut content);
 
         let mut apdu = vec![AARE_TAG];
@@ -240,11 +240,11 @@ impl ReleaseRequest {
 
     fn encode(&self, apdu_tag: u8) -> Vec<u8> {
         let mut content = Vec::new();
-        // [0] reason (IMPLICIT ENUMERATED → primitive context tag 0x80).
+        // `[0]` reason (IMPLICIT ENUMERATED → primitive context tag 0x80).
         if let Some(reason) = self.reason {
             content.extend_from_slice(&[0x80, 0x01, reason]);
         }
-        // [30] user-information (OCTET STRING carrying the InitiateRequest/Response).
+        // `[30]` user-information (OCTET STRING carrying the InitiateRequest/Response).
         if let Some(info) = &self.user_information {
             ber_tlv(0xBE, &octet_string(info), &mut content);
         }
@@ -365,7 +365,7 @@ fn parse_octet_string(value: &[u8]) -> Result<Vec<u8>, ServiceError> {
     value.get(start..start + len).map(|s| s.to_vec()).ok_or(ServiceError::Truncated)
 }
 
-/// Extracts the authentication value from a `[12]`/`[10]` CHOICE
+/// Extracts the authentication value from a ``[12]``/``[10]`` CHOICE
 /// (`80 <len> <bytes>`).
 fn parse_auth_value(value: &[u8]) -> Result<Vec<u8>, ServiceError> {
     if value.first() != Some(&0x80) {

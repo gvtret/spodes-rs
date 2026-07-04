@@ -2,17 +2,17 @@
 //!
 //! The layer is split into two independent concerns:
 //!
-//! * [`PhysicalTransport`] — a bidirectional byte channel abstracting the
+//! * [`crate::transport::PhysicalTransport`] — a bidirectional byte channel abstracting the
 //!   concrete medium (serial line, TCP connection, UDP socket). It is provided
 //!   by the user of the library.
-//! * [`DataLinkLayer`] — a framing sub-layer that carries xDLMS APDUs over a
+//! * [`crate::transport::DataLinkLayer`] — a framing sub-layer that carries xDLMS APDUs over a
 //!   physical transport. Two implementations are provided (added in later
 //!   commits): an HDLC layer usable over any medium, and a wrapper layer for
 //!   TCP/UDP only.
 //!
 //! Because the framing sub-layers are generic over the physical transport, the
 //! same HDLC implementation works over a serial line and over TCP, while the
-//! wrapper sub-layer is bounded on [`NetworkTransport`] so it can only be built
+//! wrapper sub-layer is bounded on [`crate::transport::NetworkTransport`] so it can only be built
 //! over TCP/UDP.
 
 use std::collections::VecDeque;
@@ -38,7 +38,7 @@ pub trait PhysicalTransport {
 /// Marker trait for network transports (TCP/UDP).
 ///
 /// The wrapper sub-layer is defined only over TCP/UDP, so it is bounded on this
-/// trait. HDLC works over any [`PhysicalTransport`] (serial or network) and does
+/// trait. HDLC works over any [`crate::transport::PhysicalTransport`] (serial or network) and does
 /// not require it.
 pub trait NetworkTransport: PhysicalTransport {}
 
@@ -56,7 +56,7 @@ pub trait DataLinkLayer {
 /// An in-memory loopback transport, primarily for tests: bytes written with
 /// [`PhysicalTransport::send`] are read back by [`PhysicalTransport::receive`].
 ///
-/// It implements [`NetworkTransport`], so it can back either framing sub-layer.
+/// It implements [`crate::transport::NetworkTransport`], so it can back either framing sub-layer.
 #[derive(Debug, Default)]
 pub struct MemoryTransport {
     buffer: VecDeque<u8>,

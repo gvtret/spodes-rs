@@ -2,8 +2,8 @@
 //! EVENT-NOTIFICATION and DATA-NOTIFICATION APDUs.
 //!
 //! Both are unconfirmed: the server pushes them to the client without a prior
-//! request. EVENT-NOTIFICATION ([194], tag 0xC2) reports a single attribute
-//! change; DATA-NOTIFICATION ([15], tag 0x0F) carries an arbitrary push body
+//! request. EVENT-NOTIFICATION (`[194]`, tag 0xC2) reports a single attribute
+//! change; DATA-NOTIFICATION (`[15]`, tag 0x0F) carries an arbitrary push body
 //! (see the Push setup class, IC 40).
 
 use crate::types::CosemDataType;

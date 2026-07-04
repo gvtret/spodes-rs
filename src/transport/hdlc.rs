@@ -3,7 +3,7 @@
 //!
 //! This module provides a frame codec — [`HdlcFrame`], [`HdlcAddress`],
 //! [`Control`] and the [`fcs16`] check sequence — and, on top of a
-//! [`PhysicalTransport`], the [`HdlcLayer`] data-link sub-layer. Because it only
+//! [`crate::transport::PhysicalTransport`], the [`crate::transport::hdlc::HdlcLayer`] data-link sub-layer. Because it only
 //! needs a byte channel, the same implementation works over a serial line and
 //! over TCP.
 //!

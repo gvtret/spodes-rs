@@ -11,7 +11,7 @@
 
 use super::{push_length, read_length, ServiceError};
 
-/// General-block-transfer APDU tag ([224]).
+/// General-block-transfer APDU tag (`[224]`).
 pub const GENERAL_BLOCK_TRANSFER: u8 = 0xE0;
 
 const LAST_BLOCK: u8 = 0x80;

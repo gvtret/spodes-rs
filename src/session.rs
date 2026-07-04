@@ -1,9 +1,9 @@
 //! A client-side session driver tying the transport, service and ciphering
 //! layers together (IEC 62056-5-3 / IEC 62056-53 client CF).
 //!
-//! [`ClientSession`] wraps any [`DataLinkLayer`] (HDLC or wrapper) and exposes
+//! [`crate::session::ClientSession`] wraps any [`crate::transport::DataLinkLayer`] (HDLC or wrapper) and exposes
 //! the confirmed COSEM services — association, GET, SET, ACTION, release — as
-//! blocking request/response round trips. When a [`SecurityContext`] is
+//! blocking request/response round trips. When a [`crate::service::ciphering::SecurityContext`] is
 //! configured, request APDUs are protected with global (glo-) ciphering and the
 //! matching ciphered responses are transparently unprotected; the client
 //! invocation counter is advanced after every protected request.

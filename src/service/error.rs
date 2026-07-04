@@ -1,10 +1,10 @@
 //! Error-reporting APDUs (IEC 62056-5-3): the EXCEPTION-RESPONSE used with LN
 //! referencing and the ConfirmedServiceError used with SN referencing.
 //!
-//! EXCEPTION-RESPONSE ([216], tag 0xD8) is returned when a request cannot be
+//! EXCEPTION-RESPONSE (`[216]`, tag 0xD8) is returned when a request cannot be
 //! served for a reason not tied to a specific object (association not
 //! established, PDU too long, deciphering error, …). ConfirmedServiceError
-//! ([14], tag 0x0E) reports the same class of failure in the SN world and, most
+//! (`[14]`, tag 0x0E) reports the same class of failure in the SN world and, most
 //! commonly, an InitiateRequest that the server cannot accept.
 
 use super::{tag, ServiceError};

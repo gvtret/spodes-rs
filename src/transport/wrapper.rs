@@ -12,7 +12,7 @@
 //!
 //! All fields are big-endian; `length` is the size of the APDU that follows.
 //! The wrapper is defined only over TCP/UDP, so [`Wrapper`] is bounded on
-//! [`NetworkTransport`].
+//! [`crate::transport::NetworkTransport`].
 
 use std::io;
 

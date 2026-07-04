@@ -2,16 +2,16 @@
 //!
 //! This module gathers the three orthogonal security concepts:
 //!
-//! * [`SecuritySuite`] — the cryptographic suite (0, 1 or 2) selecting the
+//! * [`crate::security::SecuritySuite`] — the cryptographic suite (0, 1 or 2) selecting the
 //!   authenticated-encryption, signature, key-agreement and hash algorithms
 //!   (IEC 62056-5-3, 5.3.7 / DLMS Green Book Table 19).
-//! * [`SecurityPolicy`] — the protection level applied to APDUs (none,
+//! * [`crate::security::SecurityPolicy`] — the protection level applied to APDUs (none,
 //!   authentication, encryption or authenticated encryption).
-//! * [`AuthMechanism`] — the authentication mechanism negotiated when opening an
+//! * [`crate::security::AuthMechanism`] — the authentication mechanism negotiated when opening an
 //!   application association (mechanism_id 0..10), including the Russian GOST
 //!   profile of Р 1323565.1, §7.5.
 //!
-//! The four-pass HLS handshake computations live in [`hls`].
+//! The four-pass HLS handshake computations live in [`crate::security::hls`].
 
 pub mod agreement;
 pub mod gost3410;
