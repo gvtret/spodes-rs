@@ -33,6 +33,18 @@ rand = "0.9.1"
 [dev-dependencies]
 
 [[example]]
+name = "client_session"
+path = "examples/client_session.rs"
+
+[[example]]
+name = "server_dispatch"
+path = "examples/server_dispatch.rs"
+
+[[example]]
+name = "hls_handshake"
+path = "examples/hls_handshake.rs"
+
+[[example]]
 name = "clock_usage"
 path = "examples/clock_usage.rs"
 
