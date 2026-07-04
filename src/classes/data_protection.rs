@@ -7,6 +7,7 @@ use std::any::Any;
 /// Configuration structure used to build a [`DataProtection`] object.
 #[derive(Clone, Serialize, Deserialize, Debug)]
 pub struct DataProtectionConfig {
+    /// Attribute 1: the object's logical name (OBIS code).
     pub logical_name: ObisCode,
     /// Attribute 2: protected data buffer (octet-string).
     pub protection_buffer: Vec<u8>,

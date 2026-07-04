@@ -7,14 +7,23 @@ use std::any::Any;
 /// Configuration used to build a `DemandRegister` object.
 #[derive(Clone, Serialize, Deserialize, Debug)]
 pub struct DemandRegisterConfig {
+    /// Attribute 1: the object's logical name (OBIS code).
     pub logical_name: ObisCode,
+    /// Attribute 2: the demand value being accumulated in the current period.
     pub current_average_value: CosemDataType,
+    /// Attribute 3: the demand value computed for the last completed period.
     pub last_average_value: CosemDataType,
+    /// Attribute 4: `scaler_unit` structure { scaler, unit } for both values.
     pub scaler_unit: CosemDataType,
+    /// Attribute 5: status of the register at capture time.
     pub status: CosemDataType,
+    /// Attribute 6: the time `last_average_value` was captured (date-time).
     pub capture_time: CosemDataType,
+    /// Attribute 7: start time of the current demand period (date-time).
     pub start_time_current: CosemDataType,
+    /// Attribute 8: the demand-integration period, in seconds (double-long-unsigned).
     pub period: CosemDataType,
+    /// Attribute 9: number of periods used for the sliding-demand computation.
     pub number_of_periods: CosemDataType,
 }
 

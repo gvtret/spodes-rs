@@ -7,6 +7,7 @@ use std::any::Any;
 /// Configuration structure used to build a [`SingleActionSchedule`] object.
 #[derive(Clone, Serialize, Deserialize, Debug)]
 pub struct SingleActionScheduleConfig {
+    /// Attribute 1: the object's logical name (OBIS code).
     pub logical_name: ObisCode,
     /// Attribute 2: `script` structure { script_logical_name, script_selector }.
     pub executed_script: CosemDataType,

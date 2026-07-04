@@ -22,36 +22,62 @@ pub mod set;
 
 /// APDU tags of the xDLMS services (LN referencing), IEC 62056-5-3 Table 60.
 pub mod tag {
+    /// `data-notification` (tag 15).
     pub const DATA_NOTIFICATION: u8 = 0x0F;
+    /// `get-request` (tag 192).
     pub const GET_REQUEST: u8 = 0xC0;
+    /// `set-request` (tag 193).
     pub const SET_REQUEST: u8 = 0xC1;
+    /// `event-notification-request` (tag 194).
     pub const EVENT_NOTIFICATION_REQUEST: u8 = 0xC2;
+    /// `action-request` (tag 195).
     pub const ACTION_REQUEST: u8 = 0xC3;
+    /// `get-response` (tag 196).
     pub const GET_RESPONSE: u8 = 0xC4;
+    /// `set-response` (tag 197).
     pub const SET_RESPONSE: u8 = 0xC5;
+    /// `action-response` (tag 199).
     pub const ACTION_RESPONSE: u8 = 0xC7;
+    /// `exception-response` (tag 216).
     pub const EXCEPTION_RESPONSE: u8 = 0xD8;
+    /// `confirmed-service-error` (tag 14).
     pub const CONFIRMED_SERVICE_ERROR: u8 = 0x0E;
 }
 
 /// `Data-Access-Result` codes (IEC 62056-5-3). Returned by GET/SET and, for the
 /// optional return parameters, by ACTION.
 pub mod data_access_result {
+    /// The access succeeded.
     pub const SUCCESS: u8 = 0;
+    /// Hardware fault.
     pub const HARDWARE_FAULT: u8 = 1;
+    /// Temporary failure.
     pub const TEMPORARY_FAILURE: u8 = 2;
+    /// Read or write denied.
     pub const READ_WRITE_DENIED: u8 = 3;
+    /// The object is not defined.
     pub const OBJECT_UNDEFINED: u8 = 4;
+    /// The object class is inconsistent with the request.
     pub const OBJECT_CLASS_INCONSISTENT: u8 = 9;
+    /// The object is unavailable.
     pub const OBJECT_UNAVAILABLE: u8 = 11;
+    /// The supplied type does not match the attribute.
     pub const TYPE_UNMATCHED: u8 = 12;
+    /// The scope of access was violated.
     pub const SCOPE_OF_ACCESS_VIOLATED: u8 = 13;
+    /// The requested data block is unavailable.
     pub const DATA_BLOCK_UNAVAILABLE: u8 = 14;
+    /// The long GET was aborted.
     pub const LONG_GET_ABORTED: u8 = 15;
+    /// No long GET is in progress.
     pub const NO_LONG_GET_IN_PROGRESS: u8 = 16;
+    /// The long SET was aborted.
     pub const LONG_SET_ABORTED: u8 = 17;
+    /// No long SET is in progress.
     pub const NO_LONG_SET_IN_PROGRESS: u8 = 18;
+    /// The data-block number is invalid.
     pub const DATA_BLOCK_NUMBER_INVALID: u8 = 19;
+    /// Other reason.
     pub const OTHER_REASON: u8 = 250;
 }
 
@@ -93,22 +119,28 @@ pub fn invoke_id_and_priority(invoke_id: u8, confirmed: bool, high_priority: boo
 /// 2 + 6 + 1 = 9 raw octets.
 #[derive(Debug, Clone, PartialEq)]
 pub struct AttributeDescriptor {
+    /// Interface class id of the referenced object.
     pub class_id: u16,
+    /// Logical name (OBIS) of the object instance.
     pub instance_id: ObisCode,
+    /// Attribute index within the object.
     pub attribute_id: i8,
 }
 
 impl AttributeDescriptor {
+    /// Creates an attribute descriptor.
     pub fn new(class_id: u16, instance_id: ObisCode, attribute_id: i8) -> Self {
         AttributeDescriptor { class_id, instance_id, attribute_id }
     }
 
+    /// Appends the 9-octet encoding to `buf`.
     pub fn encode(&self, buf: &mut Vec<u8>) {
         buf.extend_from_slice(&self.class_id.to_be_bytes());
         buf.extend_from_slice(&self.instance_id.to_bytes());
         buf.push(self.attribute_id as u8);
     }
 
+    /// Decodes a descriptor, returning it and the 9 octets consumed.
     pub fn decode(bytes: &[u8]) -> Result<(AttributeDescriptor, usize), ServiceError> {
         if bytes.len() < 9 {
             return Err(ServiceError::Truncated);
@@ -124,22 +156,28 @@ impl AttributeDescriptor {
 /// references one method of one object instance. Encoded as 9 raw octets.
 #[derive(Debug, Clone, PartialEq)]
 pub struct MethodDescriptor {
+    /// Interface class id of the referenced object.
     pub class_id: u16,
+    /// Logical name (OBIS) of the object instance.
     pub instance_id: ObisCode,
+    /// Method index within the object.
     pub method_id: i8,
 }
 
 impl MethodDescriptor {
+    /// Creates a method descriptor.
     pub fn new(class_id: u16, instance_id: ObisCode, method_id: i8) -> Self {
         MethodDescriptor { class_id, instance_id, method_id }
     }
 
+    /// Appends the 9-octet encoding to `buf`.
     pub fn encode(&self, buf: &mut Vec<u8>) {
         buf.extend_from_slice(&self.class_id.to_be_bytes());
         buf.extend_from_slice(&self.instance_id.to_bytes());
         buf.push(self.method_id as u8);
     }
 
+    /// Decodes a descriptor, returning it and the 9 octets consumed.
     pub fn decode(bytes: &[u8]) -> Result<(MethodDescriptor, usize), ServiceError> {
         if bytes.len() < 9 {
             return Err(ServiceError::Truncated);
@@ -155,12 +193,16 @@ impl MethodDescriptor {
 /// `last-block (boolean) ‖ block-number (u32) ‖ raw-data (A-XDR octet-string)`.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct DataBlockSa {
+    /// Whether this is the last block of the transfer.
     pub last_block: bool,
+    /// The block number.
     pub block_number: u32,
+    /// The raw block data.
     pub raw_data: Vec<u8>,
 }
 
 impl DataBlockSa {
+    /// Appends the block encoding to `buf`.
     pub fn encode(&self, buf: &mut Vec<u8>) {
         buf.push(self.last_block as u8);
         buf.extend_from_slice(&self.block_number.to_be_bytes());
@@ -168,6 +210,7 @@ impl DataBlockSa {
         buf.extend_from_slice(&self.raw_data);
     }
 
+    /// Decodes a block, returning it and the octets consumed.
     pub fn decode(bytes: &[u8]) -> Result<(DataBlockSa, usize), ServiceError> {
         let last_block = *bytes.first().ok_or(ServiceError::Truncated)? != 0;
         let b = bytes.get(1..5).ok_or(ServiceError::Truncated)?;

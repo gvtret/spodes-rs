@@ -42,23 +42,37 @@ pub mod security_control {
 
 /// Ciphered-APDU tags for service-specific global ciphering.
 pub mod glo {
+    /// `glo-initiate-request`.
     pub const INITIATE_REQUEST: u8 = 0x21;
+    /// `glo-initiate-response`.
     pub const INITIATE_RESPONSE: u8 = 0x28;
+    /// `glo-get-request`.
     pub const GET_REQUEST: u8 = 0xC8;
+    /// `glo-set-request`.
     pub const SET_REQUEST: u8 = 0xC9;
+    /// `glo-action-request`.
     pub const ACTION_REQUEST: u8 = 0xCB;
+    /// `glo-get-response`.
     pub const GET_RESPONSE: u8 = 0xCC;
+    /// `glo-set-response`.
     pub const SET_RESPONSE: u8 = 0xCD;
+    /// `glo-action-response`.
     pub const ACTION_RESPONSE: u8 = 0xCF;
 }
 
 /// Ciphered-APDU tags for service-specific dedicated ciphering.
 pub mod ded {
+    /// `ded-get-request`.
     pub const GET_REQUEST: u8 = 0xD0;
+    /// `ded-set-request`.
     pub const SET_REQUEST: u8 = 0xD1;
+    /// `ded-action-request`.
     pub const ACTION_REQUEST: u8 = 0xD3;
+    /// `ded-get-response`.
     pub const GET_RESPONSE: u8 = 0xD4;
+    /// `ded-set-response`.
     pub const SET_RESPONSE: u8 = 0xD5;
+    /// `ded-action-response`.
     pub const ACTION_RESPONSE: u8 = 0xD7;
 }
 

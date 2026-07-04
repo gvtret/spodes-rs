@@ -7,6 +7,7 @@ use std::any::Any;
 /// Configuration structure used to build a [`MacAddressSetup`] object.
 #[derive(Clone, Serialize, Deserialize, Debug)]
 pub struct MacAddressSetupConfig {
+    /// Attribute 1: the object's logical name (OBIS code).
     pub logical_name: ObisCode,
     /// Attribute 2: the Ethernet MAC address (octet-string, typically 6 octets).
     pub mac_address: Vec<u8>,

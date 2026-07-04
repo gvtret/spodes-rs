@@ -17,6 +17,7 @@ pub mod control_state {
 /// Configuration structure used to build a [`DisconnectControl`] object.
 #[derive(Clone, Serialize, Deserialize, Debug)]
 pub struct DisconnectControlConfig {
+    /// Attribute 1: the object's logical name (OBIS code).
     pub logical_name: ObisCode,
     /// Attribute 2: physical output state (true = closed/connected).
     pub output_state: bool,

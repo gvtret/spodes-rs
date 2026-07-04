@@ -24,6 +24,7 @@ pub const WRAPPER_VERSION: u16 = 0x0001;
 /// The 8-octet wrapper header.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct WrapperHeader {
+    /// Protocol version (always [`WRAPPER_VERSION`]).
     pub version: u16,
     /// Source wPort (the sender's SAP).
     pub source: u16,
@@ -41,7 +42,12 @@ pub enum WrapperError {
     /// The version field did not equal [`WRAPPER_VERSION`].
     UnsupportedVersion(u16),
     /// The buffer did not contain `length` octets after the header.
-    LengthMismatch { declared: usize, actual: usize },
+    LengthMismatch {
+        /// The length declared in the header.
+        declared: usize,
+        /// The number of APDU octets actually present.
+        actual: usize,
+    },
 }
 
 impl std::fmt::Display for WrapperError {

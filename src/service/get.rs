@@ -31,7 +31,9 @@ mod response_type {
 /// Optional selective-access parameters attached to an attribute descriptor.
 #[derive(Debug, Clone, PartialEq)]
 pub struct AccessSelection {
+    /// The access selector (which selective-access method to apply).
     pub selector: u8,
+    /// The selective-access parameters for the chosen selector.
     pub parameters: CosemDataType,
 }
 
@@ -70,11 +72,24 @@ impl AccessSelection {
 #[derive(Debug, Clone, PartialEq)]
 pub enum GetRequest {
     /// GET-REQUEST-NORMAL: read a single attribute.
-    Normal { invoke_id_and_priority: u8, attribute: AttributeDescriptor, access_selection: Option<AccessSelection> },
+    Normal {
+        /// The invoke-id and priority byte.
+        invoke_id_and_priority: u8,
+        /// The attribute to read.
+        attribute: AttributeDescriptor,
+        /// Optional selective access applied to the attribute.
+        access_selection: Option<AccessSelection>,
+    },
     /// GET-REQUEST-NEXT: request the next data block during block transfer.
-    Next { invoke_id_and_priority: u8, block_number: u32 },
+    Next {
+        /// The invoke-id and priority byte.
+        invoke_id_and_priority: u8,
+        /// The number of the block being acknowledged/requested.
+        block_number: u32,
+    },
     /// GET-REQUEST-WITH-LIST: read several attributes in one request.
     WithList {
+        /// The invoke-id and priority byte.
         invoke_id_and_priority: u8,
         /// Each entry is an attribute descriptor with optional selective access.
         attributes: Vec<(AttributeDescriptor, Option<AccessSelection>)>,
@@ -152,7 +167,9 @@ impl GetRequest {
 /// data-access-result code.
 #[derive(Debug, Clone, PartialEq)]
 pub enum GetDataResult {
+    /// The attribute value was read successfully.
     Data(CosemDataType),
+    /// The read failed with this data-access-result code.
     AccessResult(u8),
 }
 
@@ -160,17 +177,30 @@ pub enum GetDataResult {
 #[derive(Debug, Clone, PartialEq)]
 pub enum GetResponse {
     /// GET-RESPONSE-NORMAL: the full result fits in a single APDU.
-    Normal { invoke_id_and_priority: u8, result: GetDataResult },
+    Normal {
+        /// The invoke-id and priority byte.
+        invoke_id_and_priority: u8,
+        /// The result (value or data-access-result).
+        result: GetDataResult,
+    },
     /// GET-RESPONSE-WITH-DATABLOCK: one block of a longer result.
     WithDataBlock {
+        /// The invoke-id and priority byte.
         invoke_id_and_priority: u8,
+        /// Whether this is the last block of the result.
         last_block: bool,
+        /// The number of this block.
         block_number: u32,
         /// Raw data of this block, or a data-access-result code on failure.
         raw_data: Result<Vec<u8>, u8>,
     },
     /// GET-RESPONSE-WITH-LIST: one result per requested attribute.
-    WithList { invoke_id_and_priority: u8, results: Vec<GetDataResult> },
+    WithList {
+        /// The invoke-id and priority byte.
+        invoke_id_and_priority: u8,
+        /// One result per attribute of the request, in order.
+        results: Vec<GetDataResult>,
+    },
 }
 
 impl GetResponse {

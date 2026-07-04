@@ -7,6 +7,7 @@ use std::any::Any;
 /// Configuration structure used to build an [`IecHdlcSetup`] object.
 #[derive(Clone, Serialize, Deserialize, Debug)]
 pub struct IecHdlcSetupConfig {
+    /// Attribute 1: the object's logical name (OBIS code).
     pub logical_name: ObisCode,
     /// Class version: 0 or 1. In version 0 attributes 5 and 6 are `unsigned`;
     /// in version 1 they are `long-unsigned` (wider maximum info field length).

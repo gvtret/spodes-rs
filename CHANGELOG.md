@@ -8,6 +8,18 @@ While the crate is at `0.x`, minor releases may contain breaking changes.
 
 ## [Unreleased]
 
+## [0.2.1] - 2026-07-04
+
+### Documentation
+
+- Documented every remaining public item so the API renders in full on docs.rs.
+  The added text is anchored to the standards: interface-class fields carry
+  their IEC 62056-6-2 attribute numbers and meaning, service APDU variants and
+  tags follow IEC 62056-5-3 Table 60, HDLC address/control/frame fields follow
+  IEC 62056-46, and the ACSE/ciphering constants name their DLMS mechanisms and
+  ciphered-APDU tags. Rewrote the crate landing page with the layer diagram, a
+  module guide and three runnable examples. No functional changes.
+
 ## [0.2.0] - 2026-07-04
 
 ### Added
@@ -61,6 +73,7 @@ Initial release: a full DLMS/COSEM stack for IEC 62056 and the Russian
 - **Tooling** — GitHub Actions CI (fmt, clippy, test, doc, package) and a
   tag-triggered release workflow; dual MIT / Apache-2.0 license.
 
-[Unreleased]: https://github.com/gvtret/spodes-rs/compare/v0.2.0...HEAD
+[Unreleased]: https://github.com/gvtret/spodes-rs/compare/v0.2.1...HEAD
+[0.2.1]: https://github.com/gvtret/spodes-rs/compare/v0.2.0...v0.2.1
 [0.2.0]: https://github.com/gvtret/spodes-rs/compare/v0.1.0...v0.2.0
 [0.1.0]: https://github.com/gvtret/spodes-rs/releases/tag/v0.1.0

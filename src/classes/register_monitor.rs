@@ -7,6 +7,7 @@ use std::any::Any;
 /// Configuration structure used to build a [`RegisterMonitor`] object.
 #[derive(Clone, Serialize, Deserialize, Debug)]
 pub struct RegisterMonitorConfig {
+    /// Attribute 1: the object's logical name (OBIS code).
     pub logical_name: ObisCode,
     /// Attribute 2: array of threshold values, of the monitored attribute's type.
     pub thresholds: Vec<CosemDataType>,

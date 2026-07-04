@@ -11,8 +11,11 @@ use std::any::Any;
 /// Versions of the Association LN class.
 #[derive(Clone, Serialize, Deserialize, Debug, PartialEq)]
 pub enum AssociationLnVersion {
+    /// Version 0: attributes 1..8 (no `security_setup_reference`).
     Version0,
+    /// Version 1: adds attribute 9 (`security_setup_reference`).
     Version1,
+    /// Version 2: adds attributes 10 and 11 (`user_list`, `current_user`).
     Version2,
 }
 
@@ -51,14 +54,23 @@ pub struct HlsContext {
 /// Configuration structure used to build an `Association LN` object.
 #[derive(Clone, Serialize, Deserialize, Debug)]
 pub struct AssociationLnConfig {
+    /// Attribute 1: the object's logical name (OBIS code).
     pub logical_name: ObisCode,
+    /// The implemented class version (0, 1 or 2); selects the attribute set.
     pub version: AssociationLnVersion,
+    /// Attribute 2: list of the COSEM objects visible within the association.
     pub object_list: Vec<CosemDataType>,
+    /// Attribute 3: `associated_partners_id` structure { client SAP, server SAP }.
     pub associated_partners_id: CosemDataType,
+    /// Attribute 4: application context name (naming and ciphering in use).
     pub application_context_name: CosemDataType,
+    /// Attribute 5: `xDLMS_context_info` structure (conformance, PDU sizes, …).
     pub xdlms_context_info: CosemDataType,
+    /// Attribute 6: the authentication mechanism negotiated for the association.
     pub authentication_mechanism: AuthenticationMechanism,
+    /// Attribute 7: the LLS/HLS secret (password or shared key).
     pub secret: CosemDataType,
+    /// Attribute 8: association status (non-associated / association-pending / associated).
     pub association_status: CosemDataType,
     /// Attribute 9 (versions ≥ 1): OBIS reference to the `Security Setup` object (class 64).
     pub security_setup_reference: CosemDataType,
@@ -68,6 +80,9 @@ pub struct AssociationLnConfig {
     pub current_user: CosemDataType,
 }
 
+/// `Association LN` interface class (class_id = 15) per IEC 62056-6-2 §4.4.3.
+/// Models the associations between a client and the server (logical device) and
+/// carries the authentication mechanism and HLS handshake used to open them.
 #[derive(Clone, Serialize, Deserialize, Debug)]
 pub struct AssociationLn {
     logical_name: ObisCode,
@@ -96,6 +111,7 @@ pub struct AssociationLn {
 }
 
 impl AssociationLn {
+    /// Builds a new [`AssociationLn`] from its configuration.
     pub fn new(config: AssociationLnConfig) -> Self {
         AssociationLn {
             logical_name: config.logical_name,

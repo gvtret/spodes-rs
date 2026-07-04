@@ -7,6 +7,7 @@ use std::any::Any;
 /// Configuration structure used to build a [`SapAssignment`] object.
 #[derive(Clone, Serialize, Deserialize, Debug)]
 pub struct SapAssignmentConfig {
+    /// Attribute 1: the object's logical name (OBIS code).
     pub logical_name: ObisCode,
     /// Attribute 2: array of `sap_assignment` structures
     /// { SAP: long-unsigned, logical_device_name: octet-string }.

@@ -7,7 +7,9 @@ use std::any::Any;
 /// Configuration used to build a `ScriptTable` object.
 #[derive(Clone, Serialize, Deserialize, Debug)]
 pub struct ScriptTableConfig {
+    /// Attribute 1: the object's logical name (OBIS code).
     pub logical_name: ObisCode,
+    /// Attribute 2: array of `script` structures { script_identifier, actions }.
     pub scripts: Vec<CosemDataType>,
 }
 

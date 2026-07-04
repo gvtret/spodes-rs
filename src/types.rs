@@ -1,32 +1,54 @@
 use serde::{Deserialize, Serialize};
 use std::fmt;
 
+/// A COSEM common data type (IEC 62056-6-2, Table 3), with A-XDR (BER)
+/// serialization via [`CosemDataType::serialize_ber`] /
+/// [`CosemDataType::deserialize_ber`].
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]
 pub enum CosemDataType {
+    /// `null-data` (tag 0).
     Null,
+    /// `array` (tag 1) — a sequence of same-typed elements.
     Array(Vec<CosemDataType>),
+    /// `structure` (tag 2) — a sequence of (possibly differently typed) elements.
     Structure(Vec<CosemDataType>),
+    /// `boolean` (tag 3).
     Boolean(bool),
+    /// `integer` — signed 8-bit (tag 15).
     Integer(i8),
+    /// `long` — signed 16-bit (tag 16).
     Long(i16),
+    /// `unsigned` — unsigned 8-bit (tag 17).
     Unsigned(u8),
+    /// `long-unsigned` — unsigned 16-bit (tag 18).
     LongUnsigned(u16),
+    /// `double-long` — signed 32-bit (tag 5).
     DoubleLong(i32),
+    /// `double-long-unsigned` — unsigned 32-bit (tag 6).
     DoubleLongUnsigned(u32),
+    /// `octet-string` (tag 9).
     OctetString(Vec<u8>),
+    /// `date-time` (tag 25) — a 12-octet date-time value.
     DateTime(Vec<u8>),
+    /// `bit-string` (tag 4) — held as raw octets.
     BitString(Vec<u8>),
+    /// `enum` — an enumerated 8-bit value (tag 22).
     Enum(u8),
 }
 
+/// An error while encoding or decoding a [`CosemDataType`] in BER.
 #[derive(Debug, PartialEq)]
 pub enum BerError {
+    /// The tag octet was not a recognized COSEM data type.
     InvalidTag,
+    /// The value ended before all declared octets were present.
     InvalidLength,
+    /// A value did not conform to its type.
     InvalidValue,
 }
 
 impl CosemDataType {
+    /// Appends the A-XDR (BER) encoding of this value to `buf`.
     pub fn serialize_ber(&self, buf: &mut Vec<u8>) -> Result<(), BerError> {
         // A-XDR encoding of the common data types (IEC 62056-6-2, Table 3).
         // Tags are the one-octet values from the table; fixed scalar types and
@@ -116,6 +138,8 @@ impl CosemDataType {
         }
     }
 
+    /// Decodes one A-XDR (BER) value from `data`, returning it and the
+    /// unconsumed remainder.
     pub fn deserialize_ber(data: &[u8]) -> Result<(Self, &[u8]), BerError> {
         if data.is_empty() {
             return Err(BerError::InvalidTag);

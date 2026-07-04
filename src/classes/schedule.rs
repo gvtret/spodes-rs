@@ -7,8 +7,11 @@ use std::any::Any;
 /// Configuration used to build a `Schedule` object.
 #[derive(Clone, Serialize, Deserialize, Debug)]
 pub struct ScheduleConfig {
+    /// Attribute 1: the object's logical name (OBIS code).
     pub logical_name: ObisCode,
+    /// Attribute 2: array of `schedule_table_entry` structures.
     pub entries: Vec<CosemDataType>,
+    /// Whether the schedule is currently enabled.
     pub enabled: bool,
 }
 

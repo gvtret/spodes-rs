@@ -11,17 +11,25 @@ use super::{tag, ServiceError};
 
 /// `state-error` values of an EXCEPTION-RESPONSE.
 pub mod state_error {
+    /// The service is not allowed in the current state.
     pub const SERVICE_NOT_ALLOWED: u8 = 1;
+    /// The service is not known.
     pub const SERVICE_UNKNOWN: u8 = 2;
 }
 
 /// `service-error` values of an EXCEPTION-RESPONSE.
 pub mod service_error {
+    /// The operation is not possible.
     pub const OPERATION_NOT_POSSIBLE: u8 = 1;
+    /// The service is not supported.
     pub const SERVICE_NOT_SUPPORTED: u8 = 2;
+    /// Other reason.
     pub const OTHER_REASON: u8 = 3;
+    /// The request PDU is too long.
     pub const PDU_TOO_LONG: u8 = 4;
+    /// A deciphering error occurred.
     pub const DECIPHERING_ERROR: u8 = 5;
+    /// The invocation counter was invalid (replay protection).
     pub const INVOCATION_COUNTER_ERROR: u8 = 6;
 }
 
@@ -31,7 +39,9 @@ pub mod service_error {
 /// carrying the lowest acceptable invocation counter) is not modelled.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ExceptionResponse {
+    /// The state-error code (see [`state_error`]).
     pub state_error: u8,
+    /// The service-error code (see [`service_error`]).
     pub service_error: u8,
 }
 
@@ -54,17 +64,25 @@ impl ExceptionResponse {
 
 /// ConfirmedServiceError CHOICE selector (which service failed).
 pub mod service {
+    /// `initiateError` — the InitiateRequest failed.
     pub const INITIATE_ERROR: u8 = 1;
+    /// `getStatus`.
     pub const GET_STATUS: u8 = 2;
+    /// `read`.
     pub const READ: u8 = 5;
+    /// `write`.
     pub const WRITE: u8 = 6;
 }
 
 /// ServiceError CHOICE selector (the error category).
 pub mod category {
+    /// `application-reference`.
     pub const APPLICATION_REFERENCE: u8 = 1;
+    /// `hardware-resource`.
     pub const HARDWARE_RESOURCE: u8 = 2;
+    /// `initiate` — an InitiateRequest error.
     pub const INITIATE: u8 = 6;
+    /// `access`.
     pub const ACCESS: u8 = 9;
 }
 

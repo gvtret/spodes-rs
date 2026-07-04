@@ -20,6 +20,7 @@ pub mod key_id {
 /// Configuration structure used to build a [`SecuritySetup`] object.
 #[derive(Clone, Serialize, Deserialize, Debug)]
 pub struct SecuritySetupConfig {
+    /// Attribute 1: the object's logical name (OBIS code).
     pub logical_name: ObisCode,
     /// Class version: 0 or 1. Version 1 adds the `certificates` attribute and the
     /// PKI/ECDH methods.

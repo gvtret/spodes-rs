@@ -7,6 +7,7 @@ use std::any::Any;
 /// Configuration structure used to build an [`Ipv6Setup`] object.
 #[derive(Clone, Serialize, Deserialize, Debug)]
 pub struct Ipv6SetupConfig {
+    /// Attribute 1: the object's logical name (OBIS code).
     pub logical_name: ObisCode,
     /// Attribute 2: reference to the data link layer setup object.
     pub dl_reference: Vec<u8>,

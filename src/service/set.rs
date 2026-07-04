@@ -36,25 +36,41 @@ mod response_type {
 pub enum SetRequest {
     /// SET-REQUEST-NORMAL: write a single attribute.
     Normal {
+        /// The invoke-id and priority byte.
         invoke_id_and_priority: u8,
+        /// The attribute to write.
         attribute: AttributeDescriptor,
+        /// Optional selective access applied to the attribute.
         access_selection: Option<AccessSelection>,
+        /// The value to write.
         value: CosemDataType,
     },
     /// SET-REQUEST-WITH-FIRST-DATABLOCK: the attribute reference and the first
     /// block of the value.
     WithFirstDatablock {
+        /// The invoke-id and priority byte.
         invoke_id_and_priority: u8,
+        /// The attribute to write.
         attribute: AttributeDescriptor,
+        /// Optional selective access applied to the attribute.
         access_selection: Option<AccessSelection>,
+        /// The first block of the value being written.
         datablock: DataBlockSa,
     },
     /// SET-REQUEST-WITH-DATABLOCK: a subsequent block of the value.
-    WithDatablock { invoke_id_and_priority: u8, datablock: DataBlockSa },
+    WithDatablock {
+        /// The invoke-id and priority byte.
+        invoke_id_and_priority: u8,
+        /// The next block of the value being written.
+        datablock: DataBlockSa,
+    },
     /// SET-REQUEST-WITH-LIST: write several attributes in one request.
     WithList {
+        /// The invoke-id and priority byte.
         invoke_id_and_priority: u8,
+        /// The attributes to write, each with optional selective access.
         attributes: Vec<(AttributeDescriptor, Option<AccessSelection>)>,
+        /// The values to write, one per attribute in order.
         values: Vec<CosemDataType>,
     },
 }
@@ -156,14 +172,36 @@ impl SetRequest {
 #[derive(Debug, Clone, PartialEq)]
 pub enum SetResponse {
     /// SET-RESPONSE-NORMAL: carries a single data-access-result code.
-    Normal { invoke_id_and_priority: u8, result: u8 },
+    Normal {
+        /// The invoke-id and priority byte.
+        invoke_id_and_priority: u8,
+        /// The data-access-result code.
+        result: u8,
+    },
     /// SET-RESPONSE-DATABLOCK: acknowledges reception of an intermediate block.
-    Datablock { invoke_id_and_priority: u8, block_number: u32 },
+    Datablock {
+        /// The invoke-id and priority byte.
+        invoke_id_and_priority: u8,
+        /// The number of the block being acknowledged.
+        block_number: u32,
+    },
     /// SET-RESPONSE-LAST-DATABLOCK: acknowledges the last block and delivers the
     /// result.
-    LastDatablock { invoke_id_and_priority: u8, result: u8, block_number: u32 },
+    LastDatablock {
+        /// The invoke-id and priority byte.
+        invoke_id_and_priority: u8,
+        /// The data-access-result code.
+        result: u8,
+        /// The number of the last block.
+        block_number: u32,
+    },
     /// SET-RESPONSE-WITH-LIST: one data-access-result code per written attribute.
-    WithList { invoke_id_and_priority: u8, results: Vec<u8> },
+    WithList {
+        /// The invoke-id and priority byte.
+        invoke_id_and_priority: u8,
+        /// One data-access-result code per attribute, in order.
+        results: Vec<u8>,
+    },
 }
 
 impl SetResponse {

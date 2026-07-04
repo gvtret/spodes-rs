@@ -7,6 +7,7 @@ use std::any::Any;
 /// Configuration structure used to build an [`Arbitrator`] object.
 #[derive(Clone, Serialize, Deserialize, Debug)]
 pub struct ArbitratorConfig {
+    /// Attribute 1: the object's logical name (OBIS code).
     pub logical_name: ObisCode,
     /// Attribute 2: array of `action` structures that can be requested.
     pub actions: Vec<CosemDataType>,

@@ -9,17 +9,26 @@ use std::sync::Arc;
 /// Configuration structure used to build a `ProfileGeneric` object.
 #[derive(Clone, Serialize, Deserialize)]
 pub struct ProfileGenericConfig {
+    /// Attribute 1: the object's logical name (OBIS code).
     pub logical_name: ObisCode,
     /// Class version: 0 or 1. Version 0 additionally exposes the
     /// `get_buffer_by_range` and `get_buffer_by_index` methods.
     pub version: u8,
+    /// Attribute 2: the captured data buffer (array of entry structures).
     pub buffer: Vec<CosemDataType>,
+    /// Attribute 3: the objects captured into each buffer entry, paired with the
+    /// captured attribute index.
     #[serde(skip)]
     pub capture_objects: Vec<(Arc<dyn InterfaceClass + Send + Sync>, u8)>,
+    /// Attribute 4: the capturing period, in seconds (0 = event-driven).
     pub capture_period: u32,
+    /// Attribute 5: sort method (1 = FIFO, 2 = LIFO, 3 = largest, 4 = smallest).
     pub sort_method: u8,
+    /// Attribute 6: `capture_object_definition` used as the sort key.
     pub sort_object: CosemDataType,
+    /// Attribute 7: number of entries currently stored in the buffer.
     pub entries_in_use: u32,
+    /// Attribute 8: maximum number of entries the buffer can hold.
     pub profile_entries: u32,
 }
 

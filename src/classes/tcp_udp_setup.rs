@@ -7,6 +7,7 @@ use std::any::Any;
 /// Configuration structure used to build a [`TcpUdpSetup`] object.
 #[derive(Clone, Serialize, Deserialize, Debug)]
 pub struct TcpUdpSetupConfig {
+    /// Attribute 1: the object's logical name (OBIS code).
     pub logical_name: ObisCode,
     /// Attribute 2: TCP or UDP port the server listens on.
     pub tcp_udp_port: u16,

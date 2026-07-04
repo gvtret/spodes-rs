@@ -7,6 +7,7 @@ use std::any::Any;
 /// Configuration structure used to build an [`IecLocalPortSetup`] object.
 #[derive(Clone, Serialize, Deserialize, Debug)]
 pub struct IecLocalPortSetupConfig {
+    /// Attribute 1: the object's logical name (OBIS code).
     pub logical_name: ObisCode,
     /// Class version: 0 or 1 (identical attribute set).
     pub version: u8,

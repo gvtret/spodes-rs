@@ -82,7 +82,9 @@ impl From<HdlcError> for io::Error {
 /// seven address bits and one extension bit (set on the final octet).
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct HdlcAddress {
+    /// The address value (up to 28 significant bits, seven per octet).
     pub value: u32,
+    /// The address length in octets (1, 2 or 4).
     pub length: u8,
 }
 
@@ -128,23 +130,58 @@ impl HdlcAddress {
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Control {
     /// Set Normal Response Mode (connection establishment).
-    Snrm { poll: bool },
+    Snrm {
+        /// The poll bit.
+        poll: bool,
+    },
     /// Unnumbered Acknowledge.
-    Ua { final_bit: bool },
+    Ua {
+        /// The final bit.
+        final_bit: bool,
+    },
     /// Disconnect.
-    Disc { poll: bool },
+    Disc {
+        /// The poll bit.
+        poll: bool,
+    },
     /// Disconnected Mode.
-    Dm { final_bit: bool },
+    Dm {
+        /// The final bit.
+        final_bit: bool,
+    },
     /// Frame Reject.
-    Frmr { final_bit: bool },
+    Frmr {
+        /// The final bit.
+        final_bit: bool,
+    },
     /// Unnumbered Information.
-    Ui { poll: bool },
+    Ui {
+        /// The poll bit.
+        poll: bool,
+    },
     /// Information frame with send/receive sequence numbers.
-    Information { send_seq: u8, recv_seq: u8, poll: bool },
+    Information {
+        /// The send sequence number N(S).
+        send_seq: u8,
+        /// The receive sequence number N(R).
+        recv_seq: u8,
+        /// The poll bit.
+        poll: bool,
+    },
     /// Receive Ready (supervisory).
-    ReceiveReady { recv_seq: u8, poll_final: bool },
+    ReceiveReady {
+        /// The receive sequence number N(R).
+        recv_seq: u8,
+        /// The poll/final bit.
+        poll_final: bool,
+    },
     /// Receive Not Ready (supervisory).
-    ReceiveNotReady { recv_seq: u8, poll_final: bool },
+    ReceiveNotReady {
+        /// The receive sequence number N(R).
+        recv_seq: u8,
+        /// The poll/final bit.
+        poll_final: bool,
+    },
 }
 
 impl Control {
@@ -196,8 +233,11 @@ impl Control {
 /// A decoded HDLC frame.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct HdlcFrame {
+    /// The destination address.
     pub destination: HdlcAddress,
+    /// The source address.
     pub source: HdlcAddress,
+    /// The control field.
     pub control: Control,
     /// The information field (may be empty for supervisory/unnumbered frames).
     pub information: Vec<u8>,

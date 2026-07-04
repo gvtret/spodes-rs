@@ -7,7 +7,9 @@ use std::any::Any;
 /// Configuration used to build a `SpecialDaysTable` object.
 #[derive(Clone, Serialize, Deserialize, Debug)]
 pub struct SpecialDaysTableConfig {
+    /// Attribute 1: the object's logical name (OBIS code).
     pub logical_name: ObisCode,
+    /// Attribute 2: array of `special_day` entries { index, date, day_id }.
     pub entries: Vec<CosemDataType>,
 }
 
@@ -20,6 +22,7 @@ pub struct SpecialDaysTable {
 }
 
 impl SpecialDaysTable {
+    /// Builds a new [`SpecialDaysTable`] from its configuration.
     pub fn new(config: SpecialDaysTableConfig) -> Self {
         SpecialDaysTable { logical_name: config.logical_name, entries: config.entries }
     }

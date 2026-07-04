@@ -7,9 +7,13 @@ use std::any::Any;
 /// Configuration used to build a `RegisterActivation` object.
 #[derive(Clone, Serialize, Deserialize, Debug)]
 pub struct RegisterActivationConfig {
+    /// Attribute 1: the object's logical name (OBIS code).
     pub logical_name: ObisCode,
+    /// Attribute 2: array of `object_definition` structures the masks may select.
     pub register_assignment: Vec<CosemDataType>,
+    /// Attribute 3: array of `mask` structures { mask_name, index list }.
     pub mask_list: Vec<CosemDataType>,
+    /// Attribute 4: name of the currently active mask.
     pub active_mask: CosemDataType,
 }
 

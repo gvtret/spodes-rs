@@ -7,6 +7,7 @@ use std::any::Any;
 /// Configuration structure used to build a [`GprsModemSetup`] object.
 #[derive(Clone, Serialize, Deserialize, Debug)]
 pub struct GprsModemSetupConfig {
+    /// Attribute 1: the object's logical name (OBIS code).
     pub logical_name: ObisCode,
     /// Attribute 2: access point name (octet-string).
     pub apn: Vec<u8>,

@@ -7,6 +7,7 @@ use std::any::Any;
 /// Configuration structure used to build an [`MbusSlavePortSetup`] object.
 #[derive(Clone, Serialize, Deserialize, Debug)]
 pub struct MbusSlavePortSetupConfig {
+    /// Attribute 1: the object's logical name (OBIS code).
     pub logical_name: ObisCode,
     /// Attribute 2: default baud rate (enum).
     pub default_baud: u8,

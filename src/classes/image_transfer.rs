@@ -6,19 +6,28 @@ use std::any::Any;
 
 /// Values of the `image_transfer_status` attribute (IEC 62056-6-2 §4.4.6.4).
 pub mod transfer_status {
+    /// No image transfer has been initiated.
     pub const NOT_INITIATED: u8 = 0;
+    /// Image transfer has been initiated (blocks are being transferred).
     pub const INITIATED: u8 = 1;
+    /// Image verification is in progress.
     pub const VERIFICATION_INITIATED: u8 = 2;
+    /// Image verification completed successfully.
     pub const VERIFICATION_SUCCESSFUL: u8 = 3;
+    /// Image verification failed.
     pub const VERIFICATION_FAILED: u8 = 4;
+    /// Image activation is in progress.
     pub const ACTIVATION_INITIATED: u8 = 5;
+    /// Image activation completed successfully.
     pub const ACTIVATION_SUCCESSFUL: u8 = 6;
+    /// Image activation failed.
     pub const ACTIVATION_FAILED: u8 = 7;
 }
 
 /// Configuration structure used to build an [`ImageTransfer`] object.
 #[derive(Clone, Serialize, Deserialize, Debug)]
 pub struct ImageTransferConfig {
+    /// Attribute 1: the object's logical name (OBIS code).
     pub logical_name: ObisCode,
     /// Attribute 2: image block size in octets.
     pub image_block_size: u32,

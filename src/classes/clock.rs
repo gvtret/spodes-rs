@@ -7,14 +7,23 @@ use std::any::Any;
 /// Configuration used to build a `Clock` object.
 #[derive(Clone, Serialize, Deserialize, Debug)]
 pub struct ClockConfig {
+    /// Attribute 1: the object's logical name (OBIS code).
     pub logical_name: ObisCode,
+    /// Attribute 2: the current date and time (date-time).
     pub time: CosemDataType,
+    /// Attribute 3: deviation of local time from GMT, in minutes (long).
     pub time_zone: CosemDataType,
+    /// Attribute 4: clock status flags (unsigned bit-string).
     pub status: CosemDataType,
+    /// Attribute 5: date and time at which daylight saving begins (date-time).
     pub daylight_savings_begin: CosemDataType,
+    /// Attribute 6: date and time at which daylight saving ends (date-time).
     pub daylight_savings_end: CosemDataType,
+    /// Attribute 7: daylight-saving offset added to `time`, in minutes (integer).
     pub daylight_savings_deviation: CosemDataType,
+    /// Attribute 8: whether daylight saving is applied (boolean).
     pub daylight_savings_enabled: CosemDataType,
+    /// Attribute 9: the underlying clock base / source (enum).
     pub clock_base: CosemDataType,
 }
 

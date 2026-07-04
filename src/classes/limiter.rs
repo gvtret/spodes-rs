@@ -7,6 +7,7 @@ use std::any::Any;
 /// Configuration structure used to build a [`Limiter`] object.
 #[derive(Clone, Serialize, Deserialize, Debug)]
 pub struct LimiterConfig {
+    /// Attribute 1: the object's logical name (OBIS code).
     pub logical_name: ObisCode,
     /// Attribute 2: `value_definition` structure { class_id, logical_name, attribute_index }.
     pub monitored_value: CosemDataType,

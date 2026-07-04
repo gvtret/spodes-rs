@@ -34,8 +34,11 @@ pub mod release_reason {
 
 /// Association result (AARE field `[2]`).
 pub mod result {
+    /// The association was accepted.
     pub const ACCEPTED: u8 = 0;
+    /// The association was rejected permanently (retrying will not help).
     pub const REJECTED_PERMANENT: u8 = 1;
+    /// The association was rejected transiently (a retry may succeed).
     pub const REJECTED_TRANSIENT: u8 = 2;
 }
 
@@ -55,10 +58,15 @@ pub mod application_context {
 /// COSEM authentication-mechanism-name identifiers (last arc of the OID
 /// `2.16.756.5.8.2.x`).
 pub mod mechanism {
+    /// Mechanism 0: lowest-level security (no authentication).
     pub const LOWEST: u8 = 0;
+    /// Mechanism 1: Low-Level Security (password authentication).
     pub const LLS: u8 = 1;
+    /// Mechanism 3: High-Level Security using MD5.
     pub const HLS_MD5: u8 = 3;
+    /// Mechanism 4: High-Level Security using SHA-1.
     pub const HLS_SHA1: u8 = 4;
+    /// Mechanism 5: High-Level Security using GMAC.
     pub const HLS_GMAC: u8 = 5;
 }
 

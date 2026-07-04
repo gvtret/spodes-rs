@@ -7,6 +7,7 @@ use std::any::Any;
 /// Configuration structure used to build a [`GsmDiagnostic`] object.
 #[derive(Clone, Serialize, Deserialize, Debug)]
 pub struct GsmDiagnosticConfig {
+    /// Attribute 1: the object's logical name (OBIS code).
     pub logical_name: ObisCode,
     /// Class version: 0, 1 or 2 (same attribute set; later versions extend the
     /// internal `cell_info` structure).

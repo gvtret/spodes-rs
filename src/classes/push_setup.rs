@@ -7,6 +7,7 @@ use std::any::Any;
 /// Configuration structure used to build a [`PushSetup`] object.
 #[derive(Clone, Serialize, Deserialize, Debug)]
 pub struct PushSetupConfig {
+    /// Attribute 1: the object's logical name (OBIS code).
     pub logical_name: ObisCode,
     /// Class version: 0, 1 or 2. Selects which attributes and methods are exposed.
     pub version: u8,

@@ -7,6 +7,7 @@ use std::any::Any;
 /// Configuration structure used to build an [`ActivityCalendar`] object.
 #[derive(Clone, Serialize, Deserialize, Debug)]
 pub struct ActivityCalendarConfig {
+    /// Attribute 1: the object's logical name (OBIS code).
     pub logical_name: ObisCode,
     /// Attribute 2: name of the active calendar.
     pub calendar_name_active: Vec<u8>,
