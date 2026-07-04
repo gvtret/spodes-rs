@@ -1,6 +1,6 @@
 use crate::interface::InterfaceClass;
 use crate::obis::ObisCode;
-use crate::types::{CosemDataType, BerError};
+use crate::types::{BerError, CosemDataType};
 use serde::{Deserialize, Serialize};
 use std::any::Any;
 use std::fmt;
@@ -131,10 +131,7 @@ impl ProfileGeneric {
         let new_entry = CosemDataType::Structure(captured_values);
 
         // When the buffer is full, evict the oldest entry (FIFO).
-        if self.profile_entries > 0
-            && self.entries_in_use >= self.profile_entries
-            && !self.buffer.is_empty()
-        {
+        if self.profile_entries > 0 && self.entries_in_use >= self.profile_entries && !self.buffer.is_empty() {
             self.buffer.remove(0);
             self.entries_in_use -= 1;
         }
@@ -177,11 +174,7 @@ impl ProfileGeneric {
         }
         let start = (from_entry - 1) as usize;
         let end = (to_entry as usize).min(self.buffer.len());
-        let slice = if start < end {
-            self.buffer[start..end].to_vec()
-        } else {
-            Vec::new()
-        };
+        let slice = if start < end { self.buffer[start..end].to_vec() } else { Vec::new() };
         Ok(CosemDataType::Array(slice))
     }
 }
@@ -222,7 +215,7 @@ impl InterfaceClass for ProfileGeneric {
                         CosemDataType::LongUnsigned(obj.class_id()),
                         CosemDataType::OctetString(obj.logical_name().to_bytes()),
                         CosemDataType::Integer(*attr_id as i8), // attribute_index (integer)
-                        CosemDataType::LongUnsigned(0), // data_index (long-unsigned, default 0)
+                        CosemDataType::LongUnsigned(0),         // data_index (long-unsigned, default 0)
                     ])
                 })
                 .collect(),
@@ -327,21 +320,14 @@ impl InterfaceClass for ProfileGeneric {
         Err(BerError::InvalidTag)
     }
 
-    fn invoke_method(
-        &mut self,
-        method_id: u8,
-        params: Option<CosemDataType>,
-    ) -> Result<CosemDataType, String> {
+    fn invoke_method(&mut self, method_id: u8, params: Option<CosemDataType>) -> Result<CosemDataType, String> {
         match method_id {
             1 => self.reset(),
             2 => self.capture(),
             // Methods 3 and 4 exist only in version 0.
             3 if self.version == 0 => self.get_buffer_by_range(params),
             4 if self.version == 0 => self.get_buffer_by_index(params),
-            _ => Err(format!(
-                "Method {} not supported for ProfileGeneric version {}",
-                method_id, self.version
-            )),
+            _ => Err(format!("Method {} not supported for ProfileGeneric version {}", method_id, self.version)),
         }
     }
 
@@ -428,10 +414,8 @@ mod tests {
             p.invoke_method(2, None).unwrap();
         }
         // Entries 2..=4 (1-based, inclusive) → 3 entries.
-        let params = CosemDataType::Structure(vec![
-            CosemDataType::DoubleLongUnsigned(2),
-            CosemDataType::DoubleLongUnsigned(4),
-        ]);
+        let params =
+            CosemDataType::Structure(vec![CosemDataType::DoubleLongUnsigned(2), CosemDataType::DoubleLongUnsigned(4)]);
         let result = p.invoke_method(4, Some(params)).unwrap();
         if let CosemDataType::Array(entries) = result {
             assert_eq!(entries.len(), 3);

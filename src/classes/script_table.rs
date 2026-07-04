@@ -1,6 +1,6 @@
 use crate::interface::InterfaceClass;
 use crate::obis::ObisCode;
-use crate::types::{CosemDataType, BerError};
+use crate::types::{BerError, CosemDataType};
 use serde::{Deserialize, Serialize};
 use std::any::Any;
 
@@ -29,10 +29,7 @@ impl ScriptTable {
     /// # Returns
     /// A new `ScriptTable`.
     pub fn new(config: ScriptTableConfig) -> Self {
-        ScriptTable {
-            logical_name: config.logical_name,
-            scripts: config.scripts,
-        }
+        ScriptTable { logical_name: config.logical_name, scripts: config.scripts }
     }
 
     /// Executes the script with the given id.
@@ -135,11 +132,7 @@ impl InterfaceClass for ScriptTable {
         Err(BerError::InvalidTag)
     }
 
-    fn invoke_method(
-        &mut self,
-        method_id: u8,
-        params: Option<CosemDataType>,
-    ) -> Result<CosemDataType, String> {
+    fn invoke_method(&mut self, method_id: u8, params: Option<CosemDataType>) -> Result<CosemDataType, String> {
         match method_id {
             1 => self.execute(params),
             _ => Err(format!("Method {} not supported for ScriptTable class", method_id)),

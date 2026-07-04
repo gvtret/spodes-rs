@@ -22,9 +22,7 @@ fn main() {
     deserialize_object(&mut deserialized, &serialized).expect("Deserialization failed");
     println!("Deserialized register: {:?}", deserialized);
 
-    let reset_result = register
-        .invoke_method(1, None)
-        .expect("Reset method failed");
+    let reset_result = register.invoke_method(1, None).expect("Reset method failed");
     println!("Reset result: {:?}", reset_result);
     println!("Register after reset: {:?}", register);
 }

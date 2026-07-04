@@ -308,7 +308,7 @@ mod tests {
             date_time: Vec::new(),
             other_information: Vec::new(),
             key_info: KeyInfo::AgreedKey {
-                key_parameters: vec![0x01], // ephemeral unified model
+                key_parameters: vec![0x01],         // ephemeral unified model
                 key_ciphered_data: vec![0xAA; 128], // ephemeral pubkey ‖ signature
             },
             ciphered_content: vec![0x30, 0x00, 0x00, 0x00, 0x01, 0xCA, 0xFE],

@@ -216,10 +216,7 @@ mod tests {
         assert_eq!(SecurityPolicy::Encryption.security_control_bits(), 0x20);
         assert_eq!(SecurityPolicy::AuthenticationEncryption.security_control_bits(), 0x30);
         // Suite id occupies the low nibble.
-        assert_eq!(
-            SecurityPolicy::AuthenticationEncryption.security_control_byte(SecuritySuite::Suite2),
-            0x32
-        );
+        assert_eq!(SecurityPolicy::AuthenticationEncryption.security_control_byte(SecuritySuite::Suite2), 0x32);
         assert_eq!(SecurityPolicy::from_security_control(0x30), SecurityPolicy::AuthenticationEncryption);
         assert_eq!(SecurityPolicy::from_security_control(0x10), SecurityPolicy::Authentication);
     }

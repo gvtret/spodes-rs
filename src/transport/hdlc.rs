@@ -160,12 +160,8 @@ impl Control {
             Control::Information { send_seq, recv_seq, poll } => {
                 ((recv_seq & 0x07) << 5) | pf(poll) | ((send_seq & 0x07) << 1)
             }
-            Control::ReceiveReady { recv_seq, poll_final } => {
-                ((recv_seq & 0x07) << 5) | pf(poll_final) | 0x01
-            }
-            Control::ReceiveNotReady { recv_seq, poll_final } => {
-                ((recv_seq & 0x07) << 5) | pf(poll_final) | 0x05
-            }
+            Control::ReceiveReady { recv_seq, poll_final } => ((recv_seq & 0x07) << 5) | pf(poll_final) | 0x01,
+            Control::ReceiveNotReady { recv_seq, poll_final } => ((recv_seq & 0x07) << 5) | pf(poll_final) | 0x05,
         }
     }
 
@@ -174,11 +170,7 @@ impl Control {
         let recv_seq = (byte >> 5) & 0x07;
         if byte & 0x01 == 0 {
             // Information frame.
-            return Ok(Control::Information {
-                send_seq: (byte >> 1) & 0x07,
-                recv_seq,
-                poll: pf,
-            });
+            return Ok(Control::Information { send_seq: (byte >> 1) & 0x07, recv_seq, poll: pf });
         }
         if byte & 0x03 == 0x01 {
             // Supervisory frame.
@@ -353,7 +345,11 @@ impl<T: PhysicalTransport> HdlcLayer<T> {
     }
 
     fn llc(&self) -> [u8; 3] {
-        if self.is_client { LLC_COMMAND } else { LLC_RESPONSE }
+        if self.is_client {
+            LLC_COMMAND
+        } else {
+            LLC_RESPONSE
+        }
     }
 
     /// Reads one complete frame (from an opening flag to a closing flag) from the
@@ -393,11 +389,7 @@ impl<T: PhysicalTransport> DataLinkLayer for HdlcLayer<T> {
         let mut information = Vec::with_capacity(3 + apdu.len());
         information.extend_from_slice(&self.llc());
         information.extend_from_slice(apdu);
-        let control = Control::Information {
-            send_seq: self.send_seq,
-            recv_seq: self.recv_seq,
-            poll: true,
-        };
+        let control = Control::Information { send_seq: self.send_seq, recv_seq: self.recv_seq, poll: true };
         let frame = HdlcFrame::new(self.peer, self.own, control, information);
         self.transport.send(&frame.encode())?;
         self.send_seq = (self.send_seq + 1) & 0x07;
@@ -525,11 +517,8 @@ mod tests {
 
     #[test]
     fn layer_round_trips_apdu_over_transport() {
-        let mut client = HdlcLayer::new_client(
-            MemoryTransport::new(),
-            HdlcAddress::one_byte(0x10),
-            HdlcAddress::one_byte(0x03),
-        );
+        let mut client =
+            HdlcLayer::new_client(MemoryTransport::new(), HdlcAddress::one_byte(0x10), HdlcAddress::one_byte(0x03));
         let apdu = vec![0x60, 0x1D, 0xA1, 0x09];
         client.send_apdu(&apdu).unwrap();
         // The loopback transport now holds the encoded frame; read it back.

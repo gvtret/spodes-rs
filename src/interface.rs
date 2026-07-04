@@ -67,11 +67,7 @@ pub trait InterfaceClass: Any {
     /// # Returns
     /// * `Ok(CosemDataType)` - The method result.
     /// * `Err(String)` - An error description if the method is not supported.
-    fn invoke_method(
-        &mut self,
-        method_id: u8,
-        params: Option<CosemDataType>,
-    ) -> Result<CosemDataType, String>;
+    fn invoke_method(&mut self, method_id: u8, params: Option<CosemDataType>) -> Result<CosemDataType, String>;
 
     /// Returns the object as `dyn Any` for dynamic downcasting.
     fn as_any(&self) -> &dyn Any;

@@ -1,6 +1,6 @@
 use crate::interface::InterfaceClass;
 use crate::obis::ObisCode;
-use crate::types::{CosemDataType, BerError};
+use crate::types::{BerError, CosemDataType};
 use serde::{Deserialize, Serialize};
 use std::any::Any;
 
@@ -239,18 +239,11 @@ impl InterfaceClass for PushSetup {
         Ok(())
     }
 
-    fn invoke_method(
-        &mut self,
-        method_id: u8,
-        _params: Option<CosemDataType>,
-    ) -> Result<CosemDataType, String> {
+    fn invoke_method(&mut self, method_id: u8, _params: Option<CosemDataType>) -> Result<CosemDataType, String> {
         match method_id {
             1 => self.push(),
             2 if self.version >= 2 => self.reset(),
-            _ => Err(format!(
-                "Method {} not supported for Push setup version {}",
-                method_id, self.version
-            )),
+            _ => Err(format!("Method {} not supported for Push setup version {}", method_id, self.version)),
         }
     }
 

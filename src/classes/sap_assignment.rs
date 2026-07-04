@@ -1,6 +1,6 @@
 use crate::interface::InterfaceClass;
 use crate::obis::ObisCode;
-use crate::types::{CosemDataType, BerError};
+use crate::types::{BerError, CosemDataType};
 use serde::{Deserialize, Serialize};
 use std::any::Any;
 
@@ -24,10 +24,7 @@ pub struct SapAssignment {
 impl SapAssignment {
     /// Builds a new [`SapAssignment`] from its configuration.
     pub fn new(config: SapAssignmentConfig) -> Self {
-        SapAssignment {
-            logical_name: config.logical_name,
-            sap_assignment_list: config.sap_assignment_list,
-        }
+        SapAssignment { logical_name: config.logical_name, sap_assignment_list: config.sap_assignment_list }
     }
 
     /// Method 1: `connect_logical_device` — adds or updates a SAP-to-logical-device
@@ -131,11 +128,7 @@ impl InterfaceClass for SapAssignment {
         Ok(())
     }
 
-    fn invoke_method(
-        &mut self,
-        method_id: u8,
-        params: Option<CosemDataType>,
-    ) -> Result<CosemDataType, String> {
+    fn invoke_method(&mut self, method_id: u8, params: Option<CosemDataType>) -> Result<CosemDataType, String> {
         match method_id {
             1 => self.connect_logical_device(params.ok_or("Missing method parameter")?),
             _ => Err(format!("Method {} not supported for SAP assignment", method_id)),
@@ -199,22 +192,31 @@ mod tests {
     fn connect_adds_updates_and_removes() {
         let mut obj = sample();
         // Update SAP 1.
-        obj.invoke_method(1, Some(CosemDataType::Structure(vec![
-            CosemDataType::LongUnsigned(1),
-            CosemDataType::OctetString(b"NEWLD".to_vec()),
-        ]))).unwrap();
+        obj.invoke_method(
+            1,
+            Some(CosemDataType::Structure(vec![
+                CosemDataType::LongUnsigned(1),
+                CosemDataType::OctetString(b"NEWLD".to_vec()),
+            ])),
+        )
+        .unwrap();
         assert_eq!(obj.sap_assignment_list.len(), 1);
         // Add SAP 2.
-        obj.invoke_method(1, Some(CosemDataType::Structure(vec![
-            CosemDataType::LongUnsigned(2),
-            CosemDataType::OctetString(b"OTHER".to_vec()),
-        ]))).unwrap();
+        obj.invoke_method(
+            1,
+            Some(CosemDataType::Structure(vec![
+                CosemDataType::LongUnsigned(2),
+                CosemDataType::OctetString(b"OTHER".to_vec()),
+            ])),
+        )
+        .unwrap();
         assert_eq!(obj.sap_assignment_list.len(), 2);
         // Remove SAP 1 with an empty name.
-        obj.invoke_method(1, Some(CosemDataType::Structure(vec![
-            CosemDataType::LongUnsigned(1),
-            CosemDataType::OctetString(vec![]),
-        ]))).unwrap();
+        obj.invoke_method(
+            1,
+            Some(CosemDataType::Structure(vec![CosemDataType::LongUnsigned(1), CosemDataType::OctetString(vec![])])),
+        )
+        .unwrap();
         assert_eq!(obj.sap_assignment_list.len(), 1);
     }
 }

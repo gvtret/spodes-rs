@@ -1,31 +1,33 @@
+use sha1::{Digest, Sha1};
+use spodes_rs::classes::association_ln::{
+    AssociationLn, AssociationLnConfig, AssociationLnVersion, AuthenticationMechanism,
+};
+use spodes_rs::classes::clock::{Clock, ClockConfig};
 use spodes_rs::classes::data::Data;
+use spodes_rs::classes::demand_register::{DemandRegister, DemandRegisterConfig};
+use spodes_rs::classes::extended_register::ExtendedRegister;
 use spodes_rs::classes::profile_generic::{ProfileGeneric, ProfileGenericConfig};
 use spodes_rs::classes::register::Register;
-use spodes_rs::classes::clock::{Clock, ClockConfig};
-use spodes_rs::classes::extended_register::ExtendedRegister;
-use spodes_rs::classes::demand_register::{DemandRegister, DemandRegisterConfig};
 use spodes_rs::classes::register_activation::{RegisterActivation, RegisterActivationConfig};
-use spodes_rs::classes::script_table::{ScriptTable, ScriptTableConfig};
 use spodes_rs::classes::schedule::{Schedule, ScheduleConfig};
+use spodes_rs::classes::script_table::{ScriptTable, ScriptTableConfig};
 use spodes_rs::classes::special_days_table::{SpecialDaysTable, SpecialDaysTableConfig};
-use spodes_rs::classes::association_ln::{AssociationLn, AssociationLnConfig, AssociationLnVersion, AuthenticationMechanism};
 use spodes_rs::interface::InterfaceClass;
 use spodes_rs::obis::ObisCode;
 use spodes_rs::serialization::{deserialize_object, serialize_object};
 use spodes_rs::types::CosemDataType;
 use std::sync::Arc;
-use sha1::{Sha1, Digest};
 
 #[test]
 fn test_data_serialization_deserialization() {
     let obis = ObisCode::new(0, 0, 96, 1, 0, 255);
     let value = CosemDataType::Integer(42);
     let data = Data::new(obis.clone(), value.clone());
-    
+
     let serialized = serialize_object(&data).expect("Serialization failed");
     let mut deserialized = Data::new(obis, CosemDataType::Null);
     deserialize_object(&mut deserialized, &serialized).expect("Deserialization failed");
-    
+
     assert_eq!(deserialized.logical_name(), data.logical_name());
     assert_eq!(deserialized.attributes()[1].1, value);
 }
@@ -36,11 +38,11 @@ fn test_register_serialization_deserialization() {
     let value = CosemDataType::DoubleLong(1000);
     let scaler_unit = CosemDataType::OctetString(vec![0x00, 0x1B]);
     let register = Register::new(obis.clone(), value.clone(), scaler_unit.clone());
-    
+
     let serialized = serialize_object(&register).expect("Serialization failed");
     let mut deserialized = Register::new(obis, CosemDataType::Null, CosemDataType::Null);
     deserialize_object(&mut deserialized, &serialized).expect("Deserialization failed");
-    
+
     assert_eq!(deserialized.logical_name(), register.logical_name());
     assert_eq!(deserialized.attributes()[1].1, value);
     assert_eq!(deserialized.attributes()[2].1, scaler_unit);
@@ -65,7 +67,7 @@ fn test_profile_generic_serialization_deserialization() {
     let sort_object = CosemDataType::Null;
     let entries_in_use = 1;
     let profile_entries = 100;
-    
+
     let config = ProfileGenericConfig {
         logical_name: obis.clone(),
         version: 1,
@@ -78,7 +80,7 @@ fn test_profile_generic_serialization_deserialization() {
         profile_entries,
     };
     let profile = ProfileGeneric::new(config);
-    
+
     let serialized = serialize_object(&profile).expect("Serialization failed");
     let config = ProfileGenericConfig {
         logical_name: obis,
@@ -93,7 +95,7 @@ fn test_profile_generic_serialization_deserialization() {
     };
     let mut deserialized = ProfileGeneric::new(config);
     deserialize_object(&mut deserialized, &serialized).expect("Deserialization failed");
-    
+
     assert_eq!(deserialized.logical_name(), profile.logical_name());
     assert_eq!(deserialized.attributes()[1].1, CosemDataType::Array(buffer));
     assert_eq!(deserialized.attributes()[3].1, CosemDataType::DoubleLongUnsigned(capture_period));
@@ -109,7 +111,7 @@ fn test_register_reset_method() {
     let value = CosemDataType::DoubleLong(1000);
     let scaler_unit = CosemDataType::OctetString(vec![0x00, 0x1B]);
     let mut register = Register::new(obis, value, scaler_unit);
-    
+
     let result = register.invoke_method(1, None).expect("Reset method failed");
     assert_eq!(result, CosemDataType::Null);
     assert_eq!(register.attributes()[1].1, CosemDataType::DoubleLong(0));
@@ -133,7 +135,7 @@ fn test_profile_generic_capture_method() {
         profile_entries: 100,
     };
     let mut profile = ProfileGeneric::new(config);
-    
+
     let result = profile.invoke_method(2, None).expect("Capture method failed");
     assert_eq!(result, CosemDataType::Null);
     assert_eq!(profile.attributes()[6].1, CosemDataType::DoubleLongUnsigned(1));
@@ -177,7 +179,7 @@ fn test_clock_serialization_deserialization() {
         clock_base: clock_base.clone(),
     };
     let clock = Clock::new(config);
-    
+
     let serialized = serialize_object(&clock).expect("Serialization failed");
     let config = ClockConfig {
         logical_name: obis.clone(),
@@ -192,7 +194,7 @@ fn test_clock_serialization_deserialization() {
     };
     let mut deserialized = Clock::new(config);
     deserialize_object(&mut deserialized, &serialized).expect("Deserialization failed");
-    
+
     assert_eq!(deserialized.logical_name(), clock.logical_name());
     assert_eq!(deserialized.attributes()[1].1, time);
     assert_eq!(deserialized.attributes()[2].1, time_zone);
@@ -226,7 +228,7 @@ fn test_clock_adjust_to_quarter() {
         clock_base: CosemDataType::Unsigned(2),
     };
     let mut clock = Clock::new(config);
-    
+
     let result = clock.invoke_method(1, None).expect("Adjust to quarter failed");
     assert_eq!(result, CosemDataType::Null);
     if let CosemDataType::DateTime(dt) = &clock.attributes()[1].1 {
@@ -260,7 +262,7 @@ fn test_clock_adjust_to_minute() {
         clock_base: CosemDataType::Unsigned(2),
     };
     let mut clock = Clock::new(config);
-    
+
     let result = clock.invoke_method(2, None).expect("Adjust to minute failed");
     assert_eq!(result, CosemDataType::Null);
     if let CosemDataType::DateTime(dt) = &clock.attributes()[1].1 {
@@ -294,7 +296,7 @@ fn test_clock_adjust_to_preset_time() {
         clock_base: CosemDataType::Unsigned(2),
     };
     let mut clock = Clock::new(config);
-    
+
     let new_time = CosemDataType::DateTime(vec![
         0x07, 0xE5, 0x05, 0x02, // Год: 2025, Месяц: 5, День: 2
         0x03, // День недели: среда
@@ -302,7 +304,7 @@ fn test_clock_adjust_to_preset_time() {
         0x00, // Сотые доли секунды: 0
         0x00, 0x00, 0x00, // Отклонение от UTC: 0
     ]);
-    
+
     let result = clock.invoke_method(3, Some(new_time.clone())).expect("Adjust to preset time failed");
     assert_eq!(result, CosemDataType::Null);
     assert_eq!(clock.attributes()[1].1, new_time);
@@ -322,14 +324,9 @@ fn test_extended_register_serialization_deserialization() {
         0x00, 0x00, 0x00, // Отклонение от UTC: 0
     ]);
 
-    let extended_register = ExtendedRegister::new(
-        obis.clone(),
-        value.clone(),
-        scaler_unit.clone(),
-        status.clone(),
-        capture_time.clone(),
-    );
-    
+    let extended_register =
+        ExtendedRegister::new(obis.clone(), value.clone(), scaler_unit.clone(), status.clone(), capture_time.clone());
+
     let serialized = serialize_object(&extended_register).expect("Serialization failed");
     let mut deserialized = ExtendedRegister::new(
         obis.clone(),
@@ -339,7 +336,7 @@ fn test_extended_register_serialization_deserialization() {
         CosemDataType::Null,
     );
     deserialize_object(&mut deserialized, &serialized).expect("Deserialization failed");
-    
+
     assert_eq!(deserialized.logical_name(), extended_register.logical_name());
     assert_eq!(deserialized.attributes()[1].1, value);
     assert_eq!(deserialized.attributes()[2].1, scaler_unit);
@@ -361,7 +358,7 @@ fn test_extended_register_reset_method() {
         0x00, 0x00, 0x00, // Отклонение от UTC: 0
     ]);
     let mut extended_register = ExtendedRegister::new(obis, value, scaler_unit, status, capture_time);
-    
+
     let result = extended_register.invoke_method(1, None).expect("Reset method failed");
     assert_eq!(result, CosemDataType::Null);
     assert_eq!(extended_register.attributes()[1].1, CosemDataType::DoubleLong(0));
@@ -377,7 +374,7 @@ fn test_extended_register_capture_method() {
     let status = CosemDataType::Null;
     let capture_time = CosemDataType::Null;
     let mut extended_register = ExtendedRegister::new(obis, value, scaler_unit, status, capture_time);
-    
+
     let result = extended_register.invoke_method(2, None).expect("Capture method failed");
     assert_eq!(result, CosemDataType::Null);
     assert_eq!(extended_register.attributes()[3].1, CosemDataType::Unsigned(1));
@@ -424,7 +421,7 @@ fn test_demand_register_serialization_deserialization() {
         number_of_periods: number_of_periods.clone(),
     };
     let demand_register = DemandRegister::new(config);
-    
+
     let serialized = serialize_object(&demand_register).expect("Serialization failed");
     let config = DemandRegisterConfig {
         logical_name: obis.clone(),
@@ -439,7 +436,7 @@ fn test_demand_register_serialization_deserialization() {
     };
     let mut deserialized = DemandRegister::new(config);
     deserialize_object(&mut deserialized, &serialized).expect("Deserialization failed");
-    
+
     assert_eq!(deserialized.logical_name(), demand_register.logical_name());
     assert_eq!(deserialized.attributes()[1].1, current_average_value);
     assert_eq!(deserialized.attributes()[2].1, last_average_value);
@@ -474,7 +471,7 @@ fn test_demand_register_reset_method() {
     ]);
     let period = CosemDataType::DoubleLongUnsigned(3600);
     let number_of_periods = CosemDataType::LongUnsigned(24);
-    
+
     let config = DemandRegisterConfig {
         logical_name: obis,
         current_average_value,
@@ -487,7 +484,7 @@ fn test_demand_register_reset_method() {
         number_of_periods,
     };
     let mut demand_register = DemandRegister::new(config);
-    
+
     let result = demand_register.invoke_method(1, None).expect("Reset method failed");
     assert_eq!(result, CosemDataType::Null);
     assert_eq!(demand_register.attributes()[1].1, CosemDataType::DoubleLong(0));
@@ -508,7 +505,7 @@ fn test_demand_register_next_period_method() {
     let start_time_current = CosemDataType::Null;
     let period = CosemDataType::DoubleLongUnsigned(3600);
     let number_of_periods = CosemDataType::LongUnsigned(24);
-    
+
     let config = DemandRegisterConfig {
         logical_name: obis,
         current_average_value,
@@ -521,7 +518,7 @@ fn test_demand_register_next_period_method() {
         number_of_periods,
     };
     let mut demand_register = DemandRegister::new(config);
-    
+
     let result = demand_register.invoke_method(2, None).expect("Next period method failed");
     assert_eq!(result, CosemDataType::Null);
     assert_eq!(demand_register.attributes()[1].1, CosemDataType::DoubleLong(0));
@@ -543,13 +540,13 @@ fn test_demand_register_next_period_method() {
 fn test_register_activation_serialization_deserialization() {
     let obis = ObisCode::new(0, 0, 10, 106, 0, 255);
     let register_assignment = vec![CosemDataType::Structure(vec![
-        CosemDataType::LongUnsigned(3), // class_id: Register
+        CosemDataType::LongUnsigned(3),                       // class_id: Register
         CosemDataType::OctetString(vec![1, 0, 1, 8, 0, 255]), // logical_name
-        CosemDataType::Integer(2), // attribute_index
+        CosemDataType::Integer(2),                            // attribute_index
     ])];
     let mask_list = vec![CosemDataType::Structure(vec![
         CosemDataType::OctetString(vec![0x54, 0x41, 0x52, 0x49, 0x46, 0x46, 0x31]), // mask_name: "TARIFF1"
-        CosemDataType::Array(vec![CosemDataType::Unsigned(1)]), // register_indices
+        CosemDataType::Array(vec![CosemDataType::Unsigned(1)]),                     // register_indices
     ])];
     let active_mask = CosemDataType::OctetString(vec![0x54, 0x41, 0x52, 0x49, 0x46, 0x46, 0x31]); // "TARIFF1"
 
@@ -560,7 +557,7 @@ fn test_register_activation_serialization_deserialization() {
         active_mask: active_mask.clone(),
     };
     let register_activation = RegisterActivation::new(config);
-    
+
     let serialized = serialize_object(&register_activation).expect("Serialization failed");
     let config = RegisterActivationConfig {
         logical_name: obis.clone(),
@@ -570,7 +567,7 @@ fn test_register_activation_serialization_deserialization() {
     };
     let mut deserialized = RegisterActivation::new(config);
     deserialize_object(&mut deserialized, &serialized).expect("Deserialization failed");
-    
+
     assert_eq!(deserialized.logical_name(), register_activation.logical_name());
     assert_eq!(deserialized.attributes()[1].1, CosemDataType::Array(register_assignment));
     assert_eq!(deserialized.attributes()[2].1, CosemDataType::Array(mask_list));
@@ -581,26 +578,21 @@ fn test_register_activation_serialization_deserialization() {
 fn test_register_activation_add_mask() {
     let obis = ObisCode::new(0, 0, 10, 106, 0, 255);
     let register_assignment = vec![CosemDataType::Structure(vec![
-        CosemDataType::LongUnsigned(3), // class_id: Register
+        CosemDataType::LongUnsigned(3),                       // class_id: Register
         CosemDataType::OctetString(vec![1, 0, 1, 8, 0, 255]), // logical_name
-        CosemDataType::Integer(2), // attribute_index
+        CosemDataType::Integer(2),                            // attribute_index
     ])];
     let mask_list = vec![];
     let active_mask = CosemDataType::Null;
 
-    let config = RegisterActivationConfig {
-        logical_name: obis,
-        register_assignment,
-        mask_list,
-        active_mask,
-    };
+    let config = RegisterActivationConfig { logical_name: obis, register_assignment, mask_list, active_mask };
     let mut register_activation = RegisterActivation::new(config);
-    
+
     let new_mask = CosemDataType::Structure(vec![
         CosemDataType::OctetString(vec![0x54, 0x41, 0x52, 0x49, 0x46, 0x46, 0x31]), // mask_name: "TARIFF1"
-        CosemDataType::Array(vec![CosemDataType::Unsigned(1)]), // register_indices
+        CosemDataType::Array(vec![CosemDataType::Unsigned(1)]),                     // register_indices
     ]);
-    
+
     let result = register_activation.invoke_method(1, Some(new_mask.clone())).expect("Add mask failed");
     assert_eq!(result, CosemDataType::Null);
     if let CosemDataType::Array(ref masks) = register_activation.attributes()[2].1 {
@@ -615,26 +607,21 @@ fn test_register_activation_add_mask() {
 fn test_register_activation_delete_mask() {
     let obis = ObisCode::new(0, 0, 10, 106, 0, 255);
     let register_assignment = vec![CosemDataType::Structure(vec![
-        CosemDataType::LongUnsigned(3), // class_id: Register
+        CosemDataType::LongUnsigned(3),                       // class_id: Register
         CosemDataType::OctetString(vec![1, 0, 1, 8, 0, 255]), // logical_name
-        CosemDataType::Integer(2), // attribute_index
+        CosemDataType::Integer(2),                            // attribute_index
     ])];
     let mask_list = vec![CosemDataType::Structure(vec![
         CosemDataType::OctetString(vec![0x54, 0x41, 0x52, 0x49, 0x46, 0x46, 0x31]), // mask_name: "TARIFF1"
-        CosemDataType::Array(vec![CosemDataType::Unsigned(1)]), // register_indices
+        CosemDataType::Array(vec![CosemDataType::Unsigned(1)]),                     // register_indices
     ])];
     let active_mask = CosemDataType::OctetString(vec![0x54, 0x41, 0x52, 0x49, 0x46, 0x46, 0x31]); // "TARIFF1"
 
-    let config = RegisterActivationConfig {
-        logical_name: obis,
-        register_assignment,
-        mask_list,
-        active_mask,
-    };
+    let config = RegisterActivationConfig { logical_name: obis, register_assignment, mask_list, active_mask };
     let mut register_activation = RegisterActivation::new(config);
-    
+
     let mask_name = CosemDataType::OctetString(vec![0x54, 0x41, 0x52, 0x49, 0x46, 0x46, 0x31]); // "TARIFF1"
-    
+
     let result = register_activation.invoke_method(2, Some(mask_name)).expect("Delete mask failed");
     assert_eq!(result, CosemDataType::Null);
     if let CosemDataType::Array(ref masks) = register_activation.attributes()[2].1 {
@@ -651,26 +638,20 @@ fn test_script_table_serialization_deserialization() {
     let scripts = vec![CosemDataType::Structure(vec![
         CosemDataType::LongUnsigned(1), // script_identifier
         CosemDataType::Structure(vec![
-            CosemDataType::LongUnsigned(3), // class_id: Register
+            CosemDataType::LongUnsigned(3),                       // class_id: Register
             CosemDataType::OctetString(vec![1, 0, 1, 8, 0, 255]), // logical_name
-            CosemDataType::Integer(1), // method_index: reset
+            CosemDataType::Integer(1),                            // method_index: reset
         ]), // action
     ])];
 
-    let config = ScriptTableConfig {
-        logical_name: obis.clone(),
-        scripts: scripts.clone(),
-    };
+    let config = ScriptTableConfig { logical_name: obis.clone(), scripts: scripts.clone() };
     let script_table = ScriptTable::new(config);
-    
+
     let serialized = serialize_object(&script_table).expect("Serialization failed");
-    let config = ScriptTableConfig {
-        logical_name: obis.clone(),
-        scripts: vec![],
-    };
+    let config = ScriptTableConfig { logical_name: obis.clone(), scripts: vec![] };
     let mut deserialized = ScriptTable::new(config);
     deserialize_object(&mut deserialized, &serialized).expect("Deserialization failed");
-    
+
     assert_eq!(deserialized.logical_name(), script_table.logical_name());
     assert_eq!(deserialized.attributes()[1].1, CosemDataType::Array(scripts));
 }
@@ -681,18 +662,15 @@ fn test_script_table_execute() {
     let scripts = vec![CosemDataType::Structure(vec![
         CosemDataType::LongUnsigned(1), // script_identifier
         CosemDataType::Structure(vec![
-            CosemDataType::LongUnsigned(3), // class_id: Register
+            CosemDataType::LongUnsigned(3),                       // class_id: Register
             CosemDataType::OctetString(vec![1, 0, 1, 8, 0, 255]), // logical_name
-            CosemDataType::Integer(1), // method_index: reset
+            CosemDataType::Integer(1),                            // method_index: reset
         ]), // action
     ])];
 
-    let config = ScriptTableConfig {
-        logical_name: obis,
-        scripts,
-    };
+    let config = ScriptTableConfig { logical_name: obis, scripts };
     let mut script_table = ScriptTable::new(config);
-    
+
     let script_id = CosemDataType::LongUnsigned(1);
     let result = script_table.invoke_method(1, Some(script_id)).expect("Execute script failed");
     assert_eq!(result, CosemDataType::Null);
@@ -717,29 +695,21 @@ fn test_schedule_serialization_deserialization() {
             0x00, 0x00, 0x00, // Отклонение от UTC: 0
         ]), // time
         CosemDataType::Structure(vec![
-            CosemDataType::LongUnsigned(9), // class_id: ScriptTable
+            CosemDataType::LongUnsigned(9),                          // class_id: ScriptTable
             CosemDataType::OctetString(vec![0, 0, 10, 100, 0, 255]), // logical_name
-            CosemDataType::Integer(1), // method_index: execute
-            CosemDataType::LongUnsigned(1), // parameter: script_identifier
+            CosemDataType::Integer(1),                               // method_index: execute
+            CosemDataType::LongUnsigned(1),                          // parameter: script_identifier
         ]), // action
     ])];
 
-    let config = ScheduleConfig {
-        logical_name: obis.clone(),
-        entries: entries.clone(),
-        enabled: true,
-    };
+    let config = ScheduleConfig { logical_name: obis.clone(), entries: entries.clone(), enabled: true };
     let schedule = Schedule::new(config);
-    
+
     let serialized = serialize_object(&schedule).expect("Serialization failed");
-    let config = ScheduleConfig {
-        logical_name: obis.clone(),
-        entries: vec![],
-        enabled: false,
-    };
+    let config = ScheduleConfig { logical_name: obis.clone(), entries: vec![], enabled: false };
     let mut deserialized = Schedule::new(config);
     deserialize_object(&mut deserialized, &serialized).expect("Deserialization failed");
-    
+
     assert_eq!(deserialized.logical_name(), schedule.logical_name());
     assert_eq!(deserialized.attributes()[1].1, CosemDataType::Array(entries));
 }
@@ -756,20 +726,16 @@ fn test_schedule_enable_disable() {
             0x00, 0x00, 0x00, // Отклонение от UTC: 0
         ]), // time
         CosemDataType::Structure(vec![
-            CosemDataType::LongUnsigned(9), // class_id: ScriptTable
+            CosemDataType::LongUnsigned(9),                          // class_id: ScriptTable
             CosemDataType::OctetString(vec![0, 0, 10, 100, 0, 255]), // logical_name
-            CosemDataType::Integer(1), // method_index: execute
-            CosemDataType::LongUnsigned(1), // parameter: script_identifier
+            CosemDataType::Integer(1),                               // method_index: execute
+            CosemDataType::LongUnsigned(1),                          // parameter: script_identifier
         ]), // action
     ])];
 
-    let config = ScheduleConfig {
-        logical_name: obis,
-        entries,
-        enabled: false,
-    };
+    let config = ScheduleConfig { logical_name: obis, entries, enabled: false };
     let mut schedule = Schedule::new(config);
-    
+
     let result = schedule.invoke_method(1, None).expect("Enable schedule failed");
     assert_eq!(result, CosemDataType::Null);
     assert!(schedule.is_enabled());
@@ -783,28 +749,18 @@ fn test_schedule_enable_disable() {
 fn test_special_days_table_serialization_deserialization() {
     let obis = ObisCode::new(0, 0, 11, 102, 0, 255);
     let entries = vec![
-        CosemDataType::DateTime(vec![
-            0x07, 0xE5, 0x01, 0x01, 0x02, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
-        ]),
-        CosemDataType::DateTime(vec![
-            0x07, 0xE5, 0x12, 0x25, 0x04, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
-        ]),
+        CosemDataType::DateTime(vec![0x07, 0xE5, 0x01, 0x01, 0x02, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00]),
+        CosemDataType::DateTime(vec![0x07, 0xE5, 0x12, 0x25, 0x04, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00]),
     ];
 
-    let config = SpecialDaysTableConfig {
-        logical_name: obis.clone(),
-        entries: entries.clone(),
-    };
+    let config = SpecialDaysTableConfig { logical_name: obis.clone(), entries: entries.clone() };
     let special_days_table = SpecialDaysTable::new(config);
-    
+
     let serialized = serialize_object(&special_days_table).expect("Serialization failed");
-    let config = SpecialDaysTableConfig {
-        logical_name: obis.clone(),
-        entries: vec![],
-    };
+    let config = SpecialDaysTableConfig { logical_name: obis.clone(), entries: vec![] };
     let mut deserialized = SpecialDaysTable::new(config);
     deserialize_object(&mut deserialized, &serialized).expect("Deserialization failed");
-    
+
     assert_eq!(deserialized.logical_name(), special_days_table.logical_name());
     assert_eq!(deserialized.attributes()[1].1, CosemDataType::Array(entries));
 }
@@ -812,15 +768,11 @@ fn test_special_days_table_serialization_deserialization() {
 #[test]
 fn test_special_days_table_insert_method() {
     let obis = ObisCode::new(0, 0, 11, 102, 0, 255);
-    let config = SpecialDaysTableConfig {
-        logical_name: obis.clone(),
-        entries: vec![],
-    };
+    let config = SpecialDaysTableConfig { logical_name: obis.clone(), entries: vec![] };
     let mut special_days_table = SpecialDaysTable::new(config);
 
-    let new_date = CosemDataType::DateTime(vec![
-        0x07, 0xE5, 0x01, 0x01, 0x02, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
-    ]);
+    let new_date =
+        CosemDataType::DateTime(vec![0x07, 0xE5, 0x01, 0x01, 0x02, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00]);
 
     let result = special_days_table.invoke_method(1, Some(new_date.clone())).expect("Insert method failed");
     assert_eq!(result, CosemDataType::Null);
@@ -844,13 +796,8 @@ fn test_special_days_table_insert_method() {
 #[test]
 fn test_special_days_table_delete_method() {
     let obis = ObisCode::new(0, 0, 11, 102, 0, 255);
-    let date = CosemDataType::DateTime(vec![
-        0x07, 0xE5, 0x01, 0x01, 0x02, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
-    ]);
-    let config = SpecialDaysTableConfig {
-        logical_name: obis.clone(),
-        entries: vec![date.clone()],
-    };
+    let date = CosemDataType::DateTime(vec![0x07, 0xE5, 0x01, 0x01, 0x02, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00]);
+    let config = SpecialDaysTableConfig { logical_name: obis.clone(), entries: vec![date.clone()] };
     let mut special_days_table = SpecialDaysTable::new(config);
 
     let result = special_days_table.invoke_method(2, Some(date.clone())).expect("Delete method failed");
@@ -886,7 +833,8 @@ fn test_association_ln_serialization_deserialization_version0() {
         CosemDataType::LongUnsigned(1), // client SAP
         CosemDataType::LongUnsigned(1), // server SAP
     ]);
-    let application_context_name = CosemDataType::OctetString(vec![0x09, 0x06, 0x60, 0x85, 0x74, 0x05, 0x08, 0x01, 0x01]);
+    let application_context_name =
+        CosemDataType::OctetString(vec![0x09, 0x06, 0x60, 0x85, 0x74, 0x05, 0x08, 0x01, 0x01]);
     let xdlms_context_info = CosemDataType::Structure(vec![
         CosemDataType::DoubleLongUnsigned(0xFFFFFF),
         CosemDataType::Unsigned(16),
@@ -937,7 +885,10 @@ fn test_association_ln_serialization_deserialization_version0() {
     assert_eq!(deserialized.attributes()[2].1, associated_partners_id);
     assert_eq!(deserialized.attributes()[3].1, application_context_name);
     assert_eq!(deserialized.attributes()[4].1, xdlms_context_info);
-    assert_eq!(deserialized.attributes()[5].1, CosemDataType::OctetString(vec![0x09, 0x07, 0x60, 0x85, 0x74, 0x05, 0x08, 0x02, 0x01]));
+    assert_eq!(
+        deserialized.attributes()[5].1,
+        CosemDataType::OctetString(vec![0x09, 0x07, 0x60, 0x85, 0x74, 0x05, 0x08, 0x02, 0x01])
+    );
     assert_eq!(deserialized.attributes()[6].1, secret);
     assert_eq!(deserialized.attributes()[7].1, association_status);
 }
@@ -954,7 +905,8 @@ fn test_association_ln_serialization_deserialization_version1() {
         CosemDataType::LongUnsigned(1), // client SAP
         CosemDataType::LongUnsigned(1), // server SAP
     ]);
-    let application_context_name = CosemDataType::OctetString(vec![0x09, 0x06, 0x60, 0x85, 0x74, 0x05, 0x08, 0x01, 0x01]);
+    let application_context_name =
+        CosemDataType::OctetString(vec![0x09, 0x06, 0x60, 0x85, 0x74, 0x05, 0x08, 0x01, 0x01]);
     let xdlms_context_info = CosemDataType::Structure(vec![
         CosemDataType::DoubleLongUnsigned(0xFFFFFF),
         CosemDataType::Unsigned(16),
@@ -963,7 +915,9 @@ fn test_association_ln_serialization_deserialization_version1() {
         CosemDataType::Boolean(true),
         CosemDataType::BitString(vec![0xFF]),
     ]);
-    let secret = CosemDataType::OctetString(vec![0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08, 0x09, 0x0A, 0x0B, 0x0C, 0x0D, 0x0E, 0x0F, 0x10]);
+    let secret = CosemDataType::OctetString(vec![
+        0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08, 0x09, 0x0A, 0x0B, 0x0C, 0x0D, 0x0E, 0x0F, 0x10,
+    ]);
     let association_status = CosemDataType::Enum(1);
     let security_setup_reference = CosemDataType::OctetString(vec![0, 0, 43, 0, 0, 255]);
 
@@ -1006,7 +960,10 @@ fn test_association_ln_serialization_deserialization_version1() {
     assert_eq!(deserialized.attributes()[2].1, associated_partners_id);
     assert_eq!(deserialized.attributes()[3].1, application_context_name);
     assert_eq!(deserialized.attributes()[4].1, xdlms_context_info);
-    assert_eq!(deserialized.attributes()[5].1, CosemDataType::OctetString(vec![0x09, 0x07, 0x60, 0x85, 0x74, 0x05, 0x08, 0x02, 0x04]));
+    assert_eq!(
+        deserialized.attributes()[5].1,
+        CosemDataType::OctetString(vec![0x09, 0x07, 0x60, 0x85, 0x74, 0x05, 0x08, 0x02, 0x04])
+    );
     assert_eq!(deserialized.attributes()[6].1, secret);
     assert_eq!(deserialized.attributes()[7].1, association_status);
     assert_eq!(deserialized.attributes()[8].1, security_setup_reference);
@@ -1020,8 +977,13 @@ fn test_association_ln_lls_authentication() {
         logical_name: obis,
         version: AssociationLnVersion::Version0,
         object_list: vec![],
-        associated_partners_id: CosemDataType::Structure(vec![CosemDataType::LongUnsigned(1), CosemDataType::LongUnsigned(1)]),
-        application_context_name: CosemDataType::OctetString(vec![0x09, 0x06, 0x60, 0x85, 0x74, 0x05, 0x08, 0x01, 0x01]),
+        associated_partners_id: CosemDataType::Structure(vec![
+            CosemDataType::LongUnsigned(1),
+            CosemDataType::LongUnsigned(1),
+        ]),
+        application_context_name: CosemDataType::OctetString(vec![
+            0x09, 0x06, 0x60, 0x85, 0x74, 0x05, 0x08, 0x01, 0x01,
+        ]),
         xdlms_context_info: CosemDataType::Structure(vec![
             CosemDataType::DoubleLongUnsigned(0xFFFFFF),
             CosemDataType::Unsigned(16),
@@ -1039,7 +1001,9 @@ fn test_association_ln_lls_authentication() {
     };
     let mut association_ln = AssociationLn::new(config);
 
-    let result = association_ln.invoke_method(1, Some(CosemDataType::OctetString(secret.clone()))).expect("LLS authentication failed");
+    let result = association_ln
+        .invoke_method(1, Some(CosemDataType::OctetString(secret.clone())))
+        .expect("LLS authentication failed");
     assert_eq!(result, CosemDataType::Null);
 
     let wrong_secret = vec![0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF];
@@ -1059,8 +1023,13 @@ fn test_association_ln_hls4_sha1_authentication() {
         logical_name: obis,
         version: AssociationLnVersion::Version1,
         object_list: vec![],
-        associated_partners_id: CosemDataType::Structure(vec![CosemDataType::LongUnsigned(1), CosemDataType::LongUnsigned(1)]),
-        application_context_name: CosemDataType::OctetString(vec![0x09, 0x06, 0x60, 0x85, 0x74, 0x05, 0x08, 0x01, 0x01]),
+        associated_partners_id: CosemDataType::Structure(vec![
+            CosemDataType::LongUnsigned(1),
+            CosemDataType::LongUnsigned(1),
+        ]),
+        application_context_name: CosemDataType::OctetString(vec![
+            0x09, 0x06, 0x60, 0x85, 0x74, 0x05, 0x08, 0x01, 0x01,
+        ]),
         xdlms_context_info: CosemDataType::Structure(vec![
             CosemDataType::DoubleLongUnsigned(0xFFFFFF),
             CosemDataType::Unsigned(16),
@@ -1092,7 +1061,9 @@ fn test_association_ln_hls4_sha1_authentication() {
     hasher.update(&secret);
     let expected_f_ctos = hasher.finalize().to_vec();
 
-    let result = association_ln.invoke_method(1, Some(CosemDataType::OctetString(f_stoc.clone()))).expect("HLS4 SHA1 authentication failed");
+    let result = association_ln
+        .invoke_method(1, Some(CosemDataType::OctetString(f_stoc.clone())))
+        .expect("HLS4 SHA1 authentication failed");
     assert_eq!(result, CosemDataType::OctetString(expected_f_ctos));
 
     // Неверное f(StoC) отклоняется.
@@ -1109,8 +1080,13 @@ fn test_association_ln_change_hls_secret() {
         logical_name: obis,
         version: AssociationLnVersion::Version0,
         object_list: vec![],
-        associated_partners_id: CosemDataType::Structure(vec![CosemDataType::LongUnsigned(1), CosemDataType::LongUnsigned(1)]),
-        application_context_name: CosemDataType::OctetString(vec![0x09, 0x06, 0x60, 0x85, 0x74, 0x05, 0x08, 0x01, 0x01]),
+        associated_partners_id: CosemDataType::Structure(vec![
+            CosemDataType::LongUnsigned(1),
+            CosemDataType::LongUnsigned(1),
+        ]),
+        application_context_name: CosemDataType::OctetString(vec![
+            0x09, 0x06, 0x60, 0x85, 0x74, 0x05, 0x08, 0x01, 0x01,
+        ]),
         xdlms_context_info: CosemDataType::Structure(vec![
             CosemDataType::DoubleLongUnsigned(0xFFFFFF),
             CosemDataType::Unsigned(16),
@@ -1129,7 +1105,9 @@ fn test_association_ln_change_hls_secret() {
     let mut association_ln = AssociationLn::new(config);
 
     let new_secret = vec![0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF];
-    let result = association_ln.invoke_method(2, Some(CosemDataType::OctetString(new_secret.clone()))).expect("Change HLS secret failed");
+    let result = association_ln
+        .invoke_method(2, Some(CosemDataType::OctetString(new_secret.clone())))
+        .expect("Change HLS secret failed");
     assert_eq!(result, CosemDataType::Null);
     assert_eq!(association_ln.attributes()[6].1, CosemDataType::OctetString(new_secret));
 }
@@ -1141,8 +1119,13 @@ fn test_association_ln_add_object() {
         logical_name: obis,
         version: AssociationLnVersion::Version1,
         object_list: vec![],
-        associated_partners_id: CosemDataType::Structure(vec![CosemDataType::LongUnsigned(1), CosemDataType::LongUnsigned(1)]),
-        application_context_name: CosemDataType::OctetString(vec![0x09, 0x07, 0x60, 0x85, 0x74, 0x05, 0x08, 0x01, 0x01]),
+        associated_partners_id: CosemDataType::Structure(vec![
+            CosemDataType::LongUnsigned(1),
+            CosemDataType::LongUnsigned(1),
+        ]),
+        application_context_name: CosemDataType::OctetString(vec![
+            0x09, 0x07, 0x60, 0x85, 0x74, 0x05, 0x08, 0x01, 0x01,
+        ]),
         xdlms_context_info: CosemDataType::Null,
         authentication_mechanism: AuthenticationMechanism::HlsSha1,
         secret: CosemDataType::OctetString(vec![0x01; 16]),
@@ -1154,10 +1137,10 @@ fn test_association_ln_add_object() {
     let mut association_ln = AssociationLn::new(config);
 
     let element = CosemDataType::Structure(vec![
-        CosemDataType::LongUnsigned(1),                          // class_id
-        CosemDataType::Unsigned(0),                              // version
-        CosemDataType::OctetString(vec![0, 0, 96, 1, 0, 255]),  // logical_name
-        CosemDataType::Array(vec![]),                            // access_rights
+        CosemDataType::LongUnsigned(1),                        // class_id
+        CosemDataType::Unsigned(0),                            // version
+        CosemDataType::OctetString(vec![0, 0, 96, 1, 0, 255]), // logical_name
+        CosemDataType::Array(vec![]),                          // access_rights
     ]);
     let result = association_ln.invoke_method(3, Some(element.clone())).expect("add_object failed");
     assert_eq!(result, CosemDataType::Null);
@@ -1182,8 +1165,13 @@ fn test_association_ln_remove_object() {
         logical_name: obis,
         version: AssociationLnVersion::Version1,
         object_list: vec![element.clone()],
-        associated_partners_id: CosemDataType::Structure(vec![CosemDataType::LongUnsigned(1), CosemDataType::LongUnsigned(1)]),
-        application_context_name: CosemDataType::OctetString(vec![0x09, 0x07, 0x60, 0x85, 0x74, 0x05, 0x08, 0x01, 0x01]),
+        associated_partners_id: CosemDataType::Structure(vec![
+            CosemDataType::LongUnsigned(1),
+            CosemDataType::LongUnsigned(1),
+        ]),
+        application_context_name: CosemDataType::OctetString(vec![
+            0x09, 0x07, 0x60, 0x85, 0x74, 0x05, 0x08, 0x01, 0x01,
+        ]),
         xdlms_context_info: CosemDataType::Null,
         authentication_mechanism: AuthenticationMechanism::HlsSha1,
         secret: CosemDataType::OctetString(vec![0x01; 16]),

@@ -1,6 +1,6 @@
 use crate::interface::InterfaceClass;
 use crate::obis::ObisCode;
-use crate::types::{CosemDataType, BerError};
+use crate::types::{BerError, CosemDataType};
 use serde::{Deserialize, Serialize};
 use std::any::Any;
 
@@ -21,10 +21,7 @@ pub struct SpecialDaysTable {
 
 impl SpecialDaysTable {
     pub fn new(config: SpecialDaysTableConfig) -> Self {
-        SpecialDaysTable {
-            logical_name: config.logical_name,
-            entries: config.entries,
-        }
+        SpecialDaysTable { logical_name: config.logical_name, entries: config.entries }
     }
 
     fn insert(&mut self, date: CosemDataType) -> Result<CosemDataType, String> {
@@ -71,10 +68,7 @@ impl InterfaceClass for SpecialDaysTable {
     }
 
     fn methods(&self) -> Vec<(u8, String)> {
-        vec![
-            (1, "insert".to_string()),
-            (2, "delete".to_string()),
-        ]
+        vec![(1, "insert".to_string()), (2, "delete".to_string())]
     }
 
     fn serialize_ber(&self, buf: &mut Vec<u8>) -> Result<(), BerError> {
@@ -135,11 +129,7 @@ impl InterfaceClass for SpecialDaysTable {
         }
     }
 
-    fn invoke_method(
-        &mut self,
-        method_id: u8,
-        params: Option<CosemDataType>,
-    ) -> Result<CosemDataType, String> {
+    fn invoke_method(&mut self, method_id: u8, params: Option<CosemDataType>) -> Result<CosemDataType, String> {
         match method_id {
             1 => self.insert(params.ok_or("Missing parameter for insert method")?),
             2 => self.delete(params.ok_or("Missing parameter for delete method")?),

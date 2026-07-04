@@ -85,9 +85,7 @@ impl From<BerError> for ServiceError {
 /// Builds the invoke-id-and-priority octet: bits 0..3 the invoke id, bit 6 the
 /// service class (1 = confirmed), bit 7 the priority (1 = high).
 pub fn invoke_id_and_priority(invoke_id: u8, confirmed: bool, high_priority: bool) -> u8 {
-    (invoke_id & 0x0F)
-        | if confirmed { 0x40 } else { 0x00 }
-        | if high_priority { 0x80 } else { 0x00 }
+    (invoke_id & 0x0F) | if confirmed { 0x40 } else { 0x00 } | if high_priority { 0x80 } else { 0x00 }
 }
 
 /// A COSEM attribute descriptor: the (class-id, instance-id, attribute-id)

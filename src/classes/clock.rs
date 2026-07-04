@@ -1,6 +1,6 @@
 use crate::interface::InterfaceClass;
 use crate::obis::ObisCode;
-use crate::types::{CosemDataType, BerError};
+use crate::types::{BerError, CosemDataType};
 use serde::{Deserialize, Serialize};
 use std::any::Any;
 
@@ -23,14 +23,14 @@ pub struct ClockConfig {
 #[derive(Clone, Serialize, Deserialize, Debug)]
 pub struct Clock {
     logical_name: ObisCode,
-    time: CosemDataType, // DateTime
-    time_zone: CosemDataType, // Long
-    status: CosemDataType, // Unsigned
-    daylight_savings_begin: CosemDataType, // DateTime
-    daylight_savings_end: CosemDataType, // DateTime
+    time: CosemDataType,                       // DateTime
+    time_zone: CosemDataType,                  // Long
+    status: CosemDataType,                     // Unsigned
+    daylight_savings_begin: CosemDataType,     // DateTime
+    daylight_savings_end: CosemDataType,       // DateTime
     daylight_savings_deviation: CosemDataType, // Integer
-    daylight_savings_enabled: CosemDataType, // Boolean
-    clock_base: CosemDataType, // Enum
+    daylight_savings_enabled: CosemDataType,   // Boolean
+    clock_base: CosemDataType,                 // Enum
 }
 
 impl Clock {
@@ -197,11 +197,7 @@ impl InterfaceClass for Clock {
         Err(BerError::InvalidTag)
     }
 
-    fn invoke_method(
-        &mut self,
-        method_id: u8,
-        params: Option<CosemDataType>,
-    ) -> Result<CosemDataType, String> {
+    fn invoke_method(&mut self, method_id: u8, params: Option<CosemDataType>) -> Result<CosemDataType, String> {
         match method_id {
             1 => self.adjust_to_quarter(),
             2 => self.adjust_to_minute(),

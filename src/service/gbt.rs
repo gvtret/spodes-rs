@@ -111,9 +111,6 @@ mod tests {
 
     #[test]
     fn decode_rejects_wrong_tag() {
-        assert_eq!(
-            GeneralBlockTransfer::decode(&[0xC0, 0x00, 0, 0, 0, 0, 0]),
-            Err(ServiceError::UnexpectedTag(0xC0))
-        );
+        assert_eq!(GeneralBlockTransfer::decode(&[0xC0, 0x00, 0, 0, 0, 0, 0]), Err(ServiceError::UnexpectedTag(0xC0)));
     }
 }

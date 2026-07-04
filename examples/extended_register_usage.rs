@@ -11,9 +11,9 @@ fn main() {
     // Инициализируем ExtendedRegister
     let mut extended_register = ExtendedRegister::new(
         obis.clone(),
-        CosemDataType::DoubleLong(2000), // Значение: 2000
+        CosemDataType::DoubleLong(2000),              // Значение: 2000
         CosemDataType::OctetString(vec![0x00, 0x1B]), // Единица: Wh
-        CosemDataType::Unsigned(1), // Статус: действительное измерение
+        CosemDataType::Unsigned(1),                   // Статус: действительное измерение
         CosemDataType::DateTime(vec![
             0x07, 0xE5, 0x05, 0x01, // Год: 2025, Месяц: 5, День: 1
             0x02, // День недели: вторник

@@ -316,13 +316,13 @@ mod tests {
         };
         let server_ctx =
             SecurityContext::for_suite(policy, suite, ek.clone(), ak.clone(), server_title.clone(), 5).unwrap();
-        let ciphered_response = ciphering::protect(&server_ctx, glo::GET_RESPONSE, &response.encode().unwrap()).unwrap();
+        let ciphered_response =
+            ciphering::protect(&server_ctx, glo::GET_RESPONSE, &response.encode().unwrap()).unwrap();
 
         let mut link = LoopLink::new();
         link.queue_response(ciphered_response);
         // Outbound context: client title/counter. Inbound context: server title.
-        let tx_ctx =
-            SecurityContext::for_suite(policy, suite, ek.clone(), ak.clone(), client_title, 1).unwrap();
+        let tx_ctx = SecurityContext::for_suite(policy, suite, ek.clone(), ak.clone(), client_title, 1).unwrap();
         let rx_ctx = SecurityContext::for_suite(policy, suite, ek, ak, server_title, 5).unwrap();
         let mut session = ClientSession::with_ciphering(link, tx_ctx, rx_ctx);
         let got = session.get(1, ObisCode::new(0, 0, 0x80, 0, 0, 0xFF), 2).unwrap();

@@ -102,8 +102,8 @@ impl CosemDataType {
             }
             CosemDataType::BitString(s) => {
                 buf.push(0x04); // bit-string [4]
-                // NB: in A-XDR the bit-string length is given in BITS; here the
-                // byte count is stored, since the type model holds a raw Vec<u8>.
+                                // NB: in A-XDR the bit-string length is given in BITS; here the
+                                // byte count is stored, since the type model holds a raw Vec<u8>.
                 write_length(s.len(), buf)?;
                 buf.extend_from_slice(s);
                 Ok(())

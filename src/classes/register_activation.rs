@@ -1,6 +1,6 @@
 use crate::interface::InterfaceClass;
 use crate::obis::ObisCode;
-use crate::types::{CosemDataType, BerError};
+use crate::types::{BerError, CosemDataType};
 use serde::{Deserialize, Serialize};
 use std::any::Any;
 
@@ -19,8 +19,8 @@ pub struct RegisterActivationConfig {
 pub struct RegisterActivation {
     logical_name: ObisCode,
     register_assignment: Vec<CosemDataType>, // Array of Structure (class_id, logical_name, attribute_index)
-    mask_list: Vec<CosemDataType>, // Array of Structure (mask_name, register_indices)
-    active_mask: CosemDataType, // OctetString
+    mask_list: Vec<CosemDataType>,           // Array of Structure (mask_name, register_indices)
+    active_mask: CosemDataType,              // OctetString
 }
 
 impl RegisterActivation {
@@ -183,11 +183,7 @@ impl InterfaceClass for RegisterActivation {
         Err(BerError::InvalidTag)
     }
 
-    fn invoke_method(
-        &mut self,
-        method_id: u8,
-        params: Option<CosemDataType>,
-    ) -> Result<CosemDataType, String> {
+    fn invoke_method(&mut self, method_id: u8, params: Option<CosemDataType>) -> Result<CosemDataType, String> {
         match method_id {
             1 => self.add_mask(params),
             2 => self.delete_mask(params),

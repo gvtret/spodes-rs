@@ -1,6 +1,6 @@
 use crate::interface::InterfaceClass;
 use crate::obis::ObisCode;
-use crate::types::{CosemDataType, BerError};
+use crate::types::{BerError, CosemDataType};
 use serde::{Deserialize, Serialize};
 use std::any::Any;
 
@@ -158,11 +158,7 @@ impl InterfaceClass for ActivityCalendar {
         Ok(())
     }
 
-    fn invoke_method(
-        &mut self,
-        method_id: u8,
-        _params: Option<CosemDataType>,
-    ) -> Result<CosemDataType, String> {
+    fn invoke_method(&mut self, method_id: u8, _params: Option<CosemDataType>) -> Result<CosemDataType, String> {
         match method_id {
             1 => self.activate_passive_calendar(),
             _ => Err(format!("Method {} not supported for Activity calendar", method_id)),
@@ -246,9 +242,6 @@ mod tests {
         let mut obj = sample();
         obj.invoke_method(1, None).unwrap();
         assert_eq!(obj.attributes()[1].1, CosemDataType::OctetString(b"PAS".to_vec()));
-        assert_eq!(
-            obj.attributes()[2].1,
-            CosemDataType::Array(vec![CosemDataType::OctetString(b"winter".to_vec())])
-        );
+        assert_eq!(obj.attributes()[2].1, CosemDataType::Array(vec![CosemDataType::OctetString(b"winter".to_vec())]));
     }
 }

@@ -1,6 +1,6 @@
 use crate::interface::InterfaceClass;
 use crate::obis::ObisCode;
-use crate::types::{CosemDataType, BerError};
+use crate::types::{BerError, CosemDataType};
 use serde::{Deserialize, Serialize};
 use std::any::Any;
 
@@ -103,10 +103,7 @@ impl InterfaceClass for DisconnectControl {
     }
 
     fn methods(&self) -> Vec<(u8, String)> {
-        vec![
-            (1, "remote_disconnect".to_string()),
-            (2, "remote_reconnect".to_string()),
-        ]
+        vec![(1, "remote_disconnect".to_string()), (2, "remote_reconnect".to_string())]
     }
 
     fn serialize_ber(&self, buf: &mut Vec<u8>) -> Result<(), BerError> {
@@ -165,11 +162,7 @@ impl InterfaceClass for DisconnectControl {
         Ok(())
     }
 
-    fn invoke_method(
-        &mut self,
-        method_id: u8,
-        _params: Option<CosemDataType>,
-    ) -> Result<CosemDataType, String> {
+    fn invoke_method(&mut self, method_id: u8, _params: Option<CosemDataType>) -> Result<CosemDataType, String> {
         match method_id {
             1 => self.remote_disconnect(),
             2 => self.remote_reconnect(),
@@ -254,9 +247,6 @@ mod tests {
         let mut obj = sample(3);
         obj.control_state = control_state::DISCONNECTED;
         obj.invoke_method(2, None).unwrap();
-        assert_eq!(
-            obj.attributes()[2].1,
-            CosemDataType::Enum(control_state::READY_FOR_RECONNECTION)
-        );
+        assert_eq!(obj.attributes()[2].1, CosemDataType::Enum(control_state::READY_FOR_RECONNECTION));
     }
 }

@@ -50,10 +50,7 @@ pub enum SetRequest {
         datablock: DataBlockSa,
     },
     /// SET-REQUEST-WITH-DATABLOCK: a subsequent block of the value.
-    WithDatablock {
-        invoke_id_and_priority: u8,
-        datablock: DataBlockSa,
-    },
+    WithDatablock { invoke_id_and_priority: u8, datablock: DataBlockSa },
     /// SET-REQUEST-WITH-LIST: write several attributes in one request.
     WithList {
         invoke_id_and_priority: u8,
@@ -159,27 +156,14 @@ impl SetRequest {
 #[derive(Debug, Clone, PartialEq)]
 pub enum SetResponse {
     /// SET-RESPONSE-NORMAL: carries a single data-access-result code.
-    Normal {
-        invoke_id_and_priority: u8,
-        result: u8,
-    },
+    Normal { invoke_id_and_priority: u8, result: u8 },
     /// SET-RESPONSE-DATABLOCK: acknowledges reception of an intermediate block.
-    Datablock {
-        invoke_id_and_priority: u8,
-        block_number: u32,
-    },
+    Datablock { invoke_id_and_priority: u8, block_number: u32 },
     /// SET-RESPONSE-LAST-DATABLOCK: acknowledges the last block and delivers the
     /// result.
-    LastDatablock {
-        invoke_id_and_priority: u8,
-        result: u8,
-        block_number: u32,
-    },
+    LastDatablock { invoke_id_and_priority: u8, result: u8, block_number: u32 },
     /// SET-RESPONSE-WITH-LIST: one data-access-result code per written attribute.
-    WithList {
-        invoke_id_and_priority: u8,
-        results: Vec<u8>,
-    },
+    WithList { invoke_id_and_priority: u8, results: Vec<u8> },
 }
 
 impl SetResponse {
@@ -271,10 +255,7 @@ mod tests {
     #[test]
     fn set_response_normal_matches_reference_bytes() {
         // IEC 62056-5-3 Annex F: C5 01 C1 00 (Success).
-        let resp = SetResponse::Normal {
-            invoke_id_and_priority: 0xC1,
-            result: data_access_result::SUCCESS,
-        };
+        let resp = SetResponse::Normal { invoke_id_and_priority: 0xC1, result: data_access_result::SUCCESS };
         assert_eq!(resp.encode(), vec![0xC5, 0x01, 0xC1, 0x00]);
         assert_eq!(SetResponse::decode(&resp.encode()).unwrap(), resp);
     }
@@ -282,9 +263,8 @@ mod tests {
     #[test]
     fn set_request_with_datablock_matches_reference_bytes() {
         // IEC 62056-5-3 Annex F.8: C1 03 C1 01 00000003 11 <17 octets>.
-        let raw = vec![
-            0x39, 0x40, 0x41, 0x42, 0x43, 0x44, 0x45, 0x46, 0x47, 0x48, 0x49, 0x50, 0x0A, 0x03, 0x30, 0x30, 0x30,
-        ];
+        let raw =
+            vec![0x39, 0x40, 0x41, 0x42, 0x43, 0x44, 0x45, 0x46, 0x47, 0x48, 0x49, 0x50, 0x0A, 0x03, 0x30, 0x30, 0x30];
         let req = SetRequest::WithDatablock {
             invoke_id_and_priority: 0xC1,
             datablock: DataBlockSa { last_block: true, block_number: 3, raw_data: raw },

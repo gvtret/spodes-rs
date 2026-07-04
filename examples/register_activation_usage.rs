@@ -12,13 +12,13 @@ fn main() {
     let config = RegisterActivationConfig {
         logical_name: obis.clone(),
         register_assignment: vec![CosemDataType::Structure(vec![
-            CosemDataType::LongUnsigned(3), // class_id: Register
+            CosemDataType::LongUnsigned(3),                       // class_id: Register
             CosemDataType::OctetString(vec![1, 0, 1, 8, 0, 255]), // logical_name
-            CosemDataType::Integer(2), // attribute_index
+            CosemDataType::Integer(2),                            // attribute_index
         ])],
         mask_list: vec![CosemDataType::Structure(vec![
             CosemDataType::OctetString(vec![0x54, 0x41, 0x52, 0x49, 0x46, 0x46, 0x31]), // mask_name: "TARIFF1"
-            CosemDataType::Array(vec![CosemDataType::Unsigned(1)]), // register_indices
+            CosemDataType::Array(vec![CosemDataType::Unsigned(1)]),                     // register_indices
         ])],
         active_mask: CosemDataType::OctetString(vec![0x54, 0x41, 0x52, 0x49, 0x46, 0x46, 0x31]), // "TARIFF1"
     };
@@ -35,7 +35,7 @@ fn main() {
     // Добавляем новую маску
     let new_mask = CosemDataType::Structure(vec![
         CosemDataType::OctetString(vec![0x54, 0x41, 0x52, 0x49, 0x46, 0x46, 0x32]), // mask_name: "TARIFF2"
-        CosemDataType::Array(vec![CosemDataType::Unsigned(2)]), // register_indices
+        CosemDataType::Array(vec![CosemDataType::Unsigned(2)]),                     // register_indices
     ]);
     match register_activation.invoke_method(1, Some(new_mask.clone())) {
         Ok(result) => println!("Add mask result: {:?}", result),

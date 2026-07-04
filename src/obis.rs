@@ -36,10 +36,6 @@ impl ObisCode {
 
 impl fmt::Display for ObisCode {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(
-            f,
-            "{}-{}.{}.{}.{}.{}",
-            self.a, self.b, self.c, self.d, self.e, self.f
-        )
+        write!(f, "{}-{}.{}.{}.{}.{}", self.a, self.b, self.c, self.d, self.e, self.f)
     }
 }

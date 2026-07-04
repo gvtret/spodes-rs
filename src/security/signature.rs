@@ -82,7 +82,12 @@ pub fn ecdsa_sign(suite: SecuritySuite, private_key: &[u8], message: &[u8]) -> R
 
 /// Verifies an ECDSA `r ‖ s` signature over `message` with a public key
 /// (raw `x ‖ y` or SEC1) on the suite's curve.
-pub fn ecdsa_verify(suite: SecuritySuite, public_key: &[u8], message: &[u8], signature: &[u8]) -> Result<(), SignError> {
+pub fn ecdsa_verify(
+    suite: SecuritySuite,
+    public_key: &[u8],
+    message: &[u8],
+    signature: &[u8],
+) -> Result<(), SignError> {
     let coord = coord_len(suite).ok_or(SignError::UnsupportedSuite)?;
     let sec1 = to_sec1(public_key, coord);
     match suite {
@@ -120,10 +125,7 @@ mod tests {
         // A raw x‖y key (no 0x04) also verifies.
         ecdsa_verify(SecuritySuite::Suite1, &pk[1..], msg, &sig).unwrap();
         // Tampered message fails.
-        assert_eq!(
-            ecdsa_verify(SecuritySuite::Suite1, &pk, b"other", &sig),
-            Err(SignError::VerificationFailed)
-        );
+        assert_eq!(ecdsa_verify(SecuritySuite::Suite1, &pk, b"other", &sig), Err(SignError::VerificationFailed));
     }
 
     #[test]

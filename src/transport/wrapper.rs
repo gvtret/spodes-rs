@@ -93,12 +93,7 @@ impl WrapperHeader {
 
 /// Builds a complete wrapper PDU (header + APDU).
 pub fn encode(source: u16, destination: u16, apdu: &[u8]) -> Vec<u8> {
-    let header = WrapperHeader {
-        version: WRAPPER_VERSION,
-        source,
-        destination,
-        length: apdu.len() as u16,
-    };
+    let header = WrapperHeader { version: WRAPPER_VERSION, source, destination, length: apdu.len() as u16 };
     let mut buf = Vec::with_capacity(8 + apdu.len());
     header.encode(&mut buf);
     buf.extend_from_slice(apdu);
@@ -110,10 +105,7 @@ pub fn decode(bytes: &[u8]) -> Result<(WrapperHeader, Vec<u8>), WrapperError> {
     let header = WrapperHeader::decode(bytes)?;
     let apdu = &bytes[8..];
     if apdu.len() != header.length as usize {
-        return Err(WrapperError::LengthMismatch {
-            declared: header.length as usize,
-            actual: apdu.len(),
-        });
+        return Err(WrapperError::LengthMismatch { declared: header.length as usize, actual: apdu.len() });
     }
     Ok((header, apdu.to_vec()))
 }

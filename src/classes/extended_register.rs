@@ -1,6 +1,6 @@
 use crate::interface::InterfaceClass;
 use crate::obis::ObisCode;
-use crate::types::{CosemDataType, BerError};
+use crate::types::{BerError, CosemDataType};
 use serde::{Deserialize, Serialize};
 use std::any::Any;
 
@@ -35,13 +35,7 @@ impl ExtendedRegister {
         status: CosemDataType,
         capture_time: CosemDataType,
     ) -> Self {
-        ExtendedRegister {
-            logical_name,
-            value,
-            scaler_unit,
-            status,
-            capture_time,
-        }
+        ExtendedRegister { logical_name, value, scaler_unit, status, capture_time }
     }
 
     /// Resets the register value to 0 and clears the status and capture time.
@@ -184,11 +178,7 @@ impl InterfaceClass for ExtendedRegister {
         Err(BerError::InvalidTag)
     }
 
-    fn invoke_method(
-        &mut self,
-        method_id: u8,
-        _params: Option<CosemDataType>,
-    ) -> Result<CosemDataType, String> {
+    fn invoke_method(&mut self, method_id: u8, _params: Option<CosemDataType>) -> Result<CosemDataType, String> {
         match method_id {
             1 => self.reset(),
             2 => self.capture(),

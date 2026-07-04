@@ -228,10 +228,7 @@ mod tests {
         let secret: Vec<u8> = (0u8..16).collect();
         let challenge: Vec<u8> = (0u8..32).map(|i| 0x80 + i).collect();
         let out = manufacturer_aes(&secret, &challenge);
-        assert_eq!(
-            out,
-            hex(b"ac26591c0f8bd80ee7c7e3a2d14e2b2292dcb47a3f51368a5c18314b86eb4ae0")
-        );
+        assert_eq!(out, hex(b"ac26591c0f8bd80ee7c7e3a2d14e2b2292dcb47a3f51368a5c18314b86eb4ae0"));
     }
 
     #[test]
@@ -253,23 +250,19 @@ mod tests {
         let stoc = hex(b"8899aabbccddeeff");
         let ctos = hex(b"0011223344556677");
         let answer_c = hash_with_titles(AuthMechanism::HlsGostStreebog, &secret, &st_c, &st_s, &stoc, &ctos).unwrap();
-        assert_eq!(
-            answer_c,
-            hex(b"4c375b843898b6f0a0744051f74e42f2a944581d46c495e743e97abdcd9d7c58")
-        );
+        assert_eq!(answer_c, hex(b"4c375b843898b6f0a0744051f74e42f2a944581d46c495e743e97abdcd9d7c58"));
         // f(CtoS) swaps both pairs.
         let answer_s = hash_with_titles(AuthMechanism::HlsGostStreebog, &secret, &st_s, &st_c, &ctos, &stoc).unwrap();
-        assert_eq!(
-            answer_s,
-            hex(b"55dcd7e597cc90ec215c2faae8f86c0a1d707ddeac1adf5cbd17dfaa5378c500")
-        );
+        assert_eq!(answer_s, hex(b"55dcd7e597cc90ec215c2faae8f86c0a1d707ddeac1adf5cbd17dfaa5378c500"));
     }
 
     #[test]
     fn sha256_hash_with_titles_is_deterministic() {
-        let a = hash_with_titles(AuthMechanism::HlsSha256, b"secret", b"CCCCCCCC", b"SSSSSSSS", &[1, 2], &[3, 4]).unwrap();
+        let a =
+            hash_with_titles(AuthMechanism::HlsSha256, b"secret", b"CCCCCCCC", b"SSSSSSSS", &[1, 2], &[3, 4]).unwrap();
         assert_eq!(a.len(), 32);
-        let b = hash_with_titles(AuthMechanism::HlsSha256, b"secret", b"CCCCCCCC", b"SSSSSSSS", &[1, 2], &[3, 4]).unwrap();
+        let b =
+            hash_with_titles(AuthMechanism::HlsSha256, b"secret", b"CCCCCCCC", b"SSSSSSSS", &[1, 2], &[3, 4]).unwrap();
         assert_eq!(a, b);
     }
 

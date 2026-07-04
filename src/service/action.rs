@@ -42,30 +42,16 @@ pub enum ActionRequest {
         parameters: Option<CosemDataType>,
     },
     /// ACTION-REQUEST-NEXT-PBLOCK: acknowledge a response block and ask for the next.
-    NextPblock {
-        invoke_id_and_priority: u8,
-        block_number: u32,
-    },
+    NextPblock { invoke_id_and_priority: u8, block_number: u32 },
     /// ACTION-REQUEST-WITH-FIRST-PBLOCK: method reference and the first block of
     /// the invocation parameters.
-    WithFirstPblock {
-        invoke_id_and_priority: u8,
-        method: MethodDescriptor,
-        datablock: DataBlockSa,
-    },
+    WithFirstPblock { invoke_id_and_priority: u8, method: MethodDescriptor, datablock: DataBlockSa },
     /// ACTION-REQUEST-WITH-PBLOCK: a subsequent block of the invocation parameters.
-    WithPblock {
-        invoke_id_and_priority: u8,
-        datablock: DataBlockSa,
-    },
+    WithPblock { invoke_id_and_priority: u8, datablock: DataBlockSa },
     /// ACTION-REQUEST-WITH-LIST: invoke several methods in one request. The
     /// invocation-parameters list holds one `Data` per method (`Null` when a
     /// method takes no parameters).
-    WithList {
-        invoke_id_and_priority: u8,
-        methods: Vec<MethodDescriptor>,
-        parameters: Vec<CosemDataType>,
-    },
+    WithList { invoke_id_and_priority: u8, methods: Vec<MethodDescriptor>, parameters: Vec<CosemDataType> },
 }
 
 impl ActionRequest {
@@ -182,27 +168,14 @@ impl ActionRequest {
 #[derive(Debug, Clone, PartialEq)]
 pub enum ActionResponse {
     /// ACTION-RESPONSE-NORMAL: action-result plus optional return parameters.
-    Normal {
-        invoke_id_and_priority: u8,
-        result: u8,
-        return_parameters: Option<GetDataResult>,
-    },
+    Normal { invoke_id_and_priority: u8, result: u8, return_parameters: Option<GetDataResult> },
     /// ACTION-RESPONSE-WITH-PBLOCK: one block of the return parameters.
-    WithPblock {
-        invoke_id_and_priority: u8,
-        datablock: DataBlockSa,
-    },
+    WithPblock { invoke_id_and_priority: u8, datablock: DataBlockSa },
     /// ACTION-RESPONSE-NEXT-PBLOCK: acknowledge a request block and ask for the next.
-    NextPblock {
-        invoke_id_and_priority: u8,
-        block_number: u32,
-    },
+    NextPblock { invoke_id_and_priority: u8, block_number: u32 },
     /// ACTION-RESPONSE-WITH-LIST: one action-result (plus optional return data)
     /// per invoked method.
-    WithList {
-        invoke_id_and_priority: u8,
-        results: Vec<(u8, Option<GetDataResult>)>,
-    },
+    WithList { invoke_id_and_priority: u8, results: Vec<(u8, Option<GetDataResult>)> },
 }
 
 impl ActionResponse {
@@ -354,17 +327,10 @@ mod tests {
 
     #[test]
     fn action_request_without_parameters_round_trips() {
-        let req = ActionRequest::Normal {
-            invoke_id_and_priority: 0xC1,
-            method: method(),
-            parameters: None,
-        };
+        let req = ActionRequest::Normal { invoke_id_and_priority: 0xC1, method: method(), parameters: None };
         let bytes = req.encode().unwrap();
         // C3 01 C1 0046 0000600310FF 01 00.
-        assert_eq!(
-            bytes,
-            vec![0xC3, 0x01, 0xC1, 0x00, 0x46, 0x00, 0x00, 0x60, 0x03, 0x0A, 0xFF, 0x01, 0x00]
-        );
+        assert_eq!(bytes, vec![0xC3, 0x01, 0xC1, 0x00, 0x46, 0x00, 0x00, 0x60, 0x03, 0x0A, 0xFF, 0x01, 0x00]);
         assert_eq!(ActionRequest::decode(&bytes).unwrap(), req);
     }
 

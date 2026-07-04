@@ -1,6 +1,6 @@
 use crate::interface::InterfaceClass;
 use crate::obis::ObisCode;
-use crate::types::{CosemDataType, BerError};
+use crate::types::{BerError, CosemDataType};
 use serde::{Deserialize, Serialize};
 use std::any::Any;
 
@@ -241,11 +241,7 @@ impl InterfaceClass for ImageTransfer {
         Ok(())
     }
 
-    fn invoke_method(
-        &mut self,
-        method_id: u8,
-        params: Option<CosemDataType>,
-    ) -> Result<CosemDataType, String> {
+    fn invoke_method(&mut self, method_id: u8, params: Option<CosemDataType>) -> Result<CosemDataType, String> {
         let params = params.ok_or("Missing method parameter")?;
         match method_id {
             1 => self.image_transfer_initiate(params),
@@ -315,17 +311,25 @@ mod tests {
     #[test]
     fn transfer_flow_marks_blocks_and_advances_status() {
         let mut obj = sample();
-        obj.invoke_method(1, Some(CosemDataType::Structure(vec![
-            CosemDataType::OctetString(b"fw".to_vec()),
-            CosemDataType::DoubleLongUnsigned(512),
-        ]))).unwrap();
+        obj.invoke_method(
+            1,
+            Some(CosemDataType::Structure(vec![
+                CosemDataType::OctetString(b"fw".to_vec()),
+                CosemDataType::DoubleLongUnsigned(512),
+            ])),
+        )
+        .unwrap();
         assert_eq!(obj.attributes()[5].1, CosemDataType::Enum(transfer_status::INITIATED));
 
         // Transfer block 0; first-not-transferred advances to 1.
-        obj.invoke_method(2, Some(CosemDataType::Structure(vec![
-            CosemDataType::DoubleLongUnsigned(0),
-            CosemDataType::OctetString(vec![0xAB; 4]),
-        ]))).unwrap();
+        obj.invoke_method(
+            2,
+            Some(CosemDataType::Structure(vec![
+                CosemDataType::DoubleLongUnsigned(0),
+                CosemDataType::OctetString(vec![0xAB; 4]),
+            ])),
+        )
+        .unwrap();
         assert_eq!(obj.attributes()[3].1, CosemDataType::DoubleLongUnsigned(1));
 
         obj.invoke_method(3, Some(CosemDataType::Integer(0))).unwrap();

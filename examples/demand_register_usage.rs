@@ -12,9 +12,9 @@ fn main() {
     let config = DemandRegisterConfig {
         logical_name: obis.clone(),
         current_average_value: CosemDataType::DoubleLong(3000), // Текущее значение: 3000
-        last_average_value: CosemDataType::DoubleLong(2500), // Последнее значение: 2500
+        last_average_value: CosemDataType::DoubleLong(2500),    // Последнее значение: 2500
         scaler_unit: CosemDataType::OctetString(vec![0x00, 0x1B]), // Единица: Wh
-        status: CosemDataType::Unsigned(1), // Статус: действительное измерение
+        status: CosemDataType::Unsigned(1),                     // Статус: действительное измерение
         capture_time: CosemDataType::DateTime(vec![
             0x07, 0xE5, 0x05, 0x01, // Год: 2025, Месяц: 5, День: 1
             0x02, // День недели: вторник

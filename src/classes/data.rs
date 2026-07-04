@@ -22,10 +22,7 @@ impl Data {
     /// # Returns
     /// A new `Data`.
     pub fn new(logical_name: ObisCode, value: CosemDataType) -> Self {
-        Data {
-            logical_name,
-            value,
-        }
+        Data { logical_name, value }
     }
 }
 
@@ -43,10 +40,7 @@ impl InterfaceClass for Data {
     }
 
     fn attributes(&self) -> Vec<(u8, CosemDataType)> {
-        vec![
-            (1, CosemDataType::OctetString(self.logical_name.to_bytes())),
-            (2, self.value.clone()),
-        ]
+        vec![(1, CosemDataType::OctetString(self.logical_name.to_bytes())), (2, self.value.clone())]
     }
 
     fn methods(&self) -> Vec<(u8, String)> {
@@ -78,8 +72,7 @@ impl InterfaceClass for Data {
                     }
                     if let CosemDataType::OctetString(obis) = &seq[1] {
                         if obis.len() == 6 {
-                            self.logical_name =
-                                ObisCode::new(obis[0], obis[1], obis[2], obis[3], obis[4], obis[5]);
+                            self.logical_name = ObisCode::new(obis[0], obis[1], obis[2], obis[3], obis[4], obis[5]);
                         } else {
                             return Err(BerError::InvalidLength);
                         }
@@ -94,11 +87,7 @@ impl InterfaceClass for Data {
         Err(BerError::InvalidTag)
     }
 
-    fn invoke_method(
-        &mut self,
-        method_id: u8,
-        _params: Option<CosemDataType>,
-    ) -> Result<CosemDataType, String> {
+    fn invoke_method(&mut self, method_id: u8, _params: Option<CosemDataType>) -> Result<CosemDataType, String> {
         Err(format!("Method {} not supported for Data class", method_id))
     }
 

@@ -1,6 +1,6 @@
 use crate::interface::InterfaceClass;
 use crate::obis::ObisCode;
-use crate::types::{CosemDataType, BerError};
+use crate::types::{BerError, CosemDataType};
 use serde::{Deserialize, Serialize};
 use std::any::Any;
 
@@ -18,7 +18,7 @@ pub struct ScheduleConfig {
 pub struct Schedule {
     logical_name: ObisCode,
     entries: Vec<CosemDataType>, // Array of Structure (time, action)
-    enabled: bool, // schedule state (enabled/disabled)
+    enabled: bool,               // schedule state (enabled/disabled)
 }
 
 impl Schedule {
@@ -30,11 +30,7 @@ impl Schedule {
     /// # Returns
     /// A new `Schedule`.
     pub fn new(config: ScheduleConfig) -> Self {
-        Schedule {
-            logical_name: config.logical_name,
-            entries: config.entries,
-            enabled: config.enabled,
-        }
+        Schedule { logical_name: config.logical_name, entries: config.entries, enabled: config.enabled }
     }
 
     /// Enables the schedule.
@@ -141,11 +137,7 @@ impl InterfaceClass for Schedule {
         }
     }
 
-    fn invoke_method(
-        &mut self,
-        method_id: u8,
-        _params: Option<CosemDataType>,
-    ) -> Result<CosemDataType, String> {
+    fn invoke_method(&mut self, method_id: u8, _params: Option<CosemDataType>) -> Result<CosemDataType, String> {
         match method_id {
             1 => self.enable(),
             2 => self.disable(),

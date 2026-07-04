@@ -1,0 +1,5 @@
+# Formatting tuned to the project's compact style: a wide line budget and
+# aggressive single-line heuristics keep struct literals and short calls on one
+# line. Run `cargo fmt` to apply.
+max_width = 120
+use_small_heuristics = "Max"

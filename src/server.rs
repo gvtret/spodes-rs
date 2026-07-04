@@ -56,12 +56,7 @@ impl Default for RequestDispatcher {
 impl RequestDispatcher {
     /// Creates an empty dispatcher with the default block size.
     pub fn new() -> Self {
-        RequestDispatcher {
-            objects: Vec::new(),
-            max_pdu: DEFAULT_MAX_PDU,
-            pending_get: None,
-            pending_set: None,
-        }
+        RequestDispatcher { objects: Vec::new(), max_pdu: DEFAULT_MAX_PDU, pending_get: None, pending_set: None }
     }
 
     /// Sets the maximum block-transfer payload size (octets). Results larger
@@ -77,9 +72,7 @@ impl RequestDispatcher {
 
     /// Locates a registered object by class-id and logical name.
     fn find(&mut self, class_id: u16, instance: &ObisCode) -> Option<&mut Box<dyn InterfaceClass>> {
-        self.objects
-            .iter_mut()
-            .find(|o| o.class_id() == class_id && o.logical_name() == instance)
+        self.objects.iter_mut().find(|o| o.class_id() == class_id && o.logical_name() == instance)
     }
 
     /// Reads one attribute, returning its value or a data-access-result code.
@@ -106,7 +99,11 @@ impl RequestDispatcher {
     }
 
     /// Invokes one method, returning the action-result and optional return data.
-    fn invoke(&mut self, d: &MethodDescriptor, params: Option<crate::types::CosemDataType>) -> (u8, Option<GetDataResult>) {
+    fn invoke(
+        &mut self,
+        d: &MethodDescriptor,
+        params: Option<crate::types::CosemDataType>,
+    ) -> (u8, Option<GetDataResult>) {
         match self.find(d.class_id, &d.instance_id) {
             None => (data_access_result::OBJECT_UNDEFINED, None),
             Some(obj) => match obj.invoke_method(d.method_id as u8, params) {
@@ -187,12 +184,8 @@ impl RequestDispatcher {
         let chunk = pending.data[start..end].to_vec();
         let last_block = end >= pending.data.len();
         pending.next_block += 1;
-        let response = GetResponse::WithDataBlock {
-            invoke_id_and_priority,
-            last_block,
-            block_number,
-            raw_data: Ok(chunk),
-        };
+        let response =
+            GetResponse::WithDataBlock { invoke_id_and_priority, last_block, block_number, raw_data: Ok(chunk) };
         if last_block {
             self.pending_get = None;
         }
@@ -206,11 +199,7 @@ impl RequestDispatcher {
                 Ok(SetResponse::Normal { invoke_id_and_priority, result }.encode())
             }
             SetRequest::WithList { invoke_id_and_priority, attributes, values } => {
-                let results = attributes
-                    .iter()
-                    .zip(values)
-                    .map(|((a, _), v)| self.write_attribute(a, v))
-                    .collect();
+                let results = attributes.iter().zip(values).map(|((a, _), v)| self.write_attribute(a, v)).collect();
                 Ok(SetResponse::WithList { invoke_id_and_priority, results }.encode())
             }
             // Begin reassembling a block-transferred value.
@@ -268,11 +257,8 @@ impl RequestDispatcher {
 
 /// EXCEPTION-RESPONSE for an unsupported service tag.
 fn unsupported(_tag: u8) -> Vec<u8> {
-    ExceptionResponse {
-        state_error: state_error::SERVICE_UNKNOWN,
-        service_error: service_error::SERVICE_NOT_SUPPORTED,
-    }
-    .encode()
+    ExceptionResponse { state_error: state_error::SERVICE_UNKNOWN, service_error: service_error::SERVICE_NOT_SUPPORTED }
+        .encode()
 }
 
 /// EXCEPTION-RESPONSE for a well-formed but unhandled request (e.g. block transfer).
@@ -406,20 +392,25 @@ mod tests {
         let r2 = SetResponse::decode(&d.dispatch(&req2.encode().unwrap()).unwrap()).unwrap();
         assert_eq!(
             r2,
-            SetResponse::LastDatablock { invoke_id_and_priority: 0xC1, result: data_access_result::SUCCESS, block_number: 2 }
+            SetResponse::LastDatablock {
+                invoke_id_and_priority: 0xC1,
+                result: data_access_result::SUCCESS,
+                block_number: 2
+            }
         );
 
         // The reassembled value was written to the object.
-        let got = d.dispatch(
-            &GetRequest::Normal {
-                invoke_id_and_priority: 0xC1,
-                attribute: AttributeDescriptor::new(1, obis, 2),
-                access_selection: None,
-            }
-            .encode()
-            .unwrap(),
-        )
-        .unwrap();
+        let got = d
+            .dispatch(
+                &GetRequest::Normal {
+                    invoke_id_and_priority: 0xC1,
+                    attribute: AttributeDescriptor::new(1, obis, 2),
+                    access_selection: None,
+                }
+                .encode()
+                .unwrap(),
+            )
+            .unwrap();
         match GetResponse::decode(&got).unwrap() {
             GetResponse::Normal { result: GetDataResult::Data(v), .. } => {
                 assert_eq!(v, CosemDataType::OctetString(vec![0x5A; 40]));

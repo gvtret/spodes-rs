@@ -1,6 +1,6 @@
 use crate::interface::InterfaceClass;
 use crate::obis::ObisCode;
-use crate::types::{CosemDataType, BerError};
+use crate::types::{BerError, CosemDataType};
 use serde::{Deserialize, Serialize};
 use std::any::Any;
 use std::collections::BTreeMap;
@@ -180,10 +180,7 @@ impl InterfaceClass for SecuritySetup {
             ]
         } else {
             // Version 0 has only these two methods.
-            vec![
-                (1, "security_activate".to_string()),
-                (2, "global_key_transfer".to_string()),
-            ]
+            vec![(1, "security_activate".to_string()), (2, "global_key_transfer".to_string())]
         }
     }
 
@@ -256,11 +253,7 @@ impl InterfaceClass for SecuritySetup {
         Ok(())
     }
 
-    fn invoke_method(
-        &mut self,
-        method_id: u8,
-        params: Option<CosemDataType>,
-    ) -> Result<CosemDataType, String> {
+    fn invoke_method(&mut self, method_id: u8, params: Option<CosemDataType>) -> Result<CosemDataType, String> {
         let params = params.ok_or("Missing method parameter")?;
         match method_id {
             1 => self.security_activate(params),
@@ -269,10 +262,7 @@ impl InterfaceClass for SecuritySetup {
                 "Method {} requires security suite 1 or 2 (PKI/ECDH); not supported for suite 0",
                 method_id
             )),
-            _ => Err(format!(
-                "Method {} not supported for Security setup version {}",
-                method_id, self.version
-            )),
+            _ => Err(format!("Method {} not supported for Security setup version {}", method_id, self.version)),
         }
     }
 

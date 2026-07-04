@@ -357,10 +357,8 @@ mod tests {
         let sign_data = hb("77006611552244338899aabbccddeeff001122334455667789abcdef");
         // Fixed k used across all SIGN_256 control examples.
         let k = hb("43730c5cbccacf915ac292676f21e8bd4ef75331d9405e5f1a61dc3130a65011");
-        let expected = hb(
-            "d3b72bb12fb7da1a06f8e11acdec034ffcf14588301a3315bbe8cd611fc4545e\
-             a9fae88aeac47cd46a0858711d942223c523bfd53cbadff97e0eec1f69a3efca",
-        );
+        let expected = hb("d3b72bb12fb7da1a06f8e11acdec034ffcf14588301a3315bbe8cd611fc4545e\
+             a9fae88aeac47cd46a0858711d942223c523bfd53cbadff97e0eec1f69a3efca");
         let sig = gost_sign_with_k(&d, &sign_data, &k).unwrap();
         assert_eq!(sig.to_vec(), expected);
     }
@@ -380,10 +378,8 @@ mod tests {
     fn vko_matches_r1323565_key_agreement_example() {
         // Р 1323565.1, key-agreement control example: P_VU = VKO256(d_e,U, Q_s,V, r_U).
         let d = hb("68696a6b6c6d6e6f6061626364656667ddddddddccccccccaaaaaaaabbbbbbbb");
-        let q = hb(
-            "212daf02de1c91ea961e58e01e42df1733c00748998bc34d76dad96b3b256378\
-             7b9cffcfa0f24753d6d5eb6133b35a95375a0ef683b3ff5be7d61b99d7fe6617",
-        );
+        let q = hb("212daf02de1c91ea961e58e01e42df1733c00748998bc34d76dad96b3b256378\
+             7b9cffcfa0f24753d6d5eb6133b35a95375a0ef683b3ff5be7d61b99d7fe6617");
         let ukm = hb("f0f0f0f0e1e1e1e1d2d2d2d2c3c3c3c3");
         let expected = hb("4f54f663029709c0271facd5bb6d58187410477e102555a893d45a04ab0cafc0");
         assert_eq!(vko(&d, &q, &ukm).unwrap().to_vec(), expected);
@@ -395,11 +391,9 @@ mod tests {
         let k = hb("4f54f663029709c0271facd5bb6d58187410477e102555a893d45a04ab0cafc0");
         let label = hb("60857406080304"); // AlgorithmID
         let seed = hb("ff00ee11dd22cc33bb44aa5599668877"); // sysU ‖ sysV
-        let expected = hb(
-            "e7f74dc8fcafd9738fd14d5aa542834bac7e883eff37931c082a9a80b45f60dd\
+        let expected = hb("e7f74dc8fcafd9738fd14d5aa542834bac7e883eff37931c082a9a80b45f60dd\
              159d1118b56f8e78e938c28715c34c3c197a2339638901de1c610180f7de34ac\
-             424237f626e9ae5b55dbfa12ffd9cb7dfb903019eecc8228876015b2c15cbc89",
-        );
+             424237f626e9ae5b55dbfa12ffd9cb7dfb903019eecc8228876015b2c15cbc89");
         let t = kdf_tree(&k, &label, &seed, 96);
         assert_eq!(t, expected);
         // M_VU = MSB256(T_VU).

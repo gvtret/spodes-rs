@@ -1,12 +1,12 @@
 use crate::interface::InterfaceClass;
 use crate::obis::ObisCode;
 use crate::security::{gost3410, hls, signature, AuthMechanism, SecuritySuite};
-use crate::types::{CosemDataType, BerError};
+use crate::types::{BerError, CosemDataType};
+use aead::Aead;
+use aes_gcm::{Aes128Gcm, Aes256Gcm, KeyInit, Nonce};
+use rand::Rng;
 use serde::{Deserialize, Serialize};
 use std::any::Any;
-use aes_gcm::{Aes128Gcm, Aes256Gcm, KeyInit, Nonce};
-use aead::Aead;
-use rand::Rng;
 
 /// Versions of the Association LN class.
 #[derive(Clone, Serialize, Deserialize, Debug, PartialEq)]
@@ -283,7 +283,8 @@ impl AssociationLn {
                 gost3410::gost_verify(&ctx.peer_public_key, &msg_c, &f_stoc)
                     .map_err(|e| format!("HLS authentication failed: GOST 34.10 f(StoC) invalid: {e:?}"))?;
                 let msg_s = [&ctx.server_system_title[..], &ctx.client_system_title, ctos, stoc].concat();
-                let sig = gost3410::gost_sign(&ctx.signing_key, &msg_s).map_err(|e| format!("GOST 34.10 signing failed: {e:?}"))?;
+                let sig = gost3410::gost_sign(&ctx.signing_key, &msg_s)
+                    .map_err(|e| format!("GOST 34.10 signing failed: {e:?}"))?;
                 Ok(CosemDataType::OctetString(sig.to_vec()))
             }
             // Mechanism 2 (manufacturer-specific): f(challenge) = AES-128 over
@@ -313,11 +314,7 @@ impl AssociationLn {
     /// If an object with the same (class_id, logical_name) already exists, it is updated.
     fn add_object(&mut self, data: CosemDataType) -> Result<CosemDataType, String> {
         let key = object_key(&data).ok_or("Expected object_list_element structure")?;
-        if let Some(existing) = self
-            .object_list
-            .iter_mut()
-            .find(|e| object_key(e) == Some(key.clone()))
-        {
+        if let Some(existing) = self.object_list.iter_mut().find(|e| object_key(e) == Some(key.clone())) {
             *existing = data;
         } else {
             self.object_list.push(data);
@@ -405,15 +402,11 @@ fn gmac_tag(ek: &[u8], iv: &[u8; 12], aad: &[u8]) -> Result<Vec<u8>, String> {
     let out = match ek.len() {
         16 => {
             let cipher = Aes128Gcm::new_from_slice(ek).map_err(|_| "invalid EK".to_string())?;
-            cipher
-                .encrypt(nonce, aead::Payload { msg: &[], aad })
-                .map_err(|_| "GMAC computation failed".to_string())?
+            cipher.encrypt(nonce, aead::Payload { msg: &[], aad }).map_err(|_| "GMAC computation failed".to_string())?
         }
         32 => {
             let cipher = Aes256Gcm::new_from_slice(ek).map_err(|_| "invalid EK".to_string())?;
-            cipher
-                .encrypt(nonce, aead::Payload { msg: &[], aad })
-                .map_err(|_| "GMAC computation failed".to_string())?
+            cipher.encrypt(nonce, aead::Payload { msg: &[], aad }).map_err(|_| "GMAC computation failed".to_string())?
         }
         _ => return Err("EK must be 16 or 32 octets".to_string()),
     };
@@ -426,9 +419,7 @@ fn gmac_tag(ek: &[u8], iv: &[u8; 12], aad: &[u8]) -> Result<Vec<u8>, String> {
 fn object_key(element: &CosemDataType) -> Option<(u16, Vec<u8>)> {
     if let CosemDataType::Structure(fields) = element {
         if fields.len() >= 3 {
-            if let (CosemDataType::LongUnsigned(class_id), CosemDataType::OctetString(ln)) =
-                (&fields[0], &fields[2])
-            {
+            if let (CosemDataType::LongUnsigned(class_id), CosemDataType::OctetString(ln)) = (&fields[0], &fields[2]) {
                 return Some((*class_id, ln.clone()));
             }
         }
@@ -571,11 +562,7 @@ impl InterfaceClass for AssociationLn {
         Ok(())
     }
 
-    fn invoke_method(
-        &mut self,
-        method_id: u8,
-        params: Option<CosemDataType>,
-    ) -> Result<CosemDataType, String> {
+    fn invoke_method(&mut self, method_id: u8, params: Option<CosemDataType>) -> Result<CosemDataType, String> {
         let params = params.ok_or("Missing method parameter")?;
         let is_v2 = matches!(self.version, AssociationLnVersion::Version2);
         match method_id {
@@ -586,11 +573,7 @@ impl InterfaceClass for AssociationLn {
             // add_user / remove_user exist only in version 2.
             5 if is_v2 => self.add_user(params),
             6 if is_v2 => self.remove_user(params),
-            _ => Err(format!(
-                "Method {} not supported for Association LN version {}",
-                method_id,
-                self.version()
-            )),
+            _ => Err(format!("Method {} not supported for Association LN version {}", method_id, self.version())),
         }
     }
 
@@ -628,7 +611,7 @@ fn write_length(length: usize, buf: &mut Vec<u8>) -> Result<(), BerError> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use sha1::{Sha1, Digest};
+    use sha1::{Digest, Sha1};
 
     fn sample(version: AssociationLnVersion) -> AssociationLn {
         AssociationLn::new(AssociationLnConfig {
@@ -639,7 +622,9 @@ mod tests {
                 CosemDataType::Integer(1),
                 CosemDataType::LongUnsigned(1),
             ]),
-            application_context_name: CosemDataType::OctetString(vec![0x09, 0x07, 0x60, 0x85, 0x74, 0x05, 0x08, 0x01, 0x01]),
+            application_context_name: CosemDataType::OctetString(vec![
+                0x09, 0x07, 0x60, 0x85, 0x74, 0x05, 0x08, 0x01, 0x01,
+            ]),
             xdlms_context_info: CosemDataType::Null,
             authentication_mechanism: AuthenticationMechanism::HlsSha1,
             secret: CosemDataType::OctetString(b"12345678".to_vec()),
@@ -687,11 +672,7 @@ mod tests {
 
     #[test]
     fn round_trip_all_versions() {
-        for v in [
-            AssociationLnVersion::Version0,
-            AssociationLnVersion::Version1,
-            AssociationLnVersion::Version2,
-        ] {
+        for v in [AssociationLnVersion::Version0, AssociationLnVersion::Version1, AssociationLnVersion::Version2] {
             let obj = sample(v.clone());
             let mut buf = Vec::new();
             obj.serialize_ber(&mut buf).unwrap();
@@ -767,9 +748,7 @@ mod tests {
         // A wrong f(StoC) → rejection.
         let mut wrong = f_stoc;
         wrong[0] ^= 0xFF;
-        assert!(obj
-            .invoke_method(1, Some(CosemDataType::OctetString(wrong)))
-            .is_err());
+        assert!(obj.invoke_method(1, Some(CosemDataType::OctetString(wrong))).is_err());
     }
 
     /// HLS-5 (GMAC): reference test vector from IEC 62056-5-3, Table 33.
@@ -806,9 +785,7 @@ mod tests {
         // Corrupting the client tag → f(StoC) verification fails.
         let mut bad = f_stoc;
         bad[16] ^= 0x01;
-        assert!(obj
-            .invoke_method(1, Some(CosemDataType::OctetString(bad)))
-            .is_err());
+        assert!(obj.invoke_method(1, Some(CosemDataType::OctetString(bad))).is_err());
     }
 
     /// Mechanisms 6 (SHA-256) and 9 (Streebog): four-pass handshake through the

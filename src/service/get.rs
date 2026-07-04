@@ -70,16 +70,9 @@ impl AccessSelection {
 #[derive(Debug, Clone, PartialEq)]
 pub enum GetRequest {
     /// GET-REQUEST-NORMAL: read a single attribute.
-    Normal {
-        invoke_id_and_priority: u8,
-        attribute: AttributeDescriptor,
-        access_selection: Option<AccessSelection>,
-    },
+    Normal { invoke_id_and_priority: u8, attribute: AttributeDescriptor, access_selection: Option<AccessSelection> },
     /// GET-REQUEST-NEXT: request the next data block during block transfer.
-    Next {
-        invoke_id_and_priority: u8,
-        block_number: u32,
-    },
+    Next { invoke_id_and_priority: u8, block_number: u32 },
     /// GET-REQUEST-WITH-LIST: read several attributes in one request.
     WithList {
         invoke_id_and_priority: u8,
@@ -167,10 +160,7 @@ pub enum GetDataResult {
 #[derive(Debug, Clone, PartialEq)]
 pub enum GetResponse {
     /// GET-RESPONSE-NORMAL: the full result fits in a single APDU.
-    Normal {
-        invoke_id_and_priority: u8,
-        result: GetDataResult,
-    },
+    Normal { invoke_id_and_priority: u8, result: GetDataResult },
     /// GET-RESPONSE-WITH-DATABLOCK: one block of a longer result.
     WithDataBlock {
         invoke_id_and_priority: u8,
@@ -180,10 +170,7 @@ pub enum GetResponse {
         raw_data: Result<Vec<u8>, u8>,
     },
     /// GET-RESPONSE-WITH-LIST: one result per requested attribute.
-    WithList {
-        invoke_id_and_priority: u8,
-        results: Vec<GetDataResult>,
-    },
+    WithList { invoke_id_and_priority: u8, results: Vec<GetDataResult> },
 }
 
 impl GetResponse {

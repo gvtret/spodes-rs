@@ -118,11 +118,7 @@ mod tests {
     fn confirmed_service_error_matches_reference_bytes() {
         // IEC 61334-6 Example 3: 0E 01 06 02 — initiateError / initiate /
         // incompatible-conformance.
-        let e = ConfirmedServiceError {
-            service: service::INITIATE_ERROR,
-            category: category::INITIATE,
-            value: 2,
-        };
+        let e = ConfirmedServiceError { service: service::INITIATE_ERROR, category: category::INITIATE, value: 2 };
         assert_eq!(e.encode(), vec![0x0E, 0x01, 0x06, 0x02]);
         assert_eq!(ConfirmedServiceError::decode(&e.encode()).unwrap(), e);
     }

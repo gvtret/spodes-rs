@@ -1,6 +1,6 @@
 use crate::interface::InterfaceClass;
 use crate::obis::ObisCode;
-use crate::types::{CosemDataType, BerError};
+use crate::types::{BerError, CosemDataType};
 use serde::{Deserialize, Serialize};
 use std::any::Any;
 
@@ -24,11 +24,7 @@ impl Register {
     /// # Returns
     /// A new `Register`.
     pub fn new(logical_name: ObisCode, value: CosemDataType, scaler_unit: CosemDataType) -> Self {
-        Register {
-            logical_name,
-            value,
-            scaler_unit,
-        }
+        Register { logical_name, value, scaler_unit }
     }
 
     /// Resets the register value to 0.
@@ -134,11 +130,7 @@ impl InterfaceClass for Register {
         Err(BerError::InvalidTag)
     }
 
-    fn invoke_method(
-        &mut self,
-        method_id: u8,
-        _params: Option<CosemDataType>,
-    ) -> Result<CosemDataType, String> {
+    fn invoke_method(&mut self, method_id: u8, _params: Option<CosemDataType>) -> Result<CosemDataType, String> {
         match method_id {
             1 => self.reset(),
             _ => Err(format!("Method {} not supported for Register class", method_id)),

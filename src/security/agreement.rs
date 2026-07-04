@@ -216,10 +216,7 @@ mod tests {
         let sys_tc = hb("4D4D4D0000BC614E");
         let sys_ts = hb("4D4D4D0000000001");
         let k = kdf(SecuritySuite::Suite1, &z, &alg_id, &sys_tc, &sys_ts, 32).unwrap();
-        assert_eq!(
-            k,
-            hb("59A71FD81C929A86A99438DA17A66C058C6A93FD3065F5EE16A05D775927659B")
-        );
+        assert_eq!(k, hb("59A71FD81C929A86A99438DA17A66C058C6A93FD3065F5EE16A05D775927659B"));
         // The AES-128 encryption key is the leftmost 16 octets.
         let ek = kdf(SecuritySuite::Suite1, &z, &alg_id, &sys_tc, &sys_ts, 16).unwrap();
         assert_eq!(ek, hb("59A71FD81C929A86A99438DA17A66C05"));
