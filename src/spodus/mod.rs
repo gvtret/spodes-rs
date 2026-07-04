@@ -22,3 +22,4 @@ mod profile;
 pub mod proxy;
 pub mod records;
 pub mod status;
+pub mod tasks;

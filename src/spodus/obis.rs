@@ -95,6 +95,11 @@ pub fn access_policies() -> ObisCode {
     ObisCode::new(0, 0, 94, 7, 132, 255)
 }
 
+/// Meter data-exchange task list (§10.7, `0.0.94.7.133.255`, class Data).
+pub fn data_exchange_tasks() -> ObisCode {
+    ObisCode::new(0, 0, 94, 7, 133, 255)
+}
+
 // --- Journals (§10.9, §10.13) ----------------------------------------------
 
 /// Meter status table (§10.8, `0.0.94.7.134.255`, Profile generic).
