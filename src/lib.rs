@@ -33,3 +33,7 @@ pub mod security;
 /// Client-side session driver that ties the transport, service and ciphering
 /// layers into blocking GET/SET/ACTION/associate/release round trips.
 pub mod session;
+
+/// Server-side request dispatcher: routes incoming GET/SET/ACTION APDUs to the
+/// addressed COSEM object and returns the response APDU.
+pub mod server;

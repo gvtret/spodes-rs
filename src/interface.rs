@@ -44,6 +44,21 @@ pub trait InterfaceClass: Any {
     /// * `Err(BerError)` - Если произошла ошибка десериализации.
     fn deserialize_ber(&mut self, data: &[u8]) -> Result<(), BerError>;
 
+    /// Writes the value of a writable attribute. The default implementation
+    /// rejects the write; classes with writable attributes override it.
+    ///
+    /// # Arguments
+    /// * `attribute_id` - The attribute to write.
+    /// * `value` - The new attribute value.
+    ///
+    /// # Returns
+    /// * `Ok(())` - If the attribute was written.
+    /// * `Err(String)` - If the attribute is not writable or the value is invalid.
+    fn set_attribute(&mut self, attribute_id: u8, value: CosemDataType) -> Result<(), String> {
+        let _ = (attribute_id, value);
+        Err("attribute is not writable".to_string())
+    }
+
     /// Вызывает метод объекта с указанным идентификатором.
     ///
     /// # Arguments
