@@ -29,3 +29,7 @@ pub mod service;
 /// and the HLS/LLS authentication mechanisms (0..10), including the GOST profile
 /// of Р 1323565.1.
 pub mod security;
+
+/// Client-side session driver that ties the transport, service and ciphering
+/// layers into blocking GET/SET/ACTION/associate/release round trips.
+pub mod session;
