@@ -16,6 +16,7 @@
 //! `π_x(Q) ‖ π_y(Q)` (64 octets), and a signature is `Vec256(r) ‖ Vec256(s)`
 //! (64 octets), matching GOST R 34.10 and the control examples in Р 1323565.1.
 
+use hmac::{Hmac, Mac};
 use num_bigint::{BigInt, BigUint, Sign};
 use num_integer::Integer;
 use num_traits::{One, Zero};
@@ -243,6 +244,67 @@ pub fn gost_verify(q_pub: &[u8], message: &[u8], sig: &[u8]) -> Result<(), GostE
     }
 }
 
+/// VKO_GOST3410_2012_256 key-agreement function (R 50.1.113-2016 / RFC 7836).
+///
+/// Computes the shared key-encryption key from our private key `d`
+/// (little-endian `Vec256`), the peer public key `q_pub` (`π_x(Q) ‖ π_y(Q)`,
+/// 64 octets) and the user keying material `ukm` (little-endian). The curve has
+/// cofactor 1, so the agreed point is `S = (ukm · d mod q) · Q`; the key is
+/// `Streebog256(π_x(S) ‖ π_y(S))`.
+pub fn vko(d: &[u8], q_pub: &[u8], ukm: &[u8]) -> Result<[u8; 32], GostError> {
+    if q_pub.len() != 64 {
+        return Err(GostError::InvalidPublicKey);
+    }
+    let c = curve();
+    let d = int_le(d);
+    if d.is_zero() || d >= c.q {
+        return Err(GostError::InvalidPrivateKey);
+    }
+    let qx = int_le(&q_pub[..32]);
+    let qy = int_le(&q_pub[32..]);
+    if qx >= c.p || qy >= c.p {
+        return Err(GostError::InvalidPublicKey);
+    }
+    let q_point = Some((qx, qy));
+    let ukm = int_le(ukm);
+    // Cofactor is 1 for this curve; scalar = ukm · d mod q.
+    let scalar = (ukm * d) % &c.q;
+    let (sx, sy) = point_mul(&c, &scalar, &q_point).ok_or(GostError::InvalidPublicKey)?;
+    let mut input = Vec::with_capacity(64);
+    input.extend_from_slice(&vec256(&sx));
+    input.extend_from_slice(&vec256(&sy));
+    let mut h = Streebog256::new();
+    h.update(&input);
+    let mut kek = [0u8; 32];
+    kek.copy_from_slice(&h.finalize());
+    Ok(kek)
+}
+
+/// KDF_TREE_GOSTR3411_2012_256 (R 50.1.113-2016 / RFC 7836) with a one-octet
+/// counter (`R = 1`).
+///
+/// Derives `output_len` octets from key `k`, a `label` and a `seed`:
+/// each 256-bit block `K_i = HMAC_Streebog256(k, i ‖ label ‖ 0x00 ‖ seed ‖ L)`,
+/// where `i` is a one-octet counter (1-based) and `L` is the total output length
+/// in bits, encoded as a 16-bit big-endian integer. In the DLMS GOST profile
+/// the diversified key is 768 bits: `Key = LSB512`, `M = MSB256`.
+pub fn kdf_tree(k: &[u8], label: &[u8], seed: &[u8], output_len: usize) -> Vec<u8> {
+    let l_bits = (output_len * 8) as u16;
+    let blocks = output_len.div_ceil(32);
+    let mut out = Vec::with_capacity(blocks * 32);
+    for i in 1..=blocks as u8 {
+        let mut mac = <Hmac<Streebog256> as Mac>::new_from_slice(k).expect("HMAC accepts any key length");
+        mac.update(&[i]);
+        mac.update(label);
+        mac.update(&[0x00]);
+        mac.update(seed);
+        mac.update(&l_bits.to_be_bytes());
+        out.extend_from_slice(&mac.finalize().into_bytes());
+    }
+    out.truncate(output_len);
+    out
+}
+
 /// Derives the verification key `π_x(Q) ‖ π_y(Q)` (64 octets) from a signing
 /// key `d` (`Vec256`), where `Q = d·P`.
 pub fn public_key(d: &[u8]) -> Result<[u8; 64], GostError> {
@@ -312,6 +374,36 @@ mod tests {
         gost_verify(&pk, msg, &sig).unwrap();
         // Tampered message must fail.
         assert_eq!(gost_verify(&pk, b"other message", &sig), Err(GostError::VerificationFailed));
+    }
+
+    #[test]
+    fn vko_matches_r1323565_key_agreement_example() {
+        // Р 1323565.1, key-agreement control example: P_VU = VKO256(d_e,U, Q_s,V, r_U).
+        let d = hb("68696a6b6c6d6e6f6061626364656667ddddddddccccccccaaaaaaaabbbbbbbb");
+        let q = hb(
+            "212daf02de1c91ea961e58e01e42df1733c00748998bc34d76dad96b3b256378\
+             7b9cffcfa0f24753d6d5eb6133b35a95375a0ef683b3ff5be7d61b99d7fe6617",
+        );
+        let ukm = hb("f0f0f0f0e1e1e1e1d2d2d2d2c3c3c3c3");
+        let expected = hb("4f54f663029709c0271facd5bb6d58187410477e102555a893d45a04ab0cafc0");
+        assert_eq!(vko(&d, &q, &ukm).unwrap().to_vec(), expected);
+    }
+
+    #[test]
+    fn kdf_tree_matches_r1323565_key_agreement_example() {
+        // Р 1323565.1: T_VU = KDFTREE(P_VU, AlgorithmID, sysU ‖ sysV) ∈ V768.
+        let k = hb("4f54f663029709c0271facd5bb6d58187410477e102555a893d45a04ab0cafc0");
+        let label = hb("60857406080304"); // AlgorithmID
+        let seed = hb("ff00ee11dd22cc33bb44aa5599668877"); // sysU ‖ sysV
+        let expected = hb(
+            "e7f74dc8fcafd9738fd14d5aa542834bac7e883eff37931c082a9a80b45f60dd\
+             159d1118b56f8e78e938c28715c34c3c197a2339638901de1c610180f7de34ac\
+             424237f626e9ae5b55dbfa12ffd9cb7dfb903019eecc8228876015b2c15cbc89",
+        );
+        let t = kdf_tree(&k, &label, &seed, 96);
+        assert_eq!(t, expected);
+        // M_VU = MSB256(T_VU).
+        assert_eq!(&t[..32], &hb("e7f74dc8fcafd9738fd14d5aa542834bac7e883eff37931c082a9a80b45f60dd")[..]);
     }
 
     #[test]
