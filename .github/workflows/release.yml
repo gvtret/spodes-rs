@@ -40,14 +40,22 @@ jobs:
           generate_release_notes: true
           files: target/package/*.crate
 
-  # cargo publish is left as a manual, opt-in step. To enable automatic
-  # publishing on tag, add a CARGO_REGISTRY_TOKEN secret and uncomment below.
-  #
-  # publish:
-  #   name: Publish to crates.io
-  #   needs: release
-  #   runs-on: ubuntu-latest
-  #   steps:
-  #     - uses: actions/checkout@v4
-  #     - uses: dtolnay/rust-toolchain@stable
-  #     - run: cargo publish --token ${{ secrets.CARGO_REGISTRY_TOKEN }}
+  # Publishes to crates.io on tag. The step is skipped unless a
+  # CARGO_REGISTRY_TOKEN repository secret is configured, so the release still
+  # succeeds before publishing is set up.
+  publish:
+    name: Publish to crates.io
+    needs: release
+    runs-on: ubuntu-latest
+    env:
+      CARGO_REGISTRY_TOKEN: ${{ secrets.CARGO_REGISTRY_TOKEN }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+      - name: Publish
+        if: env.CARGO_REGISTRY_TOKEN != ''
+        run: cargo publish
+      - name: Skipped notice
+        if: env.CARGO_REGISTRY_TOKEN == ''
+        run: echo "CARGO_REGISTRY_TOKEN not set; skipping crates.io publish."
