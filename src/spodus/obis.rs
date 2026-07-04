@@ -80,6 +80,11 @@ pub fn direct_channel_table() -> ObisCode {
     ObisCode::new(0, 0, 94, 7, 129, 255)
 }
 
+/// ИВКЭ channel list (§10.4, `0.0.94.7.130.255`, Profile generic).
+pub fn channel_list() -> ObisCode {
+    ObisCode::new(0, 0, 94, 7, 130, 255)
+}
+
 /// Discovered-meters list (§10.5, `0.0.94.7.131.255`, Profile generic).
 pub fn discovered_meters() -> ObisCode {
     ObisCode::new(0, 0, 94, 7, 131, 255)

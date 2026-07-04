@@ -10,6 +10,7 @@
 //! ([`crate::server`]) and the client session ([`crate::session`]).
 
 pub mod access_policy;
+pub mod channels;
 pub mod collect;
 pub mod discovered;
 pub mod journals;
@@ -17,4 +18,5 @@ pub mod meter;
 pub mod nameplate;
 pub mod node;
 pub mod obis;
+mod profile;
 pub mod proxy;
