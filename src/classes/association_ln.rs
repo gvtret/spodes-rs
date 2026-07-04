@@ -286,8 +286,15 @@ impl AssociationLn {
                 let sig = gost3410::gost_sign(&ctx.signing_key, &msg_s).map_err(|e| format!("GOST 34.10 signing failed: {e:?}"))?;
                 Ok(CosemDataType::OctetString(sig.to_vec()))
             }
+            // Mechanism 2 (manufacturer-specific): f(challenge) = AES-128 over
+            // the challenge keyed by the secret (Gurux / TI "high" scheme).
             AuthMechanism::HlsManufacturer => {
-                Err("manufacturer-specific HLS mechanism (2) is not implemented".to_string())
+                let secret = self.secret_bytes()?;
+                let expected = hls::manufacturer_aes(secret, stoc);
+                if expected != f_stoc {
+                    return Err("HLS authentication failed: f(StoC) mismatch".to_string());
+                }
+                Ok(CosemDataType::OctetString(hls::manufacturer_aes(secret, ctos)))
             }
             AuthMechanism::None => Err("mechanism 0 does not use HLS authentication".to_string()),
             AuthMechanism::Lls => unreachable!("LLS handled above"),
@@ -879,6 +886,29 @@ mod tests {
         let mut bad = f_stoc;
         let n = bad.len();
         bad[n - 1] ^= 0x01;
+        assert!(obj.invoke_method(1, Some(CosemDataType::OctetString(bad))).is_err());
+    }
+
+    /// Mechanism 2 (manufacturer-specific AES): four-pass handshake through the
+    /// association object.
+    #[test]
+    fn hls_manufacturer_four_pass_via_association() {
+        let secret = b"12345678".to_vec();
+        let stoc = vec![0xAA, 0xBB, 0xCC, 0xDD, 0xEE, 0xFF, 0x00, 0x11];
+        let ctos = vec![0x22, 0x33, 0x44, 0x55, 0x66, 0x77, 0x88, 0x99];
+        let mut obj = sample(AssociationLnVersion::Version1);
+        obj.authentication_mechanism = AuthMechanism::HlsManufacturer;
+        obj.secret = CosemDataType::OctetString(secret.clone());
+        obj.set_stoc(stoc.clone());
+        obj.set_ctos(ctos.clone());
+        let f_stoc = hls::manufacturer_aes(&secret, &stoc);
+        let expected = hls::manufacturer_aes(&secret, &ctos);
+        let reply = obj
+            .invoke_method(1, Some(CosemDataType::OctetString(f_stoc.clone())))
+            .expect("manufacturer HLS should succeed");
+        assert_eq!(reply, CosemDataType::OctetString(expected));
+        let mut bad = f_stoc;
+        bad[0] ^= 0xFF;
         assert!(obj.invoke_method(1, Some(CosemDataType::OctetString(bad))).is_err());
     }
 
