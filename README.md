@@ -1,5 +1,8 @@
 # spodes-rs
 
+[![CI](https://github.com/gvtret/spodes-rs/actions/workflows/ci.yml/badge.svg)](https://github.com/gvtret/spodes-rs/actions/workflows/ci.yml)
+[![License](https://img.shields.io/badge/license-MIT%2FApache--2.0-blue.svg)](#license)
+
 A pure-Rust implementation of the DLMS/COSEM stack for electricity metering,
 following IEC 62056 (the DLMS Green Book) and the Russian companion profiles
 **СТО 34.01-5.1-006-2023** and **Р 1323565.1** (GOST cryptography).
@@ -101,6 +104,14 @@ cargo test          # unit + integration + doc tests
 cargo clippy --all-targets
 cargo doc --no-deps
 ```
+
+## Versioning
+
+This project follows [Semantic Versioning](https://semver.org). Notable changes
+are recorded in [CHANGELOG.md](CHANGELOG.md). Releases are cut by pushing a
+`vX.Y.Z` tag matching the `Cargo.toml` version, which triggers the release
+workflow. While the crate is at `0.x`, minor releases may contain breaking
+changes.
 
 ## License
 
