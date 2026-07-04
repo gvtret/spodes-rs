@@ -14,17 +14,17 @@
 //! # The stack
 //!
 //! ```text
-//! ┌──────────────────────────────────────────────────────────┐
-//! │  session (client)        server (dispatcher)      spodus  │  drivers / profile
-//! ├──────────────────────────────────────────────────────────┤
-//! │  service   — GET/SET/ACTION, ACSE, notifications, ciphering│  application layer
-//! │  security  — suites, policy, HLS mechanisms, ECDH/GOST     │
-//! ├──────────────────────────────────────────────────────────┤
-//! │  transport — HDLC (62056-46) and wrapper (62056-47)        │  transport layer
-//! ├──────────────────────────────────────────────────────────┤
-//! │  classes / interface — COSEM interface objects            │  object model
-//! │  types (A-XDR/BER)   ·   obis                              │
-//! └──────────────────────────────────────────────────────────┘
+//! ┌────────────────────────────────────────────────────────────┐
+//! │  session (client)     server (dispatcher)     spodus       │  drivers / profile
+//! ├────────────────────────────────────────────────────────────┤
+//! │  service    GET/SET/ACTION, ACSE, notifications, ciphering │  application layer
+//! │  security   suites, policy, HLS mechanisms, ECDH/GOST      │
+//! ├────────────────────────────────────────────────────────────┤
+//! │  transport  HDLC (62056-46) and wrapper (62056-47)         │  transport layer
+//! ├────────────────────────────────────────────────────────────┤
+//! │  classes / interface  -  COSEM interface objects           │  object model
+//! │  types (A-XDR/BER)  -  obis                                │
+//! └────────────────────────────────────────────────────────────┘
 //! ```
 //!
 //! # Modules
