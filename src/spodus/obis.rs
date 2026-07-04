@@ -5,9 +5,10 @@
 
 use crate::obis::ObisCode;
 
-/// Management logical device (`0.0.41.0.0.2`).
-pub fn management_logical_device() -> ObisCode {
-    ObisCode::new(0, 0, 41, 0, 0, 2)
+/// SAP assignment object of the management logical device (§10.1.8,
+/// `0.0.41.0.0.255`, IC 17). The management logical device itself has address 1.
+pub fn sap_assignment() -> ObisCode {
+    ObisCode::new(0, 0, 41, 0, 0, 255)
 }
 
 /// ИВКЭ logical name (`0.0.42.0.0.255`).
@@ -120,7 +121,7 @@ mod tests {
 
     #[test]
     fn meter_lists_and_management() {
-        assert_eq!(management_logical_device().to_bytes(), vec![0, 0, 41, 0, 0, 2]);
+        assert_eq!(sap_assignment().to_bytes(), vec![0, 0, 41, 0, 0, 255]);
         assert_eq!(ivke_logical_name().to_bytes(), vec![0, 0, 42, 0, 0, 255]);
         assert_eq!(discovered_meters().to_bytes(), vec![0, 0, 94, 7, 131, 255]);
         assert_eq!(access_policies().to_bytes(), vec![0, 0, 94, 7, 132, 255]);
