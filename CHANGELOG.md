@@ -8,10 +8,12 @@ While the crate is at `0.x`, minor releases may contain breaking changes.
 
 ## [Unreleased]
 
+## [0.2.0] - 2026-07-04
+
 ### Added
 
-- **СПОДУС / ИВКЭ concentrator** (`spodus` module, СТО 34.01-5.1-013-2023): a
-  fully working ИВКЭ implementing the complete Appendix-A object catalogue —
+- **СПОДУС / ИВКЭ concentrator** (`spodus` module, СТО 34.01-5.1-013-2023): the
+  complete Appendix-A object model of an ИВКЭ (data concentrator) —
   nameplate (§10.14) and its profile, configured meter list (§10.2),
   direct-channel table (§10.3), channel list (§10.4), discovered meters (§10.5),
   access policies (§10.6), data-exchange tasks (§10.7), meter status table
@@ -23,6 +25,10 @@ While the crate is at `0.x`, minor releases may contain breaking changes.
   Plus the `Concentrator` upstream server, downstream `poll_meter` aggregation
   and the `MeterProxy` transparent pass-through by `direct_id`. Example:
   `spodus_concentrator`; regression test: `tests/spodus_integration.rs`.
+
+  Scope: this is the COSEM object model over an in-memory transport. A deployable
+  ИВКЭ still needs the physical transport binding (HDLC/TCP, §8), the operational
+  collection loop (§6) and real association/security configuration.
 
 ## [0.1.0] - 2026-07-04
 
@@ -55,5 +61,6 @@ Initial release: a full DLMS/COSEM stack for IEC 62056 and the Russian
 - **Tooling** — GitHub Actions CI (fmt, clippy, test, doc, package) and a
   tag-triggered release workflow; dual MIT / Apache-2.0 license.
 
-[Unreleased]: https://github.com/gvtret/spodes-rs/compare/v0.1.0...HEAD
+[Unreleased]: https://github.com/gvtret/spodes-rs/compare/v0.2.0...HEAD
+[0.2.0]: https://github.com/gvtret/spodes-rs/compare/v0.1.0...v0.2.0
 [0.1.0]: https://github.com/gvtret/spodes-rs/releases/tag/v0.1.0
