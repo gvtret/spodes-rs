@@ -88,6 +88,17 @@ cargo run --example hls_handshake
 The per-class examples (`data_usage`, `register_usage`, `clock_usage`, …) show
 how to build and serialize individual COSEM objects.
 
+## СПОДУС — ИВКЭ concentrator (in progress)
+
+The [`spodus`](src/spodus) module implements the СПОДУС profile
+(СТО 34.01-5.1-013-2023): a data-concentrator (ИВКЭ) that speaks СПОДЭС as a
+client to the meters, aggregates their data, and serves it upstream to the
+head-end (ИВК) as a DLMS server, with transparent pass-through to an individual
+meter by its `direct_id`. It provides the ИВКЭ object model (nameplate, meter
+list, discovered meters, access policies, direct-channel table, journals), the
+`Concentrator` upstream server, downstream `poll_meter` aggregation and the
+`MeterProxy` pass-through. See `cargo run --example spodus_concentrator`.
+
 ## Standards
 
 - IEC 62056-5-3 (DLMS/COSEM application layer, the "Green Book")

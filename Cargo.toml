@@ -46,6 +46,10 @@ name = "hls_handshake"
 path = "examples/hls_handshake.rs"
 
 [[example]]
+name = "spodus_concentrator"
+path = "examples/spodus_concentrator.rs"
+
+[[example]]
 name = "clock_usage"
 path = "examples/clock_usage.rs"
 

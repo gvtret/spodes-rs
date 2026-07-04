@@ -12,6 +12,7 @@ use super::discovered::DiscoveredMeters;
 use super::journals::{EventJournal, ExchangeStatusJournal};
 use super::meter::MeterRegistry;
 use super::nameplate::Nameplate;
+use super::proxy::DirectChannelTable;
 
 /// A СПОДУС concentrator (ИВКЭ): the meter aggregation model plus the upstream
 /// server it exposes to the head-end.
@@ -25,6 +26,8 @@ pub struct Concentrator {
     pub discovered: DiscoveredMeters,
     /// Meter access policies (§10.6).
     pub access_policies: AccessPolicies,
+    /// Direct-channel (pass-through) table (§10.3).
+    pub direct_channels: DirectChannelTable,
     /// Data-exchange-status journal (§10.9).
     pub exchange_journal: ExchangeStatusJournal,
     /// ИВКЭ event journals (§10.13).
@@ -47,6 +50,7 @@ impl Concentrator {
         }
         dispatcher.add(Box::new(self.meters.build_meter_list()));
         dispatcher.add(Box::new(self.access_policies.build()));
+        dispatcher.add(Box::new(self.direct_channels.build()));
         dispatcher.add(Box::new(self.discovered.build()));
         dispatcher.add(Box::new(self.exchange_journal.build()));
         for journal in &self.event_journals {

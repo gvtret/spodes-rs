@@ -8,6 +8,16 @@ While the crate is at `0.x`, minor releases may contain breaking changes.
 
 ## [Unreleased]
 
+### Added
+
+- **СПОДУС / ИВКЭ concentrator** (`spodus` module, СТО 34.01-5.1-013-2023): the
+  ИВКЭ information model (nameplate §10.14, configured meter list §10.2,
+  discovered-meters list §10.5, access policies §10.6, direct-channel table
+  §10.3, data-exchange-status §10.9 and event §10.13 journals), the
+  `Concentrator` upstream server, downstream `poll_meter` aggregation and the
+  `MeterProxy` transparent pass-through by `direct_id`. Example:
+  `spodus_concentrator`.
+
 ## [0.1.0] - 2026-07-04
 
 Initial release: a full DLMS/COSEM stack for IEC 62056 and the Russian
