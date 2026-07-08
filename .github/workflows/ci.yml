@@ -32,3 +32,12 @@ jobs:
           RUSTDOCFLAGS: -D warnings
       - name: Package
         run: cargo package --no-verify
+
+  audit:
+    name: Security audit
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: rustsec/audit-check@v2.0.0
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}

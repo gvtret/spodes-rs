@@ -23,13 +23,13 @@ cmac = "0.7"
 p256 = { version = "0.13", features = ["ecdsa", "ecdh"] }
 p384 = { version = "0.13", features = ["ecdsa", "ecdh"] }
 ecdsa = "0.16"
-num-bigint = "0.4"
+num-bigint = "0.4.8"
 num-integer = "0.1"
 num-traits = "0.2"
 hmac = "0.12"
 aes-gcm = "0.10"
 aead = "0.5"
-rand = "0.9.1"
+rand = "0.9.4"
 
 [dev-dependencies]
 
@@ -88,3 +88,15 @@ path = "examples/script_table_usage.rs"
 [[example]]
 name = "special_days_table_usage"
 path = "examples/special_days_table_usage.rs"
+
+[[example]]
+name = "tcp_client"
+path = "examples/tcp_client.rs"
+
+[[example]]
+name = "tcp_server"
+path = "examples/tcp_server.rs"
+
+[[example]]
+name = "udp_client"
+path = "examples/udp_client.rs"
