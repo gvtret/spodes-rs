@@ -9,7 +9,7 @@
 //! (5) lives in the Association LN class; the signature mechanisms (7 ECDSA and
 //! 10 GOST 34.10) require a private key and are not computed here.
 
-use cmac::{Cmac, Mac};
+use cmac::{Cmac, KeyInit, Mac};
 use kuznyechik::Kuznyechik;
 use sha2::Digest;
 

@@ -293,7 +293,7 @@ pub fn kdf_tree(k: &[u8], label: &[u8], seed: &[u8], output_len: usize) -> Vec<u
     let blocks = output_len.div_ceil(32);
     let mut out = Vec::with_capacity(blocks * 32);
     for i in 1..=blocks as u8 {
-        let mut mac = <Hmac<Streebog256> as Mac>::new_from_slice(k).expect("HMAC accepts any key length");
+        let mut mac = <Hmac<Streebog256> as hmac::digest::KeyInit>::new_from_slice(k).expect("HMAC accepts any key length");
         mac.update(&[i]);
         mac.update(label);
         mac.update(&[0x00]);

@@ -14,21 +14,21 @@ exclude = ["/docs"]
 
 [dependencies]
 serde = { version = "1.0", features = ["derive"] }
-sha1 = "0.10.6"
-md-5 = "0.10"
-sha2 = "0.10"
-streebog = "0.10"
-kuznyechik = "0.8"
-cmac = "0.7"
-p256 = { version = "0.13", features = ["ecdsa", "ecdh"] }
-p384 = { version = "0.13", features = ["ecdsa", "ecdh"] }
-ecdsa = "0.16"
+sha1 = "0.11"
+md-5 = "0.11"
+sha2 = "0.11"
+streebog = "0.11"
+kuznyechik = "0.9"
+cmac = "0.8"
+p256 = { version = "0.14", features = ["ecdsa", "ecdh"] }
+p384 = { version = "0.14", features = ["ecdsa", "ecdh"] }
+ecdsa = "0.17"
 num-bigint = "0.4.8"
 num-integer = "0.1"
 num-traits = "0.2"
-hmac = "0.12"
-aes-gcm = "0.10"
-aead = "0.5"
+hmac = "0.13"
+aes-gcm = "0.11"
+aead = "0.6"
 rand = "0.9.4"
 
 [dev-dependencies]

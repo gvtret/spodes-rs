@@ -117,7 +117,7 @@ mod tests {
         let sk = hex(b"418073C239FA6125011DE4D6CD2E645780289F761BB21BFB0835CB5585E8B373");
         let signing = p256::ecdsa::SigningKey::from_slice(&sk).unwrap();
         let vk = signing.verifying_key();
-        let pk = vk.to_encoded_point(false).as_bytes().to_vec(); // 0x04 ‖ x ‖ y
+        let pk = vk.to_sec1_point(false).as_bytes().to_vec(); // 0x04 ‖ x ‖ y
         let msg = b"SystemTitle-C||SystemTitle-S||StoC||CtoS";
         let sig = ecdsa_sign(SecuritySuite::Suite1, &sk, msg).unwrap();
         assert_eq!(sig.len(), 64);
@@ -132,7 +132,7 @@ mod tests {
     fn p384_sign_verify_round_trip() {
         let sk = [0x11u8; 48];
         let signing = p384::ecdsa::SigningKey::from_slice(&sk).unwrap();
-        let pk = signing.verifying_key().to_encoded_point(false).as_bytes().to_vec();
+        let pk = signing.verifying_key().to_sec1_point(false).as_bytes().to_vec();
         let msg = b"message";
         let sig = ecdsa_sign(SecuritySuite::Suite2, &sk, msg).unwrap();
         assert_eq!(sig.len(), 96);

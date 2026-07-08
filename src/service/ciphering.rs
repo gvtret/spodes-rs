@@ -19,7 +19,8 @@
 
 use aes_gcm::aead::consts::U12;
 use aes_gcm::aes::{Aes128, Aes256};
-use aes_gcm::{AeadInPlace, AesGcm, KeyInit, Nonce, Tag};
+use aes_gcm::{AesGcm, KeyInit, Nonce, Tag};
+use aead::AeadInOut;
 
 /// AES-128-GCM with a 96-bit (12-octet) authentication tag.
 type Aes128Gcm12 = AesGcm<Aes128, U12, U12>;
@@ -255,15 +256,15 @@ pub fn unprotect(ctx: &mut SecurityContext, apdu: &[u8]) -> Result<(u8, Vec<u8>)
 
 /// Encrypts `buf` in place and returns the 12-octet authentication tag.
 fn gcm_encrypt_in_place(key: &[u8], iv: &[u8; 12], aad: &[u8], buf: &mut [u8]) -> Result<[u8; 12], CipherError> {
-    let nonce = Nonce::<U12>::from_slice(iv);
+    let nonce = Nonce::<U12>::from(*iv);
     let tag = match key.len() {
         16 => Aes128Gcm12::new_from_slice(key)
             .map_err(|_| CipherError::InvalidKey)?
-            .encrypt_in_place_detached(nonce, aad, buf)
+            .encrypt_inout_detached(&nonce, aad, buf.into())
             .map_err(|_| CipherError::CryptoError)?,
         32 => Aes256Gcm12::new_from_slice(key)
             .map_err(|_| CipherError::InvalidKey)?
-            .encrypt_in_place_detached(nonce, aad, buf)
+            .encrypt_inout_detached(&nonce, aad, buf.into())
             .map_err(|_| CipherError::CryptoError)?,
         _ => return Err(CipherError::InvalidKey),
     };
@@ -274,17 +275,17 @@ fn gcm_encrypt_in_place(key: &[u8], iv: &[u8; 12], aad: &[u8], buf: &mut [u8]) -
 
 /// Decrypts `ct` and verifies the 12-octet `tag`, returning the plaintext.
 fn gcm_decrypt(key: &[u8], iv: &[u8; 12], aad: &[u8], ct: &[u8], tag: &[u8]) -> Result<Vec<u8>, CipherError> {
-    let nonce = Nonce::<U12>::from_slice(iv);
-    let tag = Tag::<U12>::from_slice(tag);
+    let nonce = Nonce::<U12>::from(*iv);
+    let tag = Tag::<U12>::try_from(tag).map_err(|_| CipherError::InvalidKey)?;
     let mut buf = ct.to_vec();
     match key.len() {
         16 => Aes128Gcm12::new_from_slice(key)
             .map_err(|_| CipherError::InvalidKey)?
-            .decrypt_in_place_detached(nonce, aad, &mut buf, tag)
+            .decrypt_inout_detached(&nonce, aad, buf.as_mut_slice().into(), &tag)
             .map_err(|_| CipherError::AuthenticationFailed)?,
         32 => Aes256Gcm12::new_from_slice(key)
             .map_err(|_| CipherError::InvalidKey)?
-            .decrypt_in_place_detached(nonce, aad, &mut buf, tag)
+            .decrypt_inout_detached(&nonce, aad, buf.as_mut_slice().into(), &tag)
             .map_err(|_| CipherError::AuthenticationFailed)?,
         _ => return Err(CipherError::InvalidKey),
     }
@@ -297,18 +298,18 @@ fn gcm_decrypt(key: &[u8], iv: &[u8; 12], aad: &[u8], ct: &[u8], tag: &[u8]) -> 
 fn gcm_decrypt_no_tag(key: &[u8], iv: &[u8; 12], buf: &mut [u8]) -> Result<(), CipherError> {
     // GCM decryption is CTR-mode keystream XOR; recover the plaintext by
     // encrypting the ciphertext with the same key/nonce (CTR is symmetric).
-    let nonce = Nonce::<U12>::from_slice(iv);
+    let nonce = Nonce::<U12>::from(*iv);
     match key.len() {
         16 => {
             Aes128Gcm12::new_from_slice(key)
                 .map_err(|_| CipherError::InvalidKey)?
-                .encrypt_in_place_detached(nonce, &[], buf)
+                .encrypt_inout_detached(&nonce, &[], buf.into())
                 .map_err(|_| CipherError::CryptoError)?;
         }
         32 => {
             Aes256Gcm12::new_from_slice(key)
                 .map_err(|_| CipherError::InvalidKey)?
-                .encrypt_in_place_detached(nonce, &[], buf)
+                .encrypt_inout_detached(&nonce, &[], buf.into())
                 .map_err(|_| CipherError::CryptoError)?;
         }
         _ => return Err(CipherError::InvalidKey),

@@ -414,15 +414,15 @@ fn build_iv(system_title: &[u8], invocation_counter: &[u8]) -> Result<[u8; 12], 
 /// initialization vector `iv`. The full 16-octet tag is truncated to 96 bits
 /// (most significant octets) per NIST SP 800-38D / IEC 62056-5-3.
 fn gmac_tag(ek: &[u8], iv: &[u8; 12], aad: &[u8]) -> Result<Vec<u8>, String> {
-    let nonce = Nonce::from_slice(iv);
+    let nonce = Nonce::from(*iv);
     let out = match ek.len() {
         16 => {
             let cipher = Aes128Gcm::new_from_slice(ek).map_err(|_| "invalid EK".to_string())?;
-            cipher.encrypt(nonce, aead::Payload { msg: &[], aad }).map_err(|_| "GMAC computation failed".to_string())?
+            cipher.encrypt(&nonce, aead::Payload { msg: &[], aad }).map_err(|_| "GMAC computation failed".to_string())?
         }
         32 => {
             let cipher = Aes256Gcm::new_from_slice(ek).map_err(|_| "invalid EK".to_string())?;
-            cipher.encrypt(nonce, aead::Payload { msg: &[], aad }).map_err(|_| "GMAC computation failed".to_string())?
+            cipher.encrypt(&nonce, aead::Payload { msg: &[], aad }).map_err(|_| "GMAC computation failed".to_string())?
         }
         _ => return Err("EK must be 16 or 32 octets".to_string()),
     };
@@ -917,9 +917,9 @@ mod tests {
         let d_client = hex(b"418073C239FA6125011DE4D6CD2E645780289F761BB21BFB0835CB5585E8B373");
         let d_server = hex(b"1122334455667788112233445566778811223344556677881122334455667788");
         let pk_client =
-            SigningKey::from_slice(&d_client).unwrap().verifying_key().to_encoded_point(false).as_bytes().to_vec();
+            SigningKey::from_slice(&d_client).unwrap().verifying_key().to_sec1_point(false).as_bytes().to_vec();
         let pk_server =
-            SigningKey::from_slice(&d_server).unwrap().verifying_key().to_encoded_point(false).as_bytes().to_vec();
+            SigningKey::from_slice(&d_server).unwrap().verifying_key().to_sec1_point(false).as_bytes().to_vec();
 
         let mut obj = sample(AssociationLnVersion::Version1);
         obj.authentication_mechanism = AuthMechanism::HlsEcdsa;
