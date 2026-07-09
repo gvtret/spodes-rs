@@ -17,6 +17,7 @@ spodes-rs is a high-quality DLMS/COSEM stack implementation in Rust with support
 **Issue:** RUSTSEC-2026-0097 — rand 0.9.1 is unsound when used with a custom logger via `rand::rng()`
 
 **Fix:**
+
 ```toml
 # Update in Cargo.toml
 rand = "0.10.2"  # or at least 0.9.4
@@ -31,6 +32,7 @@ rand = "0.10.2"  # or at least 0.9.4
 **Issue:** Version 0.4.7 was yanked from crates.io
 
 **Fix:**
+
 ```toml
 # Update in Cargo.toml
 num-bigint = "0.4.8"  # or 0.5.1
@@ -45,6 +47,7 @@ num-bigint = "0.4.8"  # or 0.5.1
 ### 3. Outdated cryptographic libraries
 
 **Issue:** Multiple cryptographic dependencies have major updates:
+
 - aes-gcm 0.10.3 -> 0.11.0
 - ecdsa 0.16.9 -> 0.17.0
 - p256 0.13.2 -> 0.14.0
@@ -62,6 +65,7 @@ num-bigint = "0.4.8"  # or 0.5.1
 ### 4. Missing version pinning for some dependencies
 
 **Issue:** Some dependencies are specified without patch version:
+
 ```toml
 md-5 = "0.10"
 sha2 = "0.10"
@@ -70,6 +74,7 @@ kuznyechik = "0.8"
 ```
 
 **Fix:** Pin exact versions for build reproducibility:
+
 ```toml
 md-5 = "0.10.6"
 sha2 = "0.10.9"
@@ -87,6 +92,7 @@ kuznyechik = "0.8.2"
 **Issue:** No document describing architectural decisions and system design
 
 **Fix:** Create `docs/ARCHITECTURE.md` with:
+
 - Architecture layers (transport, service, security, application)
 - Data flows between components
 - Russian standards integration
@@ -100,6 +106,7 @@ kuznyechik = "0.8.2"
 **Issue:** No measurable test coverage, missing edge-case tests
 
 **Fix:**
+
 1. Integrate `cargo-tarpaulin` or `grcov` for coverage measurement
 2. Add CI check for minimum coverage (80% recommended)
 3. Add tests for:
@@ -115,6 +122,7 @@ kuznyechik = "0.8.2"
 **Issue:** Examples use in-memory transport, no real network examples
 
 **Fix:** Add examples:
+
 - `examples/tcp_client.rs` — TCP client (port 4059)
 - `examples/udp_client.rs` — UDP client (port 4065)
 - `examples/hdlc_serial.rs` — serial port operation
@@ -129,6 +137,7 @@ kuznyechik = "0.8.2"
 **Issue:** Insufficient explanations in complex cryptographic algorithms
 
 **Fix:** Add more inline comments to:
+
 - `src/security/gost3410.rs:71-95` — elliptic curve operations
 - `src/security/agreement.rs` — key agreement protocols
 - `src/service/ciphering.rs` — APDU ciphering
@@ -143,6 +152,7 @@ kuznyechik = "0.8.2"
 **Issue:** Missing IVEK deployment guides
 
 **Fix:** Create `docs/DEPLOYMENT.md` with:
+
 - Environment requirements
 - Association and security configuration
 - Physical transport integration (HDLC/TCP)
@@ -156,6 +166,7 @@ kuznyechik = "0.8.2"
 **Issue:** No performance tests for cryptographic operations
 
 **Fix:** Add benchmarks using `criterion`:
+
 - GOST 34.10 sign/verify speed
 - A-XDR serialization performance
 - HDLC framing throughput
@@ -172,7 +183,7 @@ Total ICs in Table 7.1: **~70**. Implemented: **30**. Core IC coverage: **100%**
 #### Implemented ICs (30)
 
 | IC | Class | Version | File | Status |
-|----|-------|---------|------|--------|
+| -- | ----- | ------- | ---- | ------ |
 | 1 | Data | v0 | `src/classes/data.rs` | Done |
 | 3 | Register | v0 | `src/classes/register.rs` | Done |
 | 4 | Extended register | v0 | `src/classes/extended_register.rs` | Done |
@@ -208,7 +219,7 @@ Total ICs in Table 7.1: **~70**. Implemented: **30**. Core IC coverage: **100%**
 #### Missing ICs relevant to SPODES (4)
 
 | IC | Class | Name | Priority | Note |
-|----|-------|------|----------|------|
+| -- | ----- | ---- | -------- | ---- |
 | 12 | Association SN | Serial number association | MEDIUM | Used for legacy devices without LN. STO-006 requires for backward compatibility |
 | 61 | Register table | Tabular register | MEDIUM | Used for structured data (journals, profiles). Some meters require it |
 | 62 | Compact data | Data packing | LOW | Transmission optimization, optional |
@@ -243,7 +254,7 @@ Full IVEK object catalog implemented. **No gaps.**
 #### Implemented SPODUS objects (20 modules)
 
 | Section | Object | OBIS | IC | Ver. | File | Status |
-|---------|--------|------|-----|------|------|--------|
+| ------- | ------ | ---- | -- | ---- | ---- | ------ |
 | 10.1.8 | SAP-assignment | 0.0.41.0.0.255 | 17 | v0 | `src/spodus/catalog.rs` | Done |
 | 10.14 | Nameplate (serial) | 0.0.96.1.0.255 | 1 | v0 | `src/spodus/nameplate.rs` | Done |
 | 10.14 | Nameplate (model) | 0.0.96.1.1.255 | 1 | v0 | `src/spodus/nameplate.rs` | Done |
@@ -289,7 +300,7 @@ Full IVEK object catalog implemented. **No gaps.**
 ### IC Coverage Summary
 
 | Profile | Required | Implemented | Coverage | Note |
-|---------|----------|-------------|----------|------|
+| ------- | -------- | ----------- | -------- | ---- |
 | SPODES (core) | 30 | 30 | **100%** | All mandatory for TCP/UDP/HDLC meters |
 | SPODES (legacy) | 4 | 0 | 0% | Association SN, Register table, Compact data, Status mapping |
 | SPODUS/IVEK | 39 objects | 39 objects | **100%** | Full Appendix A catalog |
@@ -390,6 +401,7 @@ The spodes-rs project is in good technical condition with quality code and good 
 1. **Performance benchmarks** — add criterion benchmarks (low priority)
 
 **Recommended actions:**
+
 1. Fix critical dependency issues immediately
 2. Update cryptographic libraries
 3. Improve documentation and test coverage

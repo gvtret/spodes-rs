@@ -8,14 +8,14 @@
 
 ```text
 ┌─────────────────────────────────────────────────────────────────┐
-│  session (client)      server (dispatcher)      spodus           │  drivers / profiles
+│  session (client)      server (dispatcher)      spodus          │  drivers / profiles
 ├─────────────────────────────────────────────────────────────────┤
 │  service    GET/SET/ACTION, ACSE, notifications, ciphering      │  application layer
 │  security   suites, policy, HLS mechanisms, ECDH/GOST           │
 ├─────────────────────────────────────────────────────────────────┤
 │  transport  HDLC (62056-46) and wrapper (62056-47)              │  transport layer
 ├─────────────────────────────────────────────────────────────────┤
-│  classes / interface  -  COSEM interface objects                 │  object model
+│  classes / interface  -  COSEM interface objects                │  object model
 │  types (A-XDR/BER)  -  obis                                     │
 └─────────────────────────────────────────────────────────────────┘
 ```
@@ -149,7 +149,7 @@ Encrypt (glo_*_Request):
 ## Standards Compliance
 
 | Standard | Description | Implementation |
-|----------|-------------|----------------|
+| -------- | ----------- | -------------- |
 | IEC 62056-5-3 | DLMS/COSEM application layer | service, session, server |
 | IEC 62056-6-2 | COSEM interface classes | classes (30 IC) |
 | IEC 62056-46 | HDLC transport | transport::hdlc |

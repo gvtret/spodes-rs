@@ -8,6 +8,33 @@ While the crate is at `0.x`, minor releases may contain breaking changes.
 
 ## [Unreleased]
 
+## [0.3.0] - 2026-07-09
+
+### Changed
+
+- **Updated all cryptographic dependencies** to latest versions:
+  - aes-gcm 0.10 -> 0.11, aead 0.5 -> 0.6
+  - ecdsa 0.16 -> 0.17, p256/p384 0.13 -> 0.14
+  - sha2 0.10 -> 0.11, streebog 0.10 -> 0.11
+  - hmac 0.12 -> 0.13, cmac 0.7 -> 0.8
+  - kuznyechik 0.8 -> 0.9, sha1 0.10 -> 0.11, md-5 0.10 -> 0.11
+- **Updated rand** 0.9.1 -> 0.9.4 (fixed RUSTSEC-2026-0097)
+- **Updated num-bigint** 0.4.7 -> 0.4.8 (yanked version)
+
+### Added
+
+- **TCP/UDP examples** (`tcp_client`, `tcp_server`, `udp_client`) with IEC 62056-47 wrapper
+- **Architecture documentation** (`docs/ARCHITECTURE.md`)
+- **Deployment guide** (`docs/DEPLOYMENT.md`)
+- **Audit report** (`docs/AUDIT-REPORT.md`)
+- **Performance benchmarks** (`benches/crypto.rs`, `benches/serialization.rs`)
+- **CI improvements**: cargo audit job, coverage measurement with cargo-tarpaulin
+
+### Security
+
+- Fixed RUSTSEC-2026-0097 (rand unsound with custom logger)
+- Removed yanked num-bigint 0.4.7 from dependencies
+
 ## [0.2.2] - 2026-07-04
 
 ### Documentation
@@ -81,7 +108,8 @@ Initial release: a full DLMS/COSEM stack for IEC 62056 and the Russian
 - **Tooling** — GitHub Actions CI (fmt, clippy, test, doc, package) and a
   tag-triggered release workflow; dual MIT / Apache-2.0 license.
 
-[Unreleased]: https://github.com/gvtret/spodes-rs/compare/v0.2.2...HEAD
+[Unreleased]: https://github.com/gvtret/spodes-rs/compare/v0.3.0...HEAD
+[0.3.0]: https://github.com/gvtret/spodes-rs/compare/v0.2.2...v0.3.0
 [0.2.2]: https://github.com/gvtret/spodes-rs/compare/v0.2.1...v0.2.2
 [0.2.1]: https://github.com/gvtret/spodes-rs/compare/v0.2.0...v0.2.1
 [0.2.0]: https://github.com/gvtret/spodes-rs/compare/v0.1.0...v0.2.0
