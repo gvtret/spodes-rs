@@ -1,169 +1,169 @@
-# Архитектура spodes-rs
+# spodes-rs Architecture
 
-## Обзор
+## Overview
 
-`spodes-rs` — полная реализация DLMS/COSEM стека на Rust для систем коммерческого учета электроэнергии. Стек соответствует международным стандартам IEC 62056 и российским профилям СПОДЭС (СТО 34.01-5.1-006-2023), СПОДУС (СТО 34.01-5.1-013-2023) и ГОСТ (Р 1323565.1).
+`spodes-rs` is a full DLMS/COSEM stack implementation in Rust for electricity metering systems. The stack complies with international IEC 62056 standards and Russian profiles SPODES (STO 34.01-5.1-006-2023), SPODUS (STO 34.01-5.1-013-2023), and GOST (R 1323565.1).
 
-## Архитектура по слоям
+## Layered Architecture
 
 ```text
 ┌─────────────────────────────────────────────────────────────────┐
-│  session (клиент)      server (диспетчер)      spodus           │  драйверы / профили
+│  session (client)      server (dispatcher)      spodus           │  drivers / profiles
 ├─────────────────────────────────────────────────────────────────┤
-│  service    GET/SET/ACTION, ACSE, уведомления, шифрование      │  прикладной уровень
-│  security   наборы, политика, HLS механизмы, ECDH/GOST         │
+│  service    GET/SET/ACTION, ACSE, notifications, ciphering      │  application layer
+│  security   suites, policy, HLS mechanisms, ECDH/GOST           │
 ├─────────────────────────────────────────────────────────────────┤
-│  transport  HDLC (62056-46) и wrapper (62056-47)               │  транспортный уровень
+│  transport  HDLC (62056-46) and wrapper (62056-47)              │  transport layer
 ├─────────────────────────────────────────────────────────────────┤
-│  classes / interface  -  объекты интерфейсов COSEM             │  модель объектов
-│  types (A-XDR/BER)  -  obis                                    │
+│  classes / interface  -  COSEM interface objects                 │  object model
+│  types (A-XDR/BER)  -  obis                                     │
 └─────────────────────────────────────────────────────────────────┘
 ```
 
-## Слои и модули
+## Layers and Modules
 
-### 1. Модель объектов (object model)
+### 1. Object Model
 
-**Модули:** `types`, `obis`, `interface`, `classes`
+**Modules:** `types`, `obis`, `interface`, `classes`
 
-Отвечают за представление данных COSEM и их сериализацию.
+Responsible for COSEM data representation and serialization.
 
-- **`types`** — типы данных COSEM (`CosemDataType`) и их A-XDR (BER) сериализация. Поддерживаемые типы: null, bool, integer, unsigned, octet-string, visible-string, date, time, array, structure и др.
+- **`types`** — COSEM data types (`CosemDataType`) and their A-XDR (BER) serialization. Supported types: null, bool, integer, unsigned, octet-string, visible-string, date, time, array, structure, etc.
 
-- **`obis`** — коды идентификации объектов (OBIS). Формат `A.B.C.D.E.F` идентифицирует каждый объект в устройстве.
+- **`obis`** — OBIS object identification codes. Format `A.B.C.D.E.F` identifies each object in a device.
 
-- **`interface`** — трейт `InterfaceClass`, общий для всех интерфейсных классов COSEM. Определяет методы: `class_id()`, `version()`, `logical_name()`, `attributes()`, `methods()`.
+- **`interface`** — `InterfaceClass` trait shared by all COSEM interface classes. Defines methods: `class_id()`, `version()`, `logical_name()`, `attributes()`, `methods()`.
 
-- **`classes`** — 30 реализованных интерфейсных классов:
-  - **Данные:** Data (1), Register (3), Extended register (4), Demand register (5), Register activation (6)
-  - **Профили:** Profile generic (7), Clock (8), Script table (9), Schedule (10), Special days table (11)
-  - **Управление доступом:** Association LN (15), SAP assignment (17), Security setup (64)
-  - **Интерфейсы:** IEC HDLC Setup (23), IEC Local Port Setup (19), TCP-UDP setup (41), IPv4 (42), IPv6 (48), Push setup (40)
-  - **Управление:** Activity calendar (20), Register monitor (21), Single action schedule (22), Disconnect control (70), Limiter (71), Arbitrator (68)
-  - **Прочие:** Image transfer (18), Data protection (30), GPRS modem (45), GSM diagnostic (47), MAC address (43)
+- **`classes`** — 30 implemented interface classes:
+  - **Data:** Data (1), Register (3), Extended register (4), Demand register (5), Register activation (6)
+  - **Profiles:** Profile generic (7), Clock (8), Script table (9), Schedule (10), Special days table (11)
+  - **Access control:** Association LN (15), SAP assignment (17), Security setup (64)
+  - **Interfaces:** IEC HDLC Setup (23), IEC Local Port Setup (19), TCP-UDP setup (41), IPv4 (42), IPv6 (48), Push setup (40)
+  - **Control:** Activity calendar (20), Register monitor (21), Single action schedule (22), Disconnect control (70), Limiter (71), Arbitrator (68)
+  - **Other:** Image transfer (18), Data protection (30), GPRS modem (45), GSM diagnostic (47), MAC address (43)
 
-### 2. Транспортный уровень
+### 2. Transport Layer
 
-**Модуль:** `transport`
+**Module:** `transport`
 
-Абстрагирует физическую среду и обеспечивает фрейминг APDU.
+Abstracts the physical medium and provides APDU framing.
 
-- **`PhysicalTransport`** — трейт физического канала (serial, TCP, UDP). Методы: `send()`, `receive()`.
+- **`PhysicalTransport`** — physical channel trait (serial, TCP, UDP). Methods: `send()`, `receive()`.
 
-- **`NetworkTransport`** — маркерный трейт для сетевых транспортов (TCP/UDP). Требуется для wrapper-слоя.
+- **`NetworkTransport`** — marker trait for network transports (TCP/UDP). Required for the wrapper sub-layer.
 
-- **`DataLinkLayer`** — трейт канального уровня. Методы: `send_apdu()`, `receive_apdu()`.
+- **`DataLinkLayer`** — data link layer trait. Methods: `send_apdu()`, `receive_apdu()`.
 
-- **HDLC** (`transport::hdlc`) — фрейминг по IEC 62056-46. Работает поверх любого `PhysicalTransport` (serial, TCP, UDP).
+- **HDLC** (`transport::hdlc`) — framing per IEC 62056-46. Works over any `PhysicalTransport` (serial, TCP, UDP).
 
-- **Wrapper** (`transport::wrapper`) — фрейминг по IEC 62056-47. Работает только поверх `NetworkTransport` (TCP/UDP). Заголовок 8 байт: version (2) + source wPort (2) + destination wPort (2) + length (2).
+- **Wrapper** (`transport::wrapper`) — framing per IEC 62056-47. Works only over `NetworkTransport` (TCP/UDP). 8-byte header: version (2) + source wPort (2) + destination wPort (2) + length (2).
 
-### 3. Прикладной уровень
+### 3. Application Layer
 
-**Модули:** `service`, `security`
+**Modules:** `service`, `security`
 
-Реализуют xDLMS сервисы и модель безопасности.
+Implements xDLMS services and the security model.
 
-#### Сервисы (`service`)
+#### Services (`service`)
 
-- **GET/SET/ACTION** — нормальные, блочные (с datablocks) и WITH-LIST запросы/ответы
-- **ACSE** — ассоциация (AARQ/AARE) и завершение (RLRQ/RLRE)
-- **Initiate** — структурированные InitiateRequest/InitiateResponse
-- **Уведомления** — DataNotification и EventNotification
-- **Ошибки** — ExceptionResponse и ConfirmedServiceError
-- **GBT** — общий блочный трансфер
-- **Шифрование** — glo-/ded-ciphering и general-glo-/ded-/general-ciphering / general-signing
+- **GET/SET/ACTION** — normal, block transfer (with datablocks) and WITH-LIST requests/responses
+- **ACSE** — association (AARQ/AARE) and release (RLRQ/RLRE)
+- **Initiate** — structured InitiateRequest/InitiateResponse
+- **Notifications** — DataNotification and EventNotification
+- **Errors** — ExceptionResponse and ConfirmedServiceError
+- **GBT** — general block transfer
+- **Ciphering** — glo-/ded-ciphering and general-glo-/ded-/general-ciphering / general-signing
 
-#### Безопасность (`security`)
+#### Security (`security`)
 
-- **Наборы безопасности** (SecuritySuite): 0 (AES-GCM-128), 1 (ECDH-ECDSA-P256), 2 (ECDH-ECDSA-P384), GOST
-- **Политика безопасности** (SecurityPolicy): none, authentication, encryption, authenticated_encryption
-- **Механизмы аутентификации** (AuthMechanism): 0..10, включая GOST HLS (8: CMAC, 9:reserved, 10: GOST 34.10)
-- **Согласование ключей:** ECDH (NIST P-256/P-384) и GOST VKO
-- **Цифровые подписи:** ECDSA и ГОСТ 34.10-2018
-- **Хеширование:** SHA-256, SHA-384, Streebog-256
+- **Security suites** (SecuritySuite): 0 (AES-GCM-128), 1 (ECDH-ECDSA-P256), 2 (ECDH-ECDSA-P384), GOST
+- **Security policy** (SecurityPolicy): none, authentication, encryption, authenticated_encryption
+- **Authentication mechanisms** (AuthMechanism): 0..10, including GOST HLS (8: CMAC, 9: reserved, 10: GOST 34.10)
+- **Key agreement:** ECDH (NIST P-256/P-384) and GOST VKO
+- **Digital signatures:** ECDSA and GOST 34.10-2018
+- **Hashing:** SHA-256, SHA-384, Streebog-256
 
-### 4. Драйверы
+### 4. Drivers
 
-**Модули:** `session`, `server`
+**Modules:** `session`, `server`
 
-Высокоуровневые обертки для клиентской и серверной работы.
+High-level wrappers for client and server operations.
 
-- **`ClientSession`** — блокирующий клиентский драйвер. Связывает транспорт, сервисы и шифрование в round-trip вызовы GET/SET/ACTION/associate/release.
+- **`ClientSession`** — blocking client driver. Binds transport, services, and ciphering into round-trip GET/SET/ACTION/associate/release calls.
 
-- **`RequestDispatcher`** — серверный диспетчер. Маршрутизирует входящие GET/SET/ACTION APDU к адресованным COSEM объектам и возвращает ответные APDU.
+- **`RequestDispatcher`** — server dispatcher. Routes incoming GET/SET/ACTION APDUs to addressed COSEM objects and returns response APDUs.
 
-### 5. Профиль СПОДУС
+### 5. SPODUS Profile
 
-**Модуль:** `spodus`
+**Module:** `spodus`
 
-Информационная модель ИВКЭ (концентратора/шлюза) по СТО 34.01-5.1-013-2023.
+IVEK (data concentrator/gateway) information model per STO 34.01-5.1-013-2023.
 
-- **Concentrator** (`spodus::node`) — узел концентратора, работающий как DLMS-сервер для ИВК (upstream) и DLMS-клиент для ПУ (downstream)
-- **Catalog** (`spodus::catalog`) — стандартные объекты: Clock, SAP assignment, Security setup, Association LN
-- **Объекты Appendix A:** nameplate, configured meters, direct channel, channel list, discovered meters, access policies, data-exchange tasks, status table, journals, notifications
-- **Новые классы СТО-013:** Table manager (8200), Profile data filter (8201)
-- **Прозрачный пропуск** (`spodus::proxy`) — MeterProxy для доступа к отдельному ПУ через концентратор
+- **Concentrator** (`spodus::node`) — concentrator node acting as DLMS server for IVC (upstream) and DLMS client for meters (downstream)
+- **Catalog** (`spodus::catalog`) — standard objects: Clock, SAP assignment, Security setup, Association LN
+- **Appendix A objects:** nameplate, configured meters, direct channel, channel list, discovered meters, access policies, data-exchange tasks, status table, journals, notifications
+- **New STO-013 classes:** Table manager (8200), Profile data filter (8201)
+- **Transparent pass-through** (`spodus::proxy`) — MeterProxy for accessing individual meters through the concentrator
 
-## Потоки данных
+## Data Flows
 
-### Клиентский запрос (GET)
+### Client Request (GET)
 
 ```text
 ClientSession::get(class_id, obis, attr_id)
   │
-  ├── Формирует GetRequest APDU
-  ├── Шифрует (если policy != None) через security
-  ├── Отправляет через DataLinkLayer::send_apdu()
-  │     └── Wrapper/HDLC оборачивает APDU в фрейм
-  │           └── PhysicalTransport::send() отправляет по каналу
+  ├── Builds GetRequest APDU
+  ├── Encrypts (if policy != None) via security
+  ├── Sends via DataLinkLayer::send_apdu()
+  │     └── Wrapper/HDLC frames the APDU
+  │           └── PhysicalTransport::send() transmits over the channel
   │
-  └── Ожидает ответ через DataLinkLayer::receive_apdu()
-        └── Десериализует GetResponse
+  └── Waits for response via DataLinkLayer::receive_apdu()
+        └── Deserializes GetResponse
 ```
 
-### Серверный ответ
+### Server Response
 
 ```text
 RequestDispatcher::dispatch(apdu_bytes)
   │
-  ├── Десериализует входящий APDU
-  ├── Ищет целевой объект по class_id + obis
-  ├── Вызывает метод объекта (get/set/action)
-  ├── Формирует ответный APDU
-  └── Возвращает байты ответа
+  ├── Deserializes incoming APDU
+  ├── Looks up target object by class_id + obis
+  ├── Calls object method (get/set/action)
+  ├── Builds response APDU
+  └── Returns response bytes
 ```
 
-### Шифрование APDU
+### APDU Ciphering
 
 ```text
 Encrypt (glo_*_Request):
   ├── SC (Security Control): suite_id || protection_level || key_info
   ├── IC (Invocation Counter): 4 bytes, monotonically increasing
   ├── IV = system_title || IC
-  ├── AAD = SC || AK (authenticated encryption) или SC || AK || plaintext (auth only)
+  ├── AAD = SC || AK (authenticated encryption) or SC || AK || plaintext (auth only)
   ├── AES-GCM: encrypt(plaintext, key=EK, nonce=IV, aad=AAD)
-  └── Результат: tag || IC || ciphertext || truncated_tag
+  └── Result: tag || IC || ciphertext || truncated_tag
 ```
 
-## Соответствие стандартам
+## Standards Compliance
 
-| Стандарт | Описание | Реализация |
-|----------|----------|------------|
-| IEC 62056-5-3 | Прикладной уровень DLMS/COSEM | service, session, server |
-| IEC 62056-6-2 | Интерфейсные классы COSEM | classes (30 IC) |
-| IEC 62056-46 | HDLC транспорт | transport::hdlc |
-| IEC 62056-47 | TCP/UDP транспорт (wrapper) | transport::wrapper |
-| СТО 34.01-5.1-006-2023 | СПОДЭС — модель ПУ | classes, security |
-| СТО 34.01-5.1-013-2023 | СПОДУС — модель ИВКЭ | spodus |
-| Р 1323565.1 | ГОСТ криптография | security::gost3410, hls, agreement |
-| ГОСТ Р 34.10-2018 | ЭЦП на эллиптических кривых | security::gost3410 |
-| ГОСТ Р 34.11-2018 | Хеш-функция Streebog | streebog crate |
-| ГОСТ Р 34.12-2018 | Блочный шифр Кузнечик | kuznyechik crate |
+| Standard | Description | Implementation |
+|----------|-------------|----------------|
+| IEC 62056-5-3 | DLMS/COSEM application layer | service, session, server |
+| IEC 62056-6-2 | COSEM interface classes | classes (30 IC) |
+| IEC 62056-46 | HDLC transport | transport::hdlc |
+| IEC 62056-47 | TCP/UDP transport (wrapper) | transport::wrapper |
+| STO 34.01-5.1-006-2023 | SPODES — meter model | classes, security |
+| STO 34.01-5.1-013-2023 | SPODUS — IVEK model | spodus |
+| R 1323565.1 | GOST cryptography | security::gost3410, hls, agreement |
+| GOST R 34.10-2018 | Elliptic curve digital signatures | security::gost3410 |
+| GOST R 34.11-2018 | Streebog hash function | streebog crate |
+| GOST R 34.12-2018 | Kuznyechik block cipher | kuznyechik crate |
 
-## Требования к среде
+## Requirements
 
-- **Rust:** ≥ 1.85 (edition 2021)
-- **unsafe:** отсутствует в исходном коде крейта
-- **feature flags:** не требуются
-- **Зависимости:** serde, aes-gcm, p256/p384, ecdsa, streebog, kuznyechik, num-bigint, rand
+- **Rust:** >= 1.85 (edition 2021)
+- **unsafe:** not used in crate sources
+- **feature flags:** not required
+- **Dependencies:** serde, aes-gcm, p256/p384, ecdsa, streebog, kuznyechik, num-bigint, rand

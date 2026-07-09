@@ -1,28 +1,28 @@
-# Руководство по развертыванию spodes-rs
+# spodes-rs Deployment Guide
 
-## Обзор
+## Overview
 
-`spodes-rs` — библиотека (crate) для Rust, предоставляющая полный DLMS/COSEM стек. Данное руководство описывает интеграцию библиотеки в проект и настройку для работы с приборами учета электроэнергии.
+`spodes-rs` is a Rust crate providing a full DLMS/COSEM stack. This guide describes how to integrate the library into your project and configure it for electricity metering devices.
 
-## Требования
+## Requirements
 
-- **Rust:** ≥ 1.85 (edition 2021)
-- **ОС:** Linux, macOS, Windows (any)
-- **Сеть:** TCP/UDP порты 4059/4065 (стандартные DLMS порты) или последовательный порт для HDLC
+- **Rust:** >= 1.85 (edition 2021)
+- **OS:** Linux, macOS, Windows (any)
+- **Network:** TCP/UDP ports 4059/4065 (standard DLMS ports) or serial port for HDLC
 
-## Быстрый старт
+## Quick Start
 
-### Добавление зависимости
+### Adding the dependency
 
 ```toml
 # Cargo.toml
 [dependencies]
 spodes-rs = { git = "https://github.com/gvtret/spodes-rs", branch = "main" }
-# или path dependency для локальной разработки:
+# or path dependency for local development:
 # spodes-rs = { path = "../spodes-rs" }
 ```
 
-### Минимальный пример (клиент)
+### Minimal example (client)
 
 ```rust
 use spodes_rs::obis::ObisCode;
@@ -53,52 +53,52 @@ fn main() -> io::Result<()> {
     let link = Wrapper::new(transport, 1000, 4059);
     let mut session = ClientSession::new(link);
 
-    // Чтение серийного номера (OBIS 0.0.96.1.0.255, атрибут 2)
+    // Read serial number (OBIS 0.0.96.1.0.255, attribute 2)
     let serial = ObisCode::new(0, 0, 96, 1, 0, 0xFF);
     match session.get(1, serial, 2) {
-        Ok(response) => println!("Ответ: {response:?}"),
-        Err(e) => eprintln!("Ошибка: {e}"),
+        Ok(response) => println!("Response: {response:?}"),
+        Err(e) => eprintln!("Error: {e}"),
     }
     Ok(())
 }
 ```
 
-## Конфигурация транспорта
+## Transport Configuration
 
 ### TCP (IEC 62056-47 wrapper)
 
-Стандартный транспорт для DLMS/COSEM по TCP. Использует wrapper-подуровень с 8-байтным заголовком.
+Standard transport for DLMS/COSEM over TCP. Uses the wrapper sub-layer with an 8-byte header.
 
 ```text
-Порт: 4059 (стандартный DLMS TCP порт)
-Заголовок wrapper:
+Port: 4059 (standard DLMS TCP port)
+Wrapper header:
   version (2) + source_wPort (2) + dest_wPort (2) + length (2)
 ```
 
 ### HDLC (IEC 62056-46)
 
-Фрейминг HDLC для последовательных линий или TCP. Работает поверх любого `PhysicalTransport`.
+HDLC framing for serial lines or TCP. Works over any `PhysicalTransport`.
 
 ```text
-Адреса: client (1), server (1)
-Контрольная сумма: CRC-16 CCITT
-Формат фрэйма: flag + address + control + information + fcs + flag
+Addresses: client (1), server (1)
+Checksum: CRC-16 CCITT
+Frame format: flag + address + control + information + fcs + flag
 ```
 
 ### UDP (IEC 62056-47 wrapper)
 
-Для без соединения передачи. Использует тот же wrapper-заголовок, что и TCP.
+For connectionless transmission. Uses the same wrapper header as TCP.
 
 ```text
-Порт: 4065 (стандартный DLMS UDP порт)
-Ограничение: один запрос → один ответ на дейтаграмму
+Port: 4065 (standard DLMS UDP port)
+Limitation: one request -> one response per datagram
 ```
 
-## Конфигурация безопасности
+## Security Configuration
 
 ### Security Suite 0 (AES-GCM-128)
 
-Базовый набор без PKI. Шифрование AES-128-GCM, аутентификация через GMAC.
+Basic suite without PKI. AES-128-GCM encryption, GMAC authentication.
 
 ```rust
 use spodes_rs::security::{SecuritySuite, SecurityPolicy, AuthMechanism};
@@ -110,7 +110,7 @@ let mechanism = AuthMechanism::HlsGmac; // mechanism 5
 
 ### Security Suite 1 (ECDH-ECDSA-P256)
 
-С PKI. Согласование ключей ECDH на кривой P-256, подписи ECDSA.
+With PKI. ECDH key agreement on curve P-256, ECDSA signatures.
 
 ```rust
 let suite = SecuritySuite::Suite1;
@@ -118,21 +118,21 @@ let policy = SecurityPolicy::AuthenticatedEncryption;
 let mechanism = AuthMechanism::HlsEcdsa; // mechanism 7
 ```
 
-### GOST Suite (Р 1323565.1)
+### GOST Suite (R 1323565.1)
 
-Российский профиль. Кузнечик-CMAC (mechanism 8) или ГОСТ 34.10 (mechanism 10).
+Russian profile. Kuznyechik-CMAC (mechanism 8) or GOST 34.10 (mechanism 10).
 
 ```rust
-let suite = SecuritySuite::Gost; // набор 9
+let suite = SecuritySuite::Gost; // suite 9
 let policy = SecurityPolicy::AuthenticatedEncryption;
 let mechanism = AuthMechanism::HlsGostCmac; // mechanism 8
 ```
 
-## Настройка сервера
+## Server Setup
 
 ### RequestDispatcher
 
-Диспетчер запросов — серверная сторона, обрабатывающая GET/SET/ACTION запросы.
+Request dispatcher — server side handling GET/SET/ACTION requests.
 
 ```rust
 use spodes_rs::classes::data::Data;
@@ -142,17 +142,17 @@ use spodes_rs::types::CosemDataType;
 
 let mut server = RequestDispatcher::new();
 
-// Регистрация объектов
-let obis = ObisCode::new(1, 0, 1, 8, 0, 0xFF); // активная энергия
+// Register objects
+let obis = ObisCode::new(1, 0, 1, 8, 0, 0xFF); // active energy
 server.add(Box::new(Data::new(obis, CosemDataType::DoubleLongUnsigned(123_456))));
 
-// Обработка запроса
+// Handle request
 let response = server.dispatch(&request_bytes)?;
 ```
 
 ### Association LN
 
-Настройка ассоциации для управления доступом.
+Association setup for access control.
 
 ```rust
 use spodes_rs::classes::association_ln::{
@@ -167,87 +167,87 @@ let assoc = AssociationLn::new(AssociationLnConfig {
 });
 ```
 
-## Интеграция с СПОДУС (ИВКЭ)
+## SPODUS/IVEK Integration
 
-Для работы концентратора ИВКЭ используйте модуль `spodus`:
+For IVEK concentrator operation, use the `spodus` module:
 
 ```rust
 use spodes_rs::spodus::node::Concentrator;
 use spodes_rs::spodus::catalog;
 
-// Создание каталога объектов ИВКЭ
+// Create IVEK object catalog
 let clock = catalog::clock();
 let sap = catalog::sap_assignment(sap_list);
 let sec = catalog::security_setup(obis, 0, client_st, server_st);
 ```
 
-## Тестирование
+## Testing
 
 ```bash
-# Все тесты
+# All tests
 cargo test
 
-# Только unit тесты
+# Unit tests only
 cargo test --lib
 
-# Интеграционные тесты
+# Integration tests
 cargo test --test spodus_integration
 
-# Документационные тесты
+# Doc tests
 cargo test --doc
 
 # Clippy
 cargo clippy --all-targets -- -D warnings
 
-# Проверка форматирования
+# Format check
 cargo fmt --check
 
-# Генерация документации
+# Generate documentation
 cargo doc --no-deps
 ```
 
-## Мониторинг
+## Monitoring
 
-### Логирование
+### Logging
 
-Библиотека не использует фреймворки логирования. Для отладки рекомендуется:
+The library does not use logging frameworks. For debugging, it is recommended to:
 
-1. Включить `RUST_LOG=debug` для вывода трассировки
-2. Использовать `env_logger` или `tracing` в приложении
+1. Enable `RUST_LOG=debug` for trace output
+2. Use `env_logger` or `tracing` in your application
 
-### Метрики
+### Metrics
 
-Для мониторинга производительности:
+For performance monitoring:
 
-- Количество обработанных запросов (GET/SET/ACTION)
-- Время ответа на запрос
-- Количество ошибок аутентификации
-- Состояние ассоциаций
+- Number of processed requests (GET/SET/ACTION)
+- Request response time
+- Number of authentication errors
+- Association state
 
-## Безопасность
+## Security
 
-### Рекомендации
+### Recommendations
 
-1. **Используйте Security Suite 1 или 2** дляProduction окружений
-2. **Включайте аутентификацию** (mechanism 5..10) для всех соединений
-3. **Регулярно обновляйте ключи** шифрования и аутентификации
-4. **Мониторьте invocation counter** — его рост должен быть монотонным
-5. **Используйте GOST профиль** для соответствия Р 1323565.1
+1. **Use Security Suite 1 or 2** for production environments
+2. **Enable authentication** (mechanism 5..10) for all connections
+3. **Regularly rotate keys** for encryption and authentication
+4. **Monitor invocation counter** — it must increase monotonically
+5. **Use GOST profile** for R 1323565.1 compliance
 
-### Известные ограничения
+### Known Limitations
 
-- Библиотека не реализует физический транспорт (нужно свой `PhysicalTransport`)
-- Ассоциации SN (class 12) не реализованы (только LN)
-- Некоторые legacy классы (Register table, Compact data) отсутствуют
+- The library does not implement physical transport (you need your own `PhysicalTransport`)
+- SN associations (class 12) are not implemented (LN only)
+- Some legacy classes (Register table, Compact data) are missing
 
-## Примеры
+## Examples
 
-См. директорию `examples/`:
+See the `examples/` directory:
 
-- `client_session` — клиент через in-memory транспорт
-- `server_dispatch` — сервер с диспетчером запросов
-- `tcp_client` / `tcp_server` — TCP примеры
-- `udp_client` — UDP пример
-- `hls_handshake` — HLS рукопожатие
-- `spodus_concentrator` — ИВКЭ концентратор
-- `data_usage` / `register_usage` / `clock_usage` — примеры классов
+- `client_session` — client via in-memory transport
+- `server_dispatch` — server with request dispatcher
+- `tcp_client` / `tcp_server` — TCP examples
+- `udp_client` — UDP example
+- `hls_handshake` — HLS handshake
+- `spodus_concentrator` — IVEK concentrator
+- `data_usage` / `register_usage` / `clock_usage` — class examples

@@ -1,67 +1,67 @@
-# План исправлений проекта spodes-rs
+# spodes-rs Audit & Fix Plan
 
-**Дата аудита:** 2026-07-08  
-**Версия проекта:** 0.2.2  
-**Аудитор:** Kiro AI Agent
+**Audit date:** 2026-07-08
+**Project version:** 0.2.2
+**Auditor:** Kiro AI Agent
 
-## Краткое резюме
+## Executive Summary
 
-Проект spodes-rs представляет собой высококачественную реализацию DLMS/COSEM стека на Rust с поддержкой российских стандартов (ГОСТ, СТО). Код хорошо структурирован, протестирован и документирован. Выявлены проблемы с зависимостями и областями для улучшения.
+spodes-rs is a high-quality DLMS/COSEM stack implementation in Rust with support for Russian standards (GOST, STO). The code is well-structured, tested, and documented. Dependency issues and areas for improvement were identified.
 
-**Полнота IC:** СПОДЭС — 30/30 основных IC (100%), СПОДУС/ИВКЭ — 39/39 объектов Appendix A (100%).
+**IC Coverage:** SPODES — 30/30 core ICs (100%), SPODUS/IVEK — 39/39 Appendix A objects (100%).
 
-## Критические проблемы (исправить немедленно)
+## Critical Issues (fix immediately)
 
-### 1. Уязвимость в библиотеке rand 0.9.1
+### 1. Vulnerability in rand 0.9.1
 
-**Проблема:** RUSTSEC-2026-0097 - rand 0.9.1 признан unsound при использовании с кастомным логгером через `rand::rng()`
+**Issue:** RUSTSEC-2026-0097 — rand 0.9.1 is unsound when used with a custom logger via `rand::rng()`
 
-**Решение:**
+**Fix:**
 ```toml
-# Обновить в Cargo.toml
-rand = "0.10.2"  # или минимум 0.9.4
+# Update in Cargo.toml
+rand = "0.10.2"  # or at least 0.9.4
 ```
 
-**Приоритет:** КРИТИЧЕСКИЙ  
-**Сложность:** Низкая  
-**Риск:** Средний (зависит от использования rand::rng())
+**Priority:** CRITICAL
+**Complexity:** Low
+**Risk:** Medium (depends on rand::rng() usage)
 
-### 2. Yanked версия num-bigint 0.4.7
+### 2. Yanked version num-bigint 0.4.7
 
-**Проблема:** Версия 0.4.7 была отозвана из crates.io
+**Issue:** Version 0.4.7 was yanked from crates.io
 
-**Решение:**
+**Fix:**
 ```toml
-# Обновить в Cargo.toml
-num-bigint = "0.4.8"  # или 0.5.1
+# Update in Cargo.toml
+num-bigint = "0.4.8"  # or 0.5.1
 ```
 
-**Приоритет:** КРИТИЧЕСКИЙ  
-**Сложность:** Низкая  
-**Риск:** Низкий
+**Priority:** CRITICAL
+**Complexity:** Low
+**Risk:** Low
 
-## Высокий приоритет
+## High Priority
 
-### 3. Устаревшие криптографические библиотеки
+### 3. Outdated cryptographic libraries
 
-**Проблема:** Множество криптографических зависимостей имеют мажорные обновления:
-- aes-gcm 0.10.3 → 0.11.0
-- ecdsa 0.16.9 → 0.17.0
-- p256 0.13.2 → 0.14.0
-- p384 0.13.1 → 0.14.0
-- sha2 0.10.9 → 0.11.0
-- streebog 0.10.2 → 0.11.0
-- kuznyechik 0.8.2 → 0.9.0
+**Issue:** Multiple cryptographic dependencies have major updates:
+- aes-gcm 0.10.3 -> 0.11.0
+- ecdsa 0.16.9 -> 0.17.0
+- p256 0.13.2 -> 0.14.0
+- p384 0.13.1 -> 0.14.0
+- sha2 0.10.9 -> 0.11.0
+- streebog 0.10.2 -> 0.11.0
+- kuznyechik 0.8.2 -> 0.9.0
 
-**Решение:** Постепенное обновление с тщательным тестированием криптографических тест-векторов
+**Fix:** Gradual update with careful testing of cryptographic test vectors
 
-**Приоритет:** ВЫСОКИЙ  
-**Сложность:** Средняя  
-**Риск:** Высокий (требует проверки совместимости с ГОСТ тест-векторами)
+**Priority:** HIGH
+**Complexity:** Medium
+**Risk:** High (requires GOST test vector compatibility check)
 
-### 4. Отсутствие версионных ограничений для некоторых зависимостей
+### 4. Missing version pinning for some dependencies
 
-**Проблема:** Некоторые зависимости указаны без patch-версии:
+**Issue:** Some dependencies are specified without patch version:
 ```toml
 md-5 = "0.10"
 sha2 = "0.10"
@@ -69,7 +69,7 @@ streebog = "0.10"
 kuznyechik = "0.8"
 ```
 
-**Решение:** Указать точные версии для предсказуемости сборки:
+**Fix:** Pin exact versions for build reproducibility:
 ```toml
 md-5 = "0.10.6"
 sha2 = "0.10.9"
@@ -77,320 +77,320 @@ streebog = "0.10.2"
 kuznyechik = "0.8.2"
 ```
 
-**Приоритет:** ВЫСОКИЙ  
-**Сложность:** Низкая
+**Priority:** HIGH
+**Complexity:** Low
 
-## Средний приоритет
+## Medium Priority
 
-### 5. Отсутствие архитектурной документации
+### 5. Missing architecture documentation
 
-**Проблема:** Нет документа, описывающего архитектурные решения и дизайн системы
+**Issue:** No document describing architectural decisions and system design
 
-**Решение:** Создать `docs/ARCHITECTURE.md` с описанием:
-- Слои архитектуры (transport, service, security, application)
-- Потоки данных между компонентами
-- Интеграция с российскими стандартами
-- Модель безопасности
+**Fix:** Create `docs/ARCHITECTURE.md` with:
+- Architecture layers (transport, service, security, application)
+- Data flows between components
+- Russian standards integration
+- Security model
 
-**Приоритет:** СРЕДНИЙ  
-**Сложность:** Средняя
+**Priority:** MEDIUM
+**Complexity:** Medium
 
-### 6. Расширение тестового покрытия
+### 6. Test coverage expansion
 
-**Проблема:** Нет измеримого покрытия кода тестами, отсутствуют edge-case тесты
+**Issue:** No measurable test coverage, missing edge-case tests
 
-**Решение:**
-1. Интегрировать `cargo-tarpaulin` или `grcov` для измерения покрытия
-2. Добавить CI-проверку минимального покрытия (рекомендуется 80%)
-3. Добавить тесты для:
-   - Ошибочные сценарии в криптографии
-   - Граничные случаи в сериализации/десериализации
-   - Негативные тесты для входных данных
+**Fix:**
+1. Integrate `cargo-tarpaulin` or `grcov` for coverage measurement
+2. Add CI check for minimum coverage (80% recommended)
+3. Add tests for:
+   - Error scenarios in cryptography
+   - Edge cases in serialization/deserialization
+   - Negative tests for input data
 
-**Приоритет:** СРЕДНИЙ  
-**Сложность:** Высокая
+**Priority:** MEDIUM
+**Complexity:** High
 
-### 7. Отсутствие примеров работы с сетью
+### 7. Missing network examples
 
-**Проблема:** Примеры используют in-memory транспорт, нет реальных сетевых примеров
+**Issue:** Examples use in-memory transport, no real network examples
 
-**Решение:** Добавить примеры:
-- `examples/tcp_client.rs` - клиент по TCP (порт 4059)
-- `examples/udp_client.rs` - клиент по UDP (порт 4065)
-- `examples/hdlc_serial.rs` - работа через последовательный порт
+**Fix:** Add examples:
+- `examples/tcp_client.rs` — TCP client (port 4059)
+- `examples/udp_client.rs` — UDP client (port 4065)
+- `examples/hdlc_serial.rs` — serial port operation
 
-**Приоритет:** СРЕДНИЙ  
-**Сложность:** Средняя
+**Priority:** MEDIUM
+**Complexity:** Medium
 
-## Низкий приоритет
+## Low Priority
 
-### 8. Улучшение inline-комментариев ✅
+### 8. Improve inline comments
 
-**Проблема:** В сложных криптографических алгоритмах недостаточно пояснений
+**Issue:** Insufficient explanations in complex cryptographic algorithms
 
-**Решение:** Добавить больше inline-комментариев в:
-- `src/security/gost3410.rs:71-95` - операции на эллиптической кривой
-- `src/security/agreement.rs` - протоколы согласования ключей
-- `src/service/ciphering.rs` - шифрование APDU
+**Fix:** Add more inline comments to:
+- `src/security/gost3410.rs:71-95` — elliptic curve operations
+- `src/security/agreement.rs` — key agreement protocols
+- `src/service/ciphering.rs` — APDU ciphering
 
-**Приоритет:** НИЗКИЙ  
-**Сложность:** Низкая
+**Priority:** LOW
+**Complexity:** Low
 
-**Статус:** Код уже хорошо документирован (стандарт-anchored docstrings,清晰的 inline комментарии). Дополнительные комментарии не требуются.
+**Status:** Code is already well-documented (standards-anchored docstrings, clear inline comments). Additional comments not required.
 
-### 9. Документация по развертыванию ✅
+### 9. Deployment documentation
 
-**Проблема:** Отсутствуют руководства по развертыванию ИВКЭ
+**Issue:** Missing IVEK deployment guides
 
-**Решение:** Создать `docs/DEPLOYMENT.md` с описанием:
-- Требования к окружению
-- Конфигурация ассоциаций и безопасности
-- Интеграция с физическим транспортом (HDLC/TCP)
-- Мониторинг и логирование
+**Fix:** Create `docs/DEPLOYMENT.md` with:
+- Environment requirements
+- Association and security configuration
+- Physical transport integration (HDLC/TCP)
+- Monitoring and logging
 
-**Приоритет:** НИЗКИЙ  
-**Сложность:** Средняя
+**Priority:** LOW
+**Complexity:** Medium
 
-### 10. Бенчмарки производительности
+### 10. Performance benchmarks
 
-**Проблема:** Нет тестов производительности для криптографических операций
+**Issue:** No performance tests for cryptographic operations
 
-**Решение:** Добавить бенчмарки с использованием `criterion`:
-- Скорость ГОСТ 34.10 подписи/проверки
-- Производительность A-XDR сериализации
-- Пропускная способность HDLC фрейминга
+**Fix:** Add benchmarks using `criterion`:
+- GOST 34.10 sign/verify speed
+- A-XDR serialization performance
+- HDLC framing throughput
 
-**Приоритет:** НИЗКИЙ  
-**Сложность:** Средняя
+**Priority:** LOW
+**Complexity:** Medium
 
-## Аудит полноты реализации IC для СПОДЭС и СПОДУС
+## IC Completeness Audit for SPODES and SPODUS
 
-### СПОДЭС — СТО 34.01-5.1-006-2023, Таблица 7.1
+### SPODES — STO 34.01-5.1-006-2023, Table 7.1
 
-Всего IC в Таблице 7.1: **~70**. Реализовано: **30**. Покрытие основных IC: **100%**.
+Total ICs in Table 7.1: **~70**. Implemented: **30**. Core IC coverage: **100%**.
 
-#### Реализованные IC (30)
+#### Implemented ICs (30)
 
-| ИИК | Класс | Версия | Файл | Статус |
-|-----|-------|--------|------|--------|
-| 1 | Data | v0 | `src/classes/data.rs` | ✅ |
-| 3 | Register | v0 | `src/classes/register.rs` | ✅ |
-| 4 | Extended register | v0 | `src/classes/extended_register.rs` | ✅ |
-| 5 | Demand register | v0 | `src/classes/demand_register.rs` | ✅ |
-| 6 | Register activation | v0 | `src/classes/register_activation.rs` | ✅ |
-| 7 | Profile generic | v1 | `src/classes/profile_generic.rs` | ✅ |
-| 8 | Clock | v0 | `src/classes/clock.rs` | ✅ |
-| 9 | Script table | v0 | `src/classes/script_table.rs` | ✅ |
-| 10 | Schedule | v0 | `src/classes/schedule.rs` | ✅ |
-| 11 | Special days table | v0 | `src/classes/special_days_table.rs` | ✅ |
-| 15 | Association LN | v1 | `src/classes/association_ln.rs` | ✅ |
-| 17 | SAP assignment | v0 | `src/classes/sap_assignment.rs` | ✅ |
-| 18 | Image transfer | v0 | `src/classes/image_transfer.rs` | ✅ |
-| 19 | IEC Local Port Setup | v1 | `src/classes/iec_local_port_setup.rs` | ✅ |
-| 20 | Activity calendar | v0 | `src/classes/activity_calendar.rs` | ✅ |
-| 21 | Register monitor | v0 | `src/classes/register_monitor.rs` | ✅ |
-| 22 | Single action schedule | v0 | `src/classes/single_action_schedule.rs` | ✅ |
-| 23 | IEC HDLC Setup | v1 | `src/classes/iec_hdlc_setup.rs` | ✅ |
-| 25 | M-BUS slave port setup | v0 | `src/classes/mbus_slave_port_setup.rs` | ✅ |
-| 30 | Data protection | v0 | `src/classes/data_protection.rs` | ✅ |
-| 40 | Push setup | v2 | `src/classes/push_setup.rs` | ✅ |
-| 41 | TCP-UDP setup | v0 | `src/classes/tcp_udp_setup.rs` | ✅ |
-| 42 | IPv4 setup | v0 | `src/classes/ipv4_setup.rs` | ✅ |
-| 43 | MAC address setup | v0 | `src/classes/mac_address_setup.rs` | ✅ |
-| 45 | GPRS modem setup | v0 | `src/classes/gprs_modem_setup.rs` | ✅ |
-| 47 | GSM diagnostic | v0 | `src/classes/gsm_diagnostic.rs` | ✅ |
-| 48 | IPv6 setup | v0 | `src/classes/ipv6_setup.rs` | ✅ |
-| 64 | Security setup | v0..1 | `src/classes/security_setup.rs` | ✅ |
-| 68 | Arbitrator | v0 | `src/classes/arbitrator.rs` | ✅ |
-| 70 | Disconnect control | v0 | `src/classes/disconnect_control.rs` | ✅ |
-| 71 | Limiter | v0 | `src/classes/limiter.rs` | ✅ |
+| IC | Class | Version | File | Status |
+|----|-------|---------|------|--------|
+| 1 | Data | v0 | `src/classes/data.rs` | Done |
+| 3 | Register | v0 | `src/classes/register.rs` | Done |
+| 4 | Extended register | v0 | `src/classes/extended_register.rs` | Done |
+| 5 | Demand register | v0 | `src/classes/demand_register.rs` | Done |
+| 6 | Register activation | v0 | `src/classes/register_activation.rs` | Done |
+| 7 | Profile generic | v1 | `src/classes/profile_generic.rs` | Done |
+| 8 | Clock | v0 | `src/classes/clock.rs` | Done |
+| 9 | Script table | v0 | `src/classes/script_table.rs` | Done |
+| 10 | Schedule | v0 | `src/classes/schedule.rs` | Done |
+| 11 | Special days table | v0 | `src/classes/special_days_table.rs` | Done |
+| 15 | Association LN | v1 | `src/classes/association_ln.rs` | Done |
+| 17 | SAP assignment | v0 | `src/classes/sap_assignment.rs` | Done |
+| 18 | Image transfer | v0 | `src/classes/image_transfer.rs` | Done |
+| 19 | IEC Local Port Setup | v1 | `src/classes/iec_local_port_setup.rs` | Done |
+| 20 | Activity calendar | v0 | `src/classes/activity_calendar.rs` | Done |
+| 21 | Register monitor | v0 | `src/classes/register_monitor.rs` | Done |
+| 22 | Single action schedule | v0 | `src/classes/single_action_schedule.rs` | Done |
+| 23 | IEC HDLC Setup | v1 | `src/classes/iec_hdlc_setup.rs` | Done |
+| 25 | M-BUS slave port setup | v0 | `src/classes/mbus_slave_port_setup.rs` | Done |
+| 30 | Data protection | v0 | `src/classes/data_protection.rs` | Done |
+| 40 | Push setup | v2 | `src/classes/push_setup.rs` | Done |
+| 41 | TCP-UDP setup | v0 | `src/classes/tcp_udp_setup.rs` | Done |
+| 42 | IPv4 setup | v0 | `src/classes/ipv4_setup.rs` | Done |
+| 43 | MAC address setup | v0 | `src/classes/mac_address_setup.rs` | Done |
+| 45 | GPRS modem setup | v0 | `src/classes/gprs_modem_setup.rs` | Done |
+| 47 | GSM diagnostic | v0 | `src/classes/gsm_diagnostic.rs` | Done |
+| 48 | IPv6 setup | v0 | `src/classes/ipv6_setup.rs` | Done |
+| 64 | Security setup | v0..1 | `src/classes/security_setup.rs` | Done |
+| 68 | Arbitrator | v0 | `src/classes/arbitrator.rs` | Done |
+| 70 | Disconnect control | v0 | `src/classes/disconnect_control.rs` | Done |
+| 71 | Limiter | v0 | `src/classes/limiter.rs` | Done |
 
-#### Отсутствующие IC, релевантные для СПОДЭС (4)
+#### Missing ICs relevant to SPODES (4)
 
-| ИИК | Класс | Название | Приоритет | Примечание |
-|-----|-------|----------|-----------|------------|
-| 12 | Association SN | Ассоциация по серийному номеру | СРЕДНИЙ | Используется для legacy-устройств без LN. СТО-006 требует для обратной совместимости |
-| 61 | Register table | Табличный регистр | СРЕДНИЙ | Используется для структурированных данных (журналы, профили). Некоторые ПУ требуют |
-| 62 | Compact data | Упаковка данных | НИЗКИЙ | Оптимизация передачи, опционально |
-| 63 | Status mapping | Расшифровка статуса | НИЗКИЙ | Маппинг статусов устройства, опционально |
+| IC | Class | Name | Priority | Note |
+|----|-------|------|----------|------|
+| 12 | Association SN | Serial number association | MEDIUM | Used for legacy devices without LN. STO-006 requires for backward compatibility |
+| 61 | Register table | Tabular register | MEDIUM | Used for structured data (journals, profiles). Some meters require it |
+| 62 | Compact data | Data packing | LOW | Transmission optimization, optional |
+| 63 | Status mapping | Status decoding | LOW | Device status mapping, optional |
 
-#### Отсутствующие IC, специфичные для физических слоёв (не требуются для TCP/UDP/HDLC)
+#### Missing ICs specific to physical layers (not required for TCP/UDP/HDLC)
 
-Эти IC перечислены в Таблице 7.1, но специфичны для конкретных физических слоёв и **не требуются** для стандартного СПОДЭС ПУ с TCP/UDP/HDLC транспортом:
+These ICs are listed in Table 7.1 but are specific to certain physical layers and are **not required** for a standard SPODES meter with TCP/UDP/HDLC transport:
 
-- **S-FSK** (50, 51, 52, 53, 56) — радиочастотный физический слой
-- **IEC 61334-4-32 LLC** (55, 80) — PLC (линия электропередач)
+- **S-FSK** (50, 51, 52, 53, 56) — RF physical layer
+- **IEC 61334-4-32 LLC** (55, 80) — PLC (power line)
 - **ISO/IEC 8802-2 LLC** (57, 58, 59) — Ethernet
 - **PRIME NB OFDM PLC** (81, 82, 83, 84, 86) — PLC
 - **G3-PLC** (90, 91, 92) — PLC
 - **ZigBee** (102, 103, 104, 105) — ZigBee
 - **M-Bus** (72, 74, 76, 77) — M-Bus
-- **Wireless Mode Q** (73) — специфический RF
+- **Wireless Mode Q** (73) — specific RF
 - **PPP** (44) — dial-up
 - **SMTP** (46) — email
-- **Modem/PSTN** (27) — модем
-- **Auto answer/connect** (28, 29) — модем
-- **IEC twisted pair** (24) — витая пара
-- **Utility tables** (26) — утилиты
-- **Sensor manager** (67) — датчики
-- **Parameter monitor** (65) — мониторинг
-- **Account/Credit/Charge/Token** (111-114) — биллинг
+- **Modem/PSTN** (27) — modem
+- **Auto answer/connect** (28, 29) — modem
+- **IEC twisted pair** (24) — twisted pair
+- **Utility tables** (26) — utilities
+- **Sensor manager** (67) — sensors
+- **Parameter monitor** (65) — monitoring
+- **Account/Credit/Charge/Token** (111-114) — billing
 
-### СПОДУС — СТО 34.01-5.1-013-2023, Приложение А
+### SPODUS — STO 34.01-5.1-013-2023, Appendix A
 
-Полный каталог объектов ИВКЭ реализован. **Пропусков нет.**
+Full IVEK object catalog implemented. **No gaps.**
 
-#### Реализованные объекты СПОДУС (20 модулей)
+#### Implemented SPODUS objects (20 modules)
 
-| Раздел | Объект | OBIS | ИК | Вер. | Файл | Статус |
-|--------|--------|------|-----|------|------|--------|
-| §10.1.8 | SAP-assignment | 0.0.41.0.0.255 | 17 | v0 | `src/spodus/catalog.rs` | ✅ |
-| §10.14 | Nameplate (serial) | 0.0.96.1.0.255 | 1 | v0 | `src/spodus/nameplate.rs` | ✅ |
-| §10.14 | Nameplate (model) | 0.0.96.1.1.255 | 1 | v0 | `src/spodus/nameplate.rs` | ✅ |
-| §10.14 | Nameplate (firmware) | 0.0.96.1.2.255 | 1 | v0 | `src/spodus/nameplate.rs` | ✅ |
-| §10.14 | Nameplate (manufacturer) | 0.0.96.1.3.255 | 1 | v0 | `src/spodus/nameplate.rs` | ✅ |
-| §10.14 | Nameplate (year) | 0.0.96.1.4.255 | 1 | v0 | `src/spodus/nameplate.rs` | ✅ |
-| §10.14 | Nameplate (hw version) | 0.0.0.2.1.255 | 1 | v0 | `src/spodus/nameplate.rs` | ✅ |
-| §10.14 | Nameplate (СПОДУС ver) | 0.0.96.1.6.255 | 1 | v0 | `src/spodus/nameplate.rs` | ✅ |
-| §10.14 | Nameplate (last update) | 0.0.96.1.7.255 | 1 | v0 | `src/spodus/nameplate.rs` | ✅ |
-| §10.14 | Nameplate (non-metro fw) | 0.0.96.1.8.255 | 1 | v0 | `src/spodus/nameplate.rs` | ✅ |
-| §10.14 | Nameplate (metro fw cksum) | 0.0.96.1.10.255 | 1 | v0 | `src/spodus/nameplate.rs` | ✅ |
-| §10.14 | Nameplate profile | 0.0.94.7.0.255 | 7 | v1 | `src/spodus/profile.rs` | ✅ |
-| §10.2 | Configured meter list | 0.0.94.7.128.255 | 1 | v0 | `src/spodus/meter.rs` | ✅ |
-| §10.3 | Direct-channel table | 0.0.94.7.129.255 | 1 | v0 | `src/spodus/channels.rs` | ✅ |
-| §10.4 | Channel list | 0.0.94.7.130.255 | 7 | v1 | `src/spodus/channels.rs` | ✅ |
-| §10.5 | Discovered meters | 0.0.94.7.131.255 | 7 | v1 | `src/spodus/discovered.rs` | ✅ |
-| §10.6 | Access policies | 0.0.94.7.132.255 | 1 | v0 | `src/spodus/access_policy.rs` | ✅ |
-| §10.7 | Data-exchange tasks | 0.0.94.7.133.255 | 1 | v0 | `src/spodus/tasks.rs` | ✅ |
-| §10.8 | Meter status table | 0.0.94.7.134.255 | 7 | v1 | `src/spodus/status.rs` | ✅ |
-| §10.9 | Exchange-status journal | 0.0.94.7.135.255 | 7 | v1 | `src/spodus/journals.rs` | ✅ |
-| §10.10 | Object-correction journal | 0.0.94.7.136.255 | 7 | v1 | `src/spodus/journals.rs` | ✅ |
-| §10.11 | Numeric meter journal | 0.0.94.7.137.255 | 7 | v1 | `src/spodus/journals.rs` | ✅ |
-| §10.13 | Parameter programming log | 0.0.96.11.3.255 | 1 | v0 | `src/spodus/journals.rs` | ✅ |
-| §10.13 | Access control log | 0.0.96.11.6.255 | 1 | v0 | `src/spodus/journals.rs` | ✅ |
-| §10.13 | Self-diagnostics log | 0.0.96.11.7.255 | 1 | v0 | `src/spodus/journals.rs` | ✅ |
-| §10.13 | Switching log (ch.b) | 0.b.96.11.5.255 | 1 | v0 | `src/spodus/journals.rs` | ✅ |
-| §8.5.10 | Incoming events table | 0.0.94.7.140.255 | 7 | v1 | `src/spodus/collect.rs` | ✅ |
-| §8.5 | Push setup | 0.0.25.9.0.255 | 40 | v2 | `src/spodus/push.rs` | ✅ |
-| §8.5 | Event message | 0.0.96.50.0.255 | 1 | v0 | `src/spodus/push.rs` | ✅ |
-| §8.5 | Push mask | 0.0.97.98.10.255 | 1 | v0 | `src/spodus/push.rs` | ✅ |
-| Misc | Time delta | 0.0.94.7.141.255 | 1 | v0 | `src/spodus/misc.rs` | ✅ |
-| Misc | Discrete inputs | 0.0.96.3.1.255 | 1 | v0 | `src/spodus/misc.rs` | ✅ |
-| §8.4 | Clock | 0.0.1.0.0.255 | 8 | v0 | `src/spodus/catalog.rs` | ✅ |
-| §9 | Security setup | 0.0.43.0.0.255 | 64 | v1 | `src/spodus/catalog.rs` | ✅ |
-| — | Association LN (Public) | 0.0.40.0.0.255 | 15 | v1 | `src/spodus/catalog.rs` | ✅ |
-| — | Association LN (Reader) | 0.0.40.0.1.255 | 15 | v1 | `src/spodus/catalog.rs` | ✅ |
-| — | Association LN (Push) | 0.0.40.0.2.255 | 15 | v1 | `src/spodus/catalog.rs` | ✅ |
-| — | Association LN (Config) | 0.0.40.0.3.255 | 15 | v1 | `src/spodus/catalog.rs` | ✅ |
-| — | ИВКЭ logical name | 0.0.42.0.0.255 | — | — | `src/spodus/node.rs` | ✅ |
-| СТО-013 | Table manager | 0.0.94.7.200.255 | 8200 | v0 | `src/spodus/table_manager.rs` | ✅ |
-| СТО-013 | Profile data filter | 0.0.94.7.201.255 | 8201 | v0 | `src/spodus/profile_filter.rs` | ✅ |
+| Section | Object | OBIS | IC | Ver. | File | Status |
+|---------|--------|------|-----|------|------|--------|
+| 10.1.8 | SAP-assignment | 0.0.41.0.0.255 | 17 | v0 | `src/spodus/catalog.rs` | Done |
+| 10.14 | Nameplate (serial) | 0.0.96.1.0.255 | 1 | v0 | `src/spodus/nameplate.rs` | Done |
+| 10.14 | Nameplate (model) | 0.0.96.1.1.255 | 1 | v0 | `src/spodus/nameplate.rs` | Done |
+| 10.14 | Nameplate (firmware) | 0.0.96.1.2.255 | 1 | v0 | `src/spodus/nameplate.rs` | Done |
+| 10.14 | Nameplate (manufacturer) | 0.0.96.1.3.255 | 1 | v0 | `src/spodus/nameplate.rs` | Done |
+| 10.14 | Nameplate (year) | 0.0.96.1.4.255 | 1 | v0 | `src/spodus/nameplate.rs` | Done |
+| 10.14 | Nameplate (hw version) | 0.0.0.2.1.255 | 1 | v0 | `src/spodus/nameplate.rs` | Done |
+| 10.14 | Nameplate (SPODUS ver) | 0.0.96.1.6.255 | 1 | v0 | `src/spodus/nameplate.rs` | Done |
+| 10.14 | Nameplate (last update) | 0.0.96.1.7.255 | 1 | v0 | `src/spodus/nameplate.rs` | Done |
+| 10.14 | Nameplate (non-metro fw) | 0.0.96.1.8.255 | 1 | v0 | `src/spodus/nameplate.rs` | Done |
+| 10.14 | Nameplate (metro fw cksum) | 0.0.96.1.10.255 | 1 | v0 | `src/spodus/nameplate.rs` | Done |
+| 10.14 | Nameplate profile | 0.0.94.7.0.255 | 7 | v1 | `src/spodus/profile.rs` | Done |
+| 10.2 | Configured meter list | 0.0.94.7.128.255 | 1 | v0 | `src/spodus/meter.rs` | Done |
+| 10.3 | Direct-channel table | 0.0.94.7.129.255 | 1 | v0 | `src/spodus/channels.rs` | Done |
+| 10.4 | Channel list | 0.0.94.7.130.255 | 7 | v1 | `src/spodus/channels.rs` | Done |
+| 10.5 | Discovered meters | 0.0.94.7.131.255 | 7 | v1 | `src/spodus/discovered.rs` | Done |
+| 10.6 | Access policies | 0.0.94.7.132.255 | 1 | v0 | `src/spodus/access_policy.rs` | Done |
+| 10.7 | Data-exchange tasks | 0.0.94.7.133.255 | 1 | v0 | `src/spodus/tasks.rs` | Done |
+| 10.8 | Meter status table | 0.0.94.7.134.255 | 7 | v1 | `src/spodus/status.rs` | Done |
+| 10.9 | Exchange-status journal | 0.0.94.7.135.255 | 7 | v1 | `src/spodus/journals.rs` | Done |
+| 10.10 | Object-correction journal | 0.0.94.7.136.255 | 7 | v1 | `src/spodus/journals.rs` | Done |
+| 10.11 | Numeric meter journal | 0.0.94.7.137.255 | 7 | v1 | `src/spodus/journals.rs` | Done |
+| 10.13 | Parameter programming log | 0.0.96.11.3.255 | 1 | v0 | `src/spodus/journals.rs` | Done |
+| 10.13 | Access control log | 0.0.96.11.6.255 | 1 | v0 | `src/spodus/journals.rs` | Done |
+| 10.13 | Self-diagnostics log | 0.0.96.11.7.255 | 1 | v0 | `src/spodus/journals.rs` | Done |
+| 10.13 | Switching log (ch.b) | 0.b.96.11.5.255 | 1 | v0 | `src/spodus/journals.rs` | Done |
+| 8.5.10 | Incoming events table | 0.0.94.7.140.255 | 7 | v1 | `src/spodus/collect.rs` | Done |
+| 8.5 | Push setup | 0.0.25.9.0.255 | 40 | v2 | `src/spodus/push.rs` | Done |
+| 8.5 | Event message | 0.0.96.50.0.255 | 1 | v0 | `src/spodus/push.rs` | Done |
+| 8.5 | Push mask | 0.0.97.98.10.255 | 1 | v0 | `src/spodus/push.rs` | Done |
+| Misc | Time delta | 0.0.94.7.141.255 | 1 | v0 | `src/spodus/misc.rs` | Done |
+| Misc | Discrete inputs | 0.0.96.3.1.255 | 1 | v0 | `src/spodus/misc.rs` | Done |
+| 8.4 | Clock | 0.0.1.0.0.255 | 8 | v0 | `src/spodus/catalog.rs` | Done |
+| 9 | Security setup | 0.0.43.0.0.255 | 64 | v1 | `src/spodus/catalog.rs` | Done |
+| — | Association LN (Public) | 0.0.40.0.0.255 | 15 | v1 | `src/spodus/catalog.rs` | Done |
+| — | Association LN (Reader) | 0.0.40.0.1.255 | 15 | v1 | `src/spodus/catalog.rs` | Done |
+| — | Association LN (Push) | 0.0.40.0.2.255 | 15 | v1 | `src/spodus/catalog.rs` | Done |
+| — | Association LN (Config) | 0.0.40.0.3.255 | 15 | v1 | `src/spodus/catalog.rs` | Done |
+| — | IVEK logical name | 0.0.42.0.0.255 | — | — | `src/spodus/node.rs` | Done |
+| STO-013 | Table manager | 0.0.94.7.200.255 | 8200 | v0 | `src/spodus/table_manager.rs` | Done |
+| STO-013 | Profile data filter | 0.0.94.7.201.255 | 8201 | v0 | `src/spodus/profile_filter.rs` | Done |
 
-### Сводка по полноте IC
+### IC Coverage Summary
 
-| Профиль | Требуется | Реализовано | Покрытие | Примечание |
-|---------|-----------|-------------|----------|------------|
-| СПОДЭС (основные) | 30 | 30 | **100%** | Все обязательные для TCP/UDP/HDLC ПУ |
-| СПОДЭС (legacy) | 4 | 0 | 0% | Association SN, Register table, Compact data, Status mapping |
-| СПОДУС/ИВКЭ | 39 объектов | 39 объектов | **100%** | Полный каталог Appendix A |
+| Profile | Required | Implemented | Coverage | Note |
+|---------|----------|-------------|----------|------|
+| SPODES (core) | 30 | 30 | **100%** | All mandatory for TCP/UDP/HDLC meters |
+| SPODES (legacy) | 4 | 0 | 0% | Association SN, Register table, Compact data, Status mapping |
+| SPODUS/IVEK | 39 objects | 39 objects | **100%** | Full Appendix A catalog |
 
-**Вывод:** Основной набор IC для СПОДЭС (30 классов) реализован полностью. СПОДУС/ИВКЭ каталог реализован на 100%. Пропуски касаются только legacy-классов (Association SN) и специфических физических слоёв (S-FSK, PRIME, G3-PLC, ZigBee), которые не требуются для стандартного сценария использования.
+**Conclusion:** The core set of ICs for SPODES (30 classes) is fully implemented. The SPODUS/IVEK catalog is 100% implemented. Gaps only concern legacy classes (Association SN) and specific physical layers (S-FSK, PRIME, G3-PLC, ZigBee) which are not required for the standard use case.
 
-## Соответствие стандартам (положительные выводы)
+## Standards Compliance (positive findings)
 
-✅ **ГОСТ 34.10-2018:** Реализация соответствует Р 1323565.1.024-2019, curve `id-tc26-gost-3410-2012-256-paramSetB`  
-✅ **ГОСТ 34.11-2018:** Streebog-256 используется корректно  
-✅ **ГОСТ 34.12-2018:** Kuznyechik (Кузнечик) интегрирован для mechanism 8  
-✅ **СТО 34.01-5.1-006-2023:** СПОДЭС — 30/30 основных IC реализованы (100%)  
-✅ **СТО 34.01-5.1-013-2023:** СПОДУС/ИВКЭ — 39/39 объектов Appendix A реализованы (100%)  
-✅ **IEC 62056:** DLMS/COSEM стек соответствует Green Book/Blue Book
+- **GOST 34.10-2018:** Implementation complies with R 1323565.1.024-2019, curve `id-tc26-gost-3410-2012-256-paramSetB`
+- **GOST 34.11-2018:** Streebog-256 used correctly
+- **GOST 34.12-2018:** Kuznyechik integrated for mechanism 8
+- **STO 34.01-5.1-006-2023:** SPODES — 30/30 core ICs implemented (100%)
+- **STO 34.01-5.1-013-2023:** SPODUS/IVEK — 39/39 Appendix A objects implemented (100%)
+- **IEC 62056:** DLMS/COSEM stack complies with Green Book/Blue Book
 
-## План реализации
+## Implementation Plan
 
-### Фаза 1: Критические исправления (1-2 дня)
+### Phase 1: Critical fixes (1-2 days)
 
-1. Обновить rand до 0.10.2
-2. Обновить num-bigint до 0.4.8+
-3. Прогнать полный цикл тестов
-4. Выпустить патч-релиз 0.2.3
+1. Update rand to 0.10.2
+2. Update num-bigint to 0.4.8+
+3. Run full test cycle
+4. Release patch 0.2.3
 
-### Фаза 2: Обновление зависимостей (1 неделя)
+### Phase 2: Dependency updates (1 week)
 
-1. Создать ветку `feature/deps-update`
-2. Обновить криптографические библиотеки по одной
-3. После каждого обновления проверять тест-векторы ГОСТ
-4. Обновить документацию API при необходимости
-5. Выпустить минорный релиз 0.3.0
+1. Create `feature/deps-update` branch
+2. Update cryptographic libraries one by one
+3. Verify GOST test vectors after each update
+4. Update API documentation as needed
+5. Release minor 0.3.0
 
-### Фаза 3: Улучшение качества (2-3 недели)
+### Phase 3: Quality improvement (2-3 weeks)
 
-1. Добавить измерение покрытия кода тестами
-2. Написать недостающие тесты (цель: 80%+ покрытие)
-3. Создать архитектурную документацию
-4. Добавить русскую документацию для ГОСТ модулей
-5. Добавить сетевые примеры
+1. Add test coverage measurement
+2. Write missing tests (target: 80%+ coverage)
+3. Create architecture documentation
+4. Add network examples
 
-### Фаза 4: Расширение функциональности (по запросу)
+### Phase 4: Feature expansion (on demand)
 
-1. Бенчмарки производительности
-2. Руководства по развертыванию
-3. Дополнительные примеры использования
+1. Performance benchmarks
+2. Deployment guides
+3. Additional usage examples
 
-## Рекомендации по процессу
+## Process Recommendations
 
-1. **Автоматизация:** Добавить `cargo audit` в CI pipeline для мониторинга уязвимостей
-2. **Зависимости:** Использовать `cargo outdated` регулярно для отслеживания обновлений
-3. **Документация:** Поддерживать `CHANGELOG.md` в актуальном состоянии
-4. **Тестирование:** Перед каждым релизом проверять криптографические тест-векторы из стандартов
+1. **Automation:** Add `cargo audit` to CI pipeline for vulnerability monitoring
+2. **Dependencies:** Use `cargo outdated` regularly to track updates
+3. **Documentation:** Keep `CHANGELOG.md` up to date
+4. **Testing:** Verify cryptographic test vectors from standards before each release
 
-## Заключение
+## Conclusion
 
-Проект spodes-rs находится в хорошем техническом состоянии с качественным кодом и хорошим тестированием. Основные проблемы связаны с устаревшими зависимостями и требуют оперативного исправления. После обновления зависимостей проект готов к производственному использованию.
+The spodes-rs project is in good technical condition with quality code and good testing. The main issues are related to outdated dependencies and require prompt resolution. After updating dependencies, the project is ready for production use.
 
-**Общая оценка качества:** 8/10
+**Overall quality score:** 8/10
 
-## Выполненные работы
+## Completed Work
 
-### Фаза 1: Критические исправления ✅
+### Phase 1: Critical fixes
 
-- [x] Обновлен `rand` 0.9.1 → 0.9.4 (исправлена RUSTSEC-2026-0097)
-- [x] Обновлен `num-bigint` 0.4.7 → 0.4.8 (yanked версия)
-- [x] Все тесты проходят (32 unit + 1 integration + 3 doctests)
-- [x] Clippy чист, warnings нет
-- [x] cargo audit без проблем
+- [x] Updated `rand` 0.9.1 -> 0.9.4 (fixed RUSTSEC-2026-0097)
+- [x] Updated `num-bigint` 0.4.7 -> 0.4.8 (yanked version)
+- [x] All tests pass (32 unit + 1 integration + 3 doctests)
+- [x] Clippy clean, no warnings
+- [x] cargo audit clean
 
-### Фаза 2: Обновление криптографических зависимостей ✅
+### Phase 2: Cryptographic dependency updates
 
-- [x] Обновлены: aes-gcm 0.11, aead 0.6, ecdsa 0.17, p256/p384 0.14
-- [x] Обновлены: sha2 0.11, streebog 0.11, hmac 0.13, cmac 0.8, kuznyechik 0.9
-- [x] Миграция API: AeadInPlace→AeadInOut, encrypt_inout_detached
-- [x] Все тесты проходят, clippy чист, cargo audit без проблем
+- [x] Updated: aes-gcm 0.11, aead 0.6, ecdsa 0.17, p256/p384 0.14
+- [x] Updated: sha2 0.11, streebog 0.11, hmac 0.13, cmac 0.8, kuznyechik 0.9
+- [x] API migration: AeadInPlace->AeadInOut, encrypt_inout_detached
+- [x] All tests pass, clippy clean, cargo audit clean
 
-### Фаза 3: Улучшение инфраструктуры ✅
+### Phase 3: Infrastructure improvement
 
-- [x] Добавлен `cargo audit` в CI pipeline (`.github/workflows/ci.yml`)
-- [x] Используется `rustsec/audit-check@v2.0.0` с GITHUB_TOKEN
-- [x] Добавлен `coverage` job в CI с cargo-tarpaulin
-- [x] Измерено покрытие: **80.08%** (4566/5702 строк)
+- [x] Added `cargo audit` to CI pipeline (`.github/workflows/ci.yml`)
+- [x] Using `rustsec/audit-check@v2.0.0` with GITHUB_TOKEN
+- [x] Added `coverage` job to CI with cargo-tarpaulin
+- [x] Measured coverage: **80.08%** (4566/5702 lines)
 
-### Фаза 4: Сетевые примеры ✅
+### Phase 4: Network examples
 
-- [x] Создан `examples/tcp_client.rs` — TCP клиент с Wrapper (IEC 62056-47)
-- [x] Создан `examples/tcp_server.rs` — TCP сервер с RequestDispatcher
-- [x] Создан `examples/udp_client.rs` — UDP клиент с Wrapper (IEC 62056-47)
-- [x] Примеры добавлены в `Cargo.toml`
+- [x] Created `examples/tcp_client.rs` — TCP client with Wrapper (IEC 62056-47)
+- [x] Created `examples/tcp_server.rs` — TCP server with RequestDispatcher
+- [x] Created `examples/udp_client.rs` — UDP client with Wrapper (IEC 62056-47)
+- [x] Examples added to `Cargo.toml`
 
-### Фаза 5: Документация ✅
+### Phase 5: Documentation
 
-- [x] Создан `docs/ARCHITECTURE.md` — полная архитектурная документация с описанием слоев, модулей, потоков данных и соответствия стандартам
-- [x] Примеры компилируются без ошибок
+- [x] Created `docs/ARCHITECTURE.md` — full architecture documentation
+- [x] Created `docs/DEPLOYMENT.md` — deployment guide
+- [x] Examples compile without errors
 
-## Оставшиеся задачи
+## Remaining Tasks
 
-1. **Бенчмарки производительности** — добавить criterion бенчмарки (низкий приоритет)
+1. **Performance benchmarks** — add criterion benchmarks (low priority)
 
-**Рекомендуемые действия:**
-1. Немедленно исправить критические проблемы с зависимостями ✅
-2. Обновить криптографические библиотеки ✅
-3. Улучшить документацию и тестовое покрытие ✅
-4. Измерить покрытие тестами ✅ (80.08% — цель достигнута)
+**Recommended actions:**
+1. Fix critical dependency issues immediately
+2. Update cryptographic libraries
+3. Improve documentation and test coverage
+4. Measure test coverage (80.08% — target achieved)

@@ -3,3 +3,5 @@ Cargo.lock
 /.vscode
 *.orig
 *.rej
+inner_docs/
+coverage/
