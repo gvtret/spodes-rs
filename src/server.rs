@@ -11,6 +11,7 @@
 //! types produce an EXCEPTION-RESPONSE, since block reassembly is the caller's
 //! responsibility.
 
+use crate::classes::association_ln::AssociationLn;
 use crate::interface::InterfaceClass;
 use crate::obis::ObisCode;
 use crate::service::action::{ActionRequest, ActionResponse};
@@ -45,6 +46,9 @@ pub struct RequestDispatcher {
     max_pdu: usize,
     pending_get: Option<PendingGet>,
     pending_set: Option<PendingSet>,
+    /// Current association for access rights checking (IEC 62056-5-3, 5.3.7).
+    /// When set, GET/SET/ACTION are checked against the association's object_list.
+    association: Option<AssociationLn>,
 }
 
 impl Default for RequestDispatcher {
@@ -56,7 +60,13 @@ impl Default for RequestDispatcher {
 impl RequestDispatcher {
     /// Creates an empty dispatcher with the default block size.
     pub fn new() -> Self {
-        RequestDispatcher { objects: Vec::new(), max_pdu: DEFAULT_MAX_PDU, pending_get: None, pending_set: None }
+        RequestDispatcher {
+            objects: Vec::new(),
+            max_pdu: DEFAULT_MAX_PDU,
+            pending_get: None,
+            pending_set: None,
+            association: None,
+        }
     }
 
     /// Sets the maximum block-transfer payload size (octets). Results larger
@@ -70,14 +80,58 @@ impl RequestDispatcher {
         self.objects.push(object);
     }
 
+    /// Sets the current association for access rights checking.
+    /// When an association is set, all GET/SET/ACTION requests are checked
+    /// against the association's object_list access_rights.
+    pub fn set_association(&mut self, assoc: AssociationLn) {
+        self.association = Some(assoc);
+    }
+
+    /// Returns a reference to the current association, if any.
+    pub fn association(&self) -> Option<&AssociationLn> {
+        self.association.as_ref()
+    }
+
     /// Locates a registered object by class-id and logical name.
     fn find(&mut self, class_id: u16, instance: &ObisCode) -> Option<&mut Box<dyn InterfaceClass>> {
         self.objects.iter_mut().find(|o| o.class_id() == class_id && o.logical_name() == instance)
     }
 
+    /// Checks whether a read is allowed for the given object and attribute.
+    /// Returns true if no association is set (unrestricted access).
+    fn check_read(&self, class_id: u16, instance: &ObisCode, attribute_id: i8) -> bool {
+        match &self.association {
+            None => true, // No association — unrestricted
+            Some(assoc) => assoc.can_read(class_id, instance, attribute_id),
+        }
+    }
+
+    /// Checks whether a write is allowed for the given object and attribute.
+    /// Returns true if no association is set (unrestricted access).
+    fn check_write(&self, class_id: u16, instance: &ObisCode, attribute_id: i8) -> bool {
+        match &self.association {
+            None => true, // No association — unrestricted
+            Some(assoc) => assoc.can_write(class_id, instance, attribute_id),
+        }
+    }
+
+    /// Checks whether a method invocation is allowed.
+    /// Returns true if no association is set (unrestricted access).
+    fn check_invoke(&self, class_id: u16, instance: &ObisCode, method_id: i8) -> bool {
+        match &self.association {
+            None => true, // No association — unrestricted
+            Some(assoc) => assoc.can_invoke(class_id, instance, method_id),
+        }
+    }
+
     /// Reads one attribute, returning its value or a data-access-result code.
+    /// Checks access rights from the current association's object_list.
     fn read_attribute(&mut self, d: &AttributeDescriptor) -> GetDataResult {
         let attr_id = d.attribute_id;
+        // Check access rights first.
+        if !self.check_read(d.class_id, &d.instance_id, attr_id) {
+            return GetDataResult::AccessResult(data_access_result::READ_WRITE_DENIED);
+        }
         match self.find(d.class_id, &d.instance_id) {
             None => GetDataResult::AccessResult(data_access_result::OBJECT_UNDEFINED),
             Some(obj) => match obj.attributes().into_iter().find(|(id, _)| *id as i8 == attr_id) {
@@ -88,7 +142,12 @@ impl RequestDispatcher {
     }
 
     /// Writes one attribute, returning a data-access-result code.
+    /// Checks access rights from the current association's object_list.
     fn write_attribute(&mut self, d: &AttributeDescriptor, value: crate::types::CosemDataType) -> u8 {
+        // Check access rights first.
+        if !self.check_write(d.class_id, &d.instance_id, d.attribute_id) {
+            return data_access_result::READ_WRITE_DENIED;
+        }
         match self.find(d.class_id, &d.instance_id) {
             None => data_access_result::OBJECT_UNDEFINED,
             Some(obj) => match obj.set_attribute(d.attribute_id as u8, value) {
@@ -99,11 +158,16 @@ impl RequestDispatcher {
     }
 
     /// Invokes one method, returning the action-result and optional return data.
+    /// Checks method access rights from the current association's object_list.
     fn invoke(
         &mut self,
         d: &MethodDescriptor,
         params: Option<crate::types::CosemDataType>,
     ) -> (u8, Option<GetDataResult>) {
+        // Check method access rights first.
+        if !self.check_invoke(d.class_id, &d.instance_id, d.method_id) {
+            return (data_access_result::READ_WRITE_DENIED, None);
+        }
         match self.find(d.class_id, &d.instance_id) {
             None => (data_access_result::OBJECT_UNDEFINED, None),
             Some(obj) => match obj.invoke_method(d.method_id as u8, params) {

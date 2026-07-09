@@ -1,5 +1,6 @@
 use crate::interface::InterfaceClass;
 use crate::obis::ObisCode;
+use crate::security::access_rights::ObjectListEntry;
 use crate::security::{gost3410, hls, signature, AuthMechanism, SecuritySuite};
 use crate::types::{BerError, CosemDataType};
 use aead::Aead;
@@ -97,6 +98,9 @@ pub struct AssociationLn {
     security_setup_reference: CosemDataType,
     user_list: Vec<CosemDataType>,
     current_user: CosemDataType,
+    /// Parsed object_list with structured access rights.
+    #[serde(skip)]
+    parsed_object_list: Vec<ObjectListEntry>,
     /// Transient HLS handshake state — not part of the COSEM attributes.
     /// Client-to-server challenge (CtoS) received in the AARQ (Pass 1).
     #[serde(skip)]
@@ -126,6 +130,7 @@ impl AssociationLn {
             security_setup_reference: config.security_setup_reference,
             user_list: config.user_list,
             current_user: config.current_user,
+            parsed_object_list: Vec::new(),
             ctos: None,
             stoc: None,
             hls_context: None,
@@ -372,6 +377,50 @@ impl AssociationLn {
             return Err("User not found in user_list".to_string());
         }
         Ok(CosemDataType::Null)
+    }
+
+    // --- Access rights methods (IEC 62056-5-3, 5.3.7.2.2) ---
+
+    /// Finds an object_list entry by class_id and logical name.
+    pub fn find_object(&self, class_id: u16, logical_name: &ObisCode) -> Option<&ObjectListEntry> {
+        self.parsed_object_list.iter().find(|e| {
+            e.class_id == class_id && e.logical_name == logical_name.to_bytes()
+        })
+    }
+
+    /// Checks whether a read is allowed for the given object and attribute.
+    pub fn can_read(&self, class_id: u16, logical_name: &ObisCode, attribute_id: i8) -> bool {
+        self.find_object(class_id, logical_name)
+            .map(|e| e.can_read(attribute_id))
+            .unwrap_or(false)
+    }
+
+    /// Checks whether a write is allowed for the given object and attribute.
+    pub fn can_write(&self, class_id: u16, logical_name: &ObisCode, attribute_id: i8) -> bool {
+        self.find_object(class_id, logical_name)
+            .map(|e| e.can_write(attribute_id))
+            .unwrap_or(false)
+    }
+
+    /// Checks whether a method invocation is allowed.
+    pub fn can_invoke(&self, class_id: u16, logical_name: &ObisCode, method_id: i8) -> bool {
+        self.find_object(class_id, logical_name)
+            .map(|e| e.can_invoke(method_id))
+            .unwrap_or(false)
+    }
+
+    /// Returns the parsed object_list.
+    pub fn object_list_entries(&self) -> &[ObjectListEntry] {
+        &self.parsed_object_list
+    }
+
+    /// Adds an object_list entry with the given access rights.
+    pub fn add_object_with_access(&mut self, entry: ObjectListEntry) {
+        // Remove existing entry for the same object.
+        self.parsed_object_list.retain(|e| {
+            !(e.class_id == entry.class_id && e.logical_name == entry.logical_name)
+        });
+        self.parsed_object_list.push(entry);
     }
 }
 

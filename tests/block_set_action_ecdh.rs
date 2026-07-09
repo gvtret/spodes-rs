@@ -1,6 +1,7 @@
 //! Comprehensive integration tests: block transfer, SET/ACTION, ECDH key
 //! agreement, and full GOST HLS handshake through AssociationLN.
 
+use std::any::Any;
 use std::io;
 
 use spodes_rs::classes::association_ln::{
@@ -10,15 +11,47 @@ use spodes_rs::classes::data::Data;
 use spodes_rs::classes::register::Register;
 use spodes_rs::interface::InterfaceClass;
 use spodes_rs::obis::ObisCode;
-use spodes_rs::security::{gost3410, hls, AuthMechanism, SecuritySuite};
+use spodes_rs::security::{gost3410, SecuritySuite};
 use spodes_rs::server::RequestDispatcher;
-use spodes_rs::service::action::{ActionRequest, ActionResponse};
 use spodes_rs::service::get::{GetDataResult, GetRequest, GetResponse};
-use spodes_rs::service::set::{SetRequest, SetResponse};
-use spodes_rs::service::{invoke_id_and_priority, AttributeDescriptor, DataBlockSa, MethodDescriptor};
+use spodes_rs::service::{invoke_id_and_priority, AttributeDescriptor};
 use spodes_rs::session::ClientSession;
 use spodes_rs::transport::DataLinkLayer;
-use spodes_rs::types::CosemDataType;
+use spodes_rs::types::{BerError, CosemDataType};
+
+/// A writable Data object for testing SET operations.
+struct WritableData {
+    logical_name: ObisCode,
+    value: CosemDataType,
+}
+
+impl WritableData {
+    fn new(obis: ObisCode, value: CosemDataType) -> Self {
+        Self { logical_name: obis, value }
+    }
+}
+
+impl InterfaceClass for WritableData {
+    fn class_id(&self) -> u16 { 1 }
+    fn version(&self) -> u8 { 0 }
+    fn logical_name(&self) -> &ObisCode { &self.logical_name }
+    fn attributes(&self) -> Vec<(u8, CosemDataType)> {
+        vec![(1, CosemDataType::OctetString(self.logical_name.to_bytes())), (2, self.value.clone())]
+    }
+    fn methods(&self) -> Vec<(u8, String)> { vec![] }
+    fn serialize_ber(&self, buf: &mut Vec<u8>) -> Result<(), BerError> { Ok(()) }
+    fn deserialize_ber(&mut self, _data: &[u8]) -> Result<(), BerError> { Ok(()) }
+    fn invoke_method(&mut self, _method_id: u8, _params: Option<CosemDataType>) -> Result<CosemDataType, String> {
+        Err("no methods".to_string())
+    }
+    fn set_attribute(&mut self, attribute_id: u8, value: CosemDataType) -> Result<(), String> {
+        match attribute_id {
+            2 => { self.value = value; Ok(()) }
+            _ => Err("attribute not writable".to_string()),
+        }
+    }
+    fn as_any(&self) -> &dyn Any { self }
+}
 
 // ---------------------------------------------------------------------------
 // Test infrastructure
@@ -235,11 +268,51 @@ fn test_set_block_transfer_data_not_writable() {
 }
 
 // ===========================================================================
-// PART 4: ECDH key agreement (skipped — rand_core version mismatch)
+// PART 4: ECDSA P-256/P-384 signing (Suite 1/2)
 // ===========================================================================
-// Note: ECDH ephemeral key generation requires rand_core 0.6 but p256/p384 0.14
-// uses rand_core 0.10. StaticSecret is not available in the public API.
-// These tests are covered indirectly by the gost_security_integration tests.
+
+#[test]
+fn test_ecdsa_p256_sign_verify() {
+    use spodes_rs::security::signature;
+
+    let sk = [
+        0x48, 0x49, 0x4A, 0x4B, 0x4C, 0x4D, 0x4E, 0x4F,
+        0x40, 0x41, 0x42, 0x43, 0x44, 0x45, 0x46, 0x47,
+        0xBB, 0xBB, 0xAA, 0xAA, 0x99, 0x99, 0x88, 0x88,
+        0x44, 0x44, 0x55, 0x55, 0x66, 0x66, 0x77, 0x77,
+    ];
+    let pk = p256::ecdsa::SigningKey::from_bytes(&sk.into()).unwrap()
+        .verifying_key().to_sec1_point(false).as_bytes().to_vec();
+
+    let msg = b"DLMS Suite 1 ECDSA test";
+    let sig = signature::ecdsa_sign(SecuritySuite::Suite1, &sk, msg).unwrap();
+    assert_eq!(sig.len(), 64);
+    signature::ecdsa_verify(SecuritySuite::Suite1, &pk, msg, &sig).unwrap();
+
+    // Wrong message fails.
+    assert!(signature::ecdsa_verify(SecuritySuite::Suite1, &pk, b"wrong", &sig).is_err());
+}
+
+#[test]
+fn test_ecdsa_p384_sign_verify() {
+    use spodes_rs::security::signature;
+
+    let sk = [
+        0x48, 0x49, 0x4A, 0x4B, 0x4C, 0x4D, 0x4E, 0x4F,
+        0x40, 0x41, 0x42, 0x43, 0x44, 0x45, 0x46, 0x47,
+        0xBB, 0xBB, 0xAA, 0xAA, 0x99, 0x99, 0x88, 0x88,
+        0x44, 0x44, 0x55, 0x55, 0x66, 0x66, 0x77, 0x77,
+        0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+        0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+    ];
+    let pk = p384::ecdsa::SigningKey::from_bytes(&sk.into()).unwrap()
+        .verifying_key().to_sec1_point(false).as_bytes().to_vec();
+
+    let msg = b"DLMS Suite 2 ECDSA test";
+    let sig = signature::ecdsa_sign(SecuritySuite::Suite2, &sk, msg).unwrap();
+    assert_eq!(sig.len(), 96); // P-384 signature is 96 bytes
+    signature::ecdsa_verify(SecuritySuite::Suite2, &pk, msg, &sig).unwrap();
+}
 
 // ===========================================================================
 // PART 5: GOST HLS full handshake simulation (mechanism 10)

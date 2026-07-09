@@ -13,6 +13,7 @@
 //!
 //! The four-pass HLS handshake computations live in [`crate::security::hls`].
 
+pub mod access_rights;
 pub mod agreement;
 pub mod gost3410;
 pub mod hls;
