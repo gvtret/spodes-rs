@@ -138,47 +138,58 @@ pub struct ObjectListEntry {
 impl ObjectListEntry {
     /// Checks whether a read is allowed for the given attribute.
     pub fn can_read(&self, attribute_id: i8) -> bool {
-        self.access_rights.attribute_access.iter()
+        self.access_rights
+            .attribute_access
+            .iter()
             .any(|item| item.attribute_id == attribute_id && item.access_mode.allows_read())
     }
 
     /// Checks whether a write is allowed for the given attribute.
     pub fn can_write(&self, attribute_id: i8) -> bool {
-        self.access_rights.attribute_access.iter()
+        self.access_rights
+            .attribute_access
+            .iter()
             .any(|item| item.attribute_id == attribute_id && item.access_mode.allows_write())
     }
 
     /// Checks whether a method call is allowed.
     pub fn can_invoke(&self, method_id: i8) -> bool {
-        self.access_rights.method_access.iter()
+        self.access_rights
+            .method_access
+            .iter()
             .any(|item| item.method_id == method_id && item.access_mode.allows_access())
     }
 
     /// Checks whether authentication is required for reading.
     pub fn auth_required_read(&self, attribute_id: i8) -> bool {
-        self.access_rights.attribute_access.iter()
+        self.access_rights
+            .attribute_access
+            .iter()
             .any(|item| item.attribute_id == attribute_id && item.access_mode.requires_auth())
     }
 
     /// Checks whether authentication is required for writing.
     pub fn auth_required_write(&self, attribute_id: i8) -> bool {
-        self.access_rights.attribute_access.iter()
+        self.access_rights
+            .attribute_access
+            .iter()
             .any(|item| item.attribute_id == attribute_id && item.access_mode.requires_auth())
     }
 }
 
 /// Builds an object_list entry with default read/write access for all attributes.
 pub fn full_access_entry(class_id: u16, version: u8, obis: &[u8], attr_count: u8, method_count: u8) -> ObjectListEntry {
-    let attribute_access = (1..=attr_count).map(|id| AttributeAccessItem {
-        attribute_id: id as i8,
-        access_mode: AttributeAccessMode::ReadWrite,
-        access_selectors: None,
-    }).collect();
+    let attribute_access = (1..=attr_count)
+        .map(|id| AttributeAccessItem {
+            attribute_id: id as i8,
+            access_mode: AttributeAccessMode::ReadWrite,
+            access_selectors: None,
+        })
+        .collect();
 
-    let method_access = (1..=method_count).map(|id| MethodAccessItem {
-        method_id: id as i8,
-        access_mode: MethodAccessMode::Access,
-    }).collect();
+    let method_access = (1..=method_count)
+        .map(|id| MethodAccessItem { method_id: id as i8, access_mode: MethodAccessMode::Access })
+        .collect();
 
     ObjectListEntry {
         class_id,
@@ -190,16 +201,17 @@ pub fn full_access_entry(class_id: u16, version: u8, obis: &[u8], attr_count: u8
 
 /// Builds an object_list entry with read-only access for all attributes.
 pub fn read_only_entry(class_id: u16, version: u8, obis: &[u8], attr_count: u8, method_count: u8) -> ObjectListEntry {
-    let attribute_access = (1..=attr_count).map(|id| AttributeAccessItem {
-        attribute_id: id as i8,
-        access_mode: AttributeAccessMode::ReadOnly,
-        access_selectors: None,
-    }).collect();
+    let attribute_access = (1..=attr_count)
+        .map(|id| AttributeAccessItem {
+            attribute_id: id as i8,
+            access_mode: AttributeAccessMode::ReadOnly,
+            access_selectors: None,
+        })
+        .collect();
 
-    let method_access = (1..=method_count).map(|id| MethodAccessItem {
-        method_id: id as i8,
-        access_mode: MethodAccessMode::NoAccess,
-    }).collect();
+    let method_access = (1..=method_count)
+        .map(|id| MethodAccessItem { method_id: id as i8, access_mode: MethodAccessMode::NoAccess })
+        .collect();
 
     ObjectListEntry {
         class_id,

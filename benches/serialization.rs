@@ -48,11 +48,7 @@ fn bench_register_deserialize(c: &mut Criterion) {
 
     c.bench_function("Register deserialize", |b| {
         b.iter(|| {
-            let mut obj = Register::new(
-                ObisCode::new(0, 0, 0, 0, 0, 0),
-                CosemDataType::Null,
-                CosemDataType::Null,
-            );
+            let mut obj = Register::new(ObisCode::new(0, 0, 0, 0, 0, 0), CosemDataType::Null, CosemDataType::Null);
             deserialize_object(&mut obj, black_box(&encoded)).unwrap();
         });
     });

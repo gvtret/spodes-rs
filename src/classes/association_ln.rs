@@ -383,30 +383,22 @@ impl AssociationLn {
 
     /// Finds an object_list entry by class_id and logical name.
     pub fn find_object(&self, class_id: u16, logical_name: &ObisCode) -> Option<&ObjectListEntry> {
-        self.parsed_object_list.iter().find(|e| {
-            e.class_id == class_id && e.logical_name == logical_name.to_bytes()
-        })
+        self.parsed_object_list.iter().find(|e| e.class_id == class_id && e.logical_name == logical_name.to_bytes())
     }
 
     /// Checks whether a read is allowed for the given object and attribute.
     pub fn can_read(&self, class_id: u16, logical_name: &ObisCode, attribute_id: i8) -> bool {
-        self.find_object(class_id, logical_name)
-            .map(|e| e.can_read(attribute_id))
-            .unwrap_or(false)
+        self.find_object(class_id, logical_name).map(|e| e.can_read(attribute_id)).unwrap_or(false)
     }
 
     /// Checks whether a write is allowed for the given object and attribute.
     pub fn can_write(&self, class_id: u16, logical_name: &ObisCode, attribute_id: i8) -> bool {
-        self.find_object(class_id, logical_name)
-            .map(|e| e.can_write(attribute_id))
-            .unwrap_or(false)
+        self.find_object(class_id, logical_name).map(|e| e.can_write(attribute_id)).unwrap_or(false)
     }
 
     /// Checks whether a method invocation is allowed.
     pub fn can_invoke(&self, class_id: u16, logical_name: &ObisCode, method_id: i8) -> bool {
-        self.find_object(class_id, logical_name)
-            .map(|e| e.can_invoke(method_id))
-            .unwrap_or(false)
+        self.find_object(class_id, logical_name).map(|e| e.can_invoke(method_id)).unwrap_or(false)
     }
 
     /// Returns the parsed object_list.
@@ -417,9 +409,7 @@ impl AssociationLn {
     /// Adds an object_list entry with the given access rights.
     pub fn add_object_with_access(&mut self, entry: ObjectListEntry) {
         // Remove existing entry for the same object.
-        self.parsed_object_list.retain(|e| {
-            !(e.class_id == entry.class_id && e.logical_name == entry.logical_name)
-        });
+        self.parsed_object_list.retain(|e| !(e.class_id == entry.class_id && e.logical_name == entry.logical_name));
         self.parsed_object_list.push(entry);
     }
 }
@@ -467,11 +457,15 @@ fn gmac_tag(ek: &[u8], iv: &[u8; 12], aad: &[u8]) -> Result<Vec<u8>, String> {
     let out = match ek.len() {
         16 => {
             let cipher = Aes128Gcm::new_from_slice(ek).map_err(|_| "invalid EK".to_string())?;
-            cipher.encrypt(&nonce, aead::Payload { msg: &[], aad }).map_err(|_| "GMAC computation failed".to_string())?
+            cipher
+                .encrypt(&nonce, aead::Payload { msg: &[], aad })
+                .map_err(|_| "GMAC computation failed".to_string())?
         }
         32 => {
             let cipher = Aes256Gcm::new_from_slice(ek).map_err(|_| "invalid EK".to_string())?;
-            cipher.encrypt(&nonce, aead::Payload { msg: &[], aad }).map_err(|_| "GMAC computation failed".to_string())?
+            cipher
+                .encrypt(&nonce, aead::Payload { msg: &[], aad })
+                .map_err(|_| "GMAC computation failed".to_string())?
         }
         _ => return Err("EK must be 16 or 32 octets".to_string()),
     };

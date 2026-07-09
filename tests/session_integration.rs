@@ -53,21 +53,12 @@ fn build_meter_server() -> RequestDispatcher {
     let serial = ObisCode::new(0, 0, 96, 1, 0, 0xFF);
     let energy = ObisCode::new(1, 0, 1, 8, 0, 0xFF);
     server.add(Box::new(Data::new(serial, CosemDataType::OctetString(b"METER-001".to_vec()))));
-    server.add(Box::new(Register::new(
-        energy,
-        CosemDataType::DoubleLongUnsigned(123_456),
-        CosemDataType::Long(0),
-    )));
+    server.add(Box::new(Register::new(energy, CosemDataType::DoubleLongUnsigned(123_456), CosemDataType::Long(0))));
     server
 }
 
 /// Performs a GET request through a session.
-fn get_value(
-    session: &mut ClientSession<LoopbackLink>,
-    class_id: u16,
-    obis: ObisCode,
-    attr: i8,
-) -> CosemDataType {
+fn get_value(session: &mut ClientSession<LoopbackLink>, class_id: u16, obis: ObisCode, attr: i8) -> CosemDataType {
     match session.get(class_id, obis, attr) {
         Ok(GetResponse::Normal { result: GetDataResult::Data(value), .. }) => value,
         other => panic!("unexpected response: {other:?}"),

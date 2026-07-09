@@ -17,10 +17,10 @@
 //! Validated against the authenticated-encryption test vector of IEC 62056-5-3
 //! Annex E.5.
 
+use aead::AeadInOut;
 use aes_gcm::aead::consts::U12;
 use aes_gcm::aes::{Aes128, Aes256};
 use aes_gcm::{AesGcm, KeyInit, Nonce, Tag};
-use aead::AeadInOut;
 
 /// AES-128-GCM with a 96-bit (12-octet) authentication tag.
 type Aes128Gcm12 = AesGcm<Aes128, U12, U12>;

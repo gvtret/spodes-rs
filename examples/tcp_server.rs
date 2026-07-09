@@ -73,10 +73,7 @@ fn handle_client(stream: TcpStream) -> io::Result<()> {
 }
 
 fn main() -> io::Result<()> {
-    let port: u16 = std::env::args()
-        .nth(1)
-        .and_then(|p| p.parse().ok())
-        .unwrap_or(4059);
+    let port: u16 = std::env::args().nth(1).and_then(|p| p.parse().ok()).unwrap_or(4059);
 
     let listener = TcpListener::bind(("0.0.0.0", port))?;
     println!("DLMS/COSEM TCP server listening on port {port}");

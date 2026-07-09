@@ -32,25 +32,42 @@ impl WritableData {
 }
 
 impl InterfaceClass for WritableData {
-    fn class_id(&self) -> u16 { 1 }
-    fn version(&self) -> u8 { 0 }
-    fn logical_name(&self) -> &ObisCode { &self.logical_name }
+    fn class_id(&self) -> u16 {
+        1
+    }
+    fn version(&self) -> u8 {
+        0
+    }
+    fn logical_name(&self) -> &ObisCode {
+        &self.logical_name
+    }
     fn attributes(&self) -> Vec<(u8, CosemDataType)> {
         vec![(1, CosemDataType::OctetString(self.logical_name.to_bytes())), (2, self.value.clone())]
     }
-    fn methods(&self) -> Vec<(u8, String)> { vec![] }
-    fn serialize_ber(&self, buf: &mut Vec<u8>) -> Result<(), BerError> { Ok(()) }
-    fn deserialize_ber(&mut self, _data: &[u8]) -> Result<(), BerError> { Ok(()) }
+    fn methods(&self) -> Vec<(u8, String)> {
+        vec![]
+    }
+    fn serialize_ber(&self, buf: &mut Vec<u8>) -> Result<(), BerError> {
+        Ok(())
+    }
+    fn deserialize_ber(&mut self, _data: &[u8]) -> Result<(), BerError> {
+        Ok(())
+    }
     fn invoke_method(&mut self, _method_id: u8, _params: Option<CosemDataType>) -> Result<CosemDataType, String> {
         Err("no methods".to_string())
     }
     fn set_attribute(&mut self, attribute_id: u8, value: CosemDataType) -> Result<(), String> {
         match attribute_id {
-            2 => { self.value = value; Ok(()) }
+            2 => {
+                self.value = value;
+                Ok(())
+            }
             _ => Err("attribute not writable".to_string()),
         }
     }
-    fn as_any(&self) -> &dyn Any { self }
+    fn as_any(&self) -> &dyn Any {
+        self
+    }
 }
 
 // ---------------------------------------------------------------------------
@@ -149,10 +166,7 @@ fn test_set_register_returns_not_writable() {
 fn test_action_on_data_object() {
     let mut server = RequestDispatcher::new();
     // Data objects don't have meaningful methods, but we can test the dispatch path.
-    server.add(Box::new(Data::new(
-        ObisCode::new(0, 0, 96, 1, 0, 0xFF),
-        CosemDataType::OctetString(b"test".to_vec()),
-    )));
+    server.add(Box::new(Data::new(ObisCode::new(0, 0, 96, 1, 0, 0xFF), CosemDataType::OctetString(b"test".to_vec()))));
 
     let link = LoopbackLink::new(server);
     let mut session = ClientSession::new(link);
@@ -162,7 +176,7 @@ fn test_action_on_data_object() {
     let result = session.action(1, obis, 1, None);
     // Either error or method-not-available response is acceptable.
     match result {
-        Ok(_) => {} // Response received
+        Ok(_) => {}  // Response received
         Err(_) => {} // Error is fine
     }
 }
@@ -170,19 +184,13 @@ fn test_action_on_data_object() {
 #[test]
 fn test_action_with_parameters() {
     let mut server = RequestDispatcher::new();
-    server.add(Box::new(Data::new(
-        ObisCode::new(0, 0, 96, 1, 0, 0xFF),
-        CosemDataType::OctetString(b"test".to_vec()),
-    )));
+    server.add(Box::new(Data::new(ObisCode::new(0, 0, 96, 1, 0, 0xFF), CosemDataType::OctetString(b"test".to_vec()))));
 
     let link = LoopbackLink::new(server);
     let mut session = ClientSession::new(link);
 
     let obis = ObisCode::new(0, 0, 96, 1, 0, 0xFF);
-    let params = CosemDataType::Structure(vec![
-        CosemDataType::Unsigned(1),
-        CosemDataType::Unsigned(2),
-    ]);
+    let params = CosemDataType::Structure(vec![CosemDataType::Unsigned(1), CosemDataType::Unsigned(2)]);
     let result = session.action(1, obis, 1, Some(params));
     // Acceptable outcomes: error or method-not-available.
     match result {
@@ -201,16 +209,19 @@ fn test_get_block_transfer() {
     let mut server = RequestDispatcher::new();
     server.set_max_pdu(32); // Small blocks
 
-    let large_data = CosemDataType::Array((0..100).map(|i| {
-        CosemDataType::Structure(vec![
-            CosemDataType::DoubleLongUnsigned(i),
-            CosemDataType::DateTime(vec![0x07, 0xE5, 0x01, 0x01, 0x01, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00]),
-        ])
-    }).collect());
-    server.add(Box::new(Data::new(
-        ObisCode::new(1, 0, 99, 1, 0, 0xFF),
-        large_data,
-    )));
+    let large_data = CosemDataType::Array(
+        (0..100)
+            .map(|i| {
+                CosemDataType::Structure(vec![
+                    CosemDataType::DoubleLongUnsigned(i),
+                    CosemDataType::DateTime(vec![
+                        0x07, 0xE5, 0x01, 0x01, 0x01, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+                    ]),
+                ])
+            })
+            .collect(),
+    );
+    server.add(Box::new(Data::new(ObisCode::new(1, 0, 99, 1, 0, 0xFF), large_data)));
 
     let obis = ObisCode::new(1, 0, 99, 1, 0, 0xFF);
     let request = GetRequest::Normal {
@@ -246,10 +257,7 @@ fn test_set_block_transfer_data_not_writable() {
     // at the transport level but the value remains unchanged.
     let mut server = RequestDispatcher::new();
     server.set_max_pdu(32);
-    server.add(Box::new(Data::new(
-        ObisCode::new(1, 0, 99, 1, 0, 0xFF),
-        CosemDataType::Null,
-    )));
+    server.add(Box::new(Data::new(ObisCode::new(1, 0, 99, 1, 0, 0xFF), CosemDataType::Null)));
 
     let link = LoopbackLink::new(server);
     let mut session = ClientSession::new(link);
@@ -276,13 +284,15 @@ fn test_ecdsa_p256_sign_verify() {
     use spodes_rs::security::signature;
 
     let sk = [
-        0x48, 0x49, 0x4A, 0x4B, 0x4C, 0x4D, 0x4E, 0x4F,
-        0x40, 0x41, 0x42, 0x43, 0x44, 0x45, 0x46, 0x47,
-        0xBB, 0xBB, 0xAA, 0xAA, 0x99, 0x99, 0x88, 0x88,
-        0x44, 0x44, 0x55, 0x55, 0x66, 0x66, 0x77, 0x77,
+        0x48, 0x49, 0x4A, 0x4B, 0x4C, 0x4D, 0x4E, 0x4F, 0x40, 0x41, 0x42, 0x43, 0x44, 0x45, 0x46, 0x47, 0xBB, 0xBB,
+        0xAA, 0xAA, 0x99, 0x99, 0x88, 0x88, 0x44, 0x44, 0x55, 0x55, 0x66, 0x66, 0x77, 0x77,
     ];
-    let pk = p256::ecdsa::SigningKey::from_bytes(&sk.into()).unwrap()
-        .verifying_key().to_sec1_point(false).as_bytes().to_vec();
+    let pk = p256::ecdsa::SigningKey::from_bytes(&sk.into())
+        .unwrap()
+        .verifying_key()
+        .to_sec1_point(false)
+        .as_bytes()
+        .to_vec();
 
     let msg = b"DLMS Suite 1 ECDSA test";
     let sig = signature::ecdsa_sign(SecuritySuite::Suite1, &sk, msg).unwrap();
@@ -298,15 +308,16 @@ fn test_ecdsa_p384_sign_verify() {
     use spodes_rs::security::signature;
 
     let sk = [
-        0x48, 0x49, 0x4A, 0x4B, 0x4C, 0x4D, 0x4E, 0x4F,
-        0x40, 0x41, 0x42, 0x43, 0x44, 0x45, 0x46, 0x47,
-        0xBB, 0xBB, 0xAA, 0xAA, 0x99, 0x99, 0x88, 0x88,
-        0x44, 0x44, 0x55, 0x55, 0x66, 0x66, 0x77, 0x77,
-        0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
-        0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+        0x48, 0x49, 0x4A, 0x4B, 0x4C, 0x4D, 0x4E, 0x4F, 0x40, 0x41, 0x42, 0x43, 0x44, 0x45, 0x46, 0x47, 0xBB, 0xBB,
+        0xAA, 0xAA, 0x99, 0x99, 0x88, 0x88, 0x44, 0x44, 0x55, 0x55, 0x66, 0x66, 0x77, 0x77, 0x00, 0x00, 0x00, 0x00,
+        0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
     ];
-    let pk = p384::ecdsa::SigningKey::from_bytes(&sk.into()).unwrap()
-        .verifying_key().to_sec1_point(false).as_bytes().to_vec();
+    let pk = p384::ecdsa::SigningKey::from_bytes(&sk.into())
+        .unwrap()
+        .verifying_key()
+        .to_sec1_point(false)
+        .as_bytes()
+        .to_vec();
 
     let msg = b"DLMS Suite 2 ECDSA test";
     let sig = signature::ecdsa_sign(SecuritySuite::Suite2, &sk, msg).unwrap();
@@ -323,15 +334,12 @@ fn test_gost_hls_handshake_mechanism_10() {
     // Simulate a full GOST 34.10 HLS handshake.
     // Both client and server have signing keys.
     let client_sk = [
-        0x48, 0x49, 0x4A, 0x4B, 0x4C, 0x4D, 0x4E, 0x4F,
-        0x40, 0x41, 0x42, 0x43, 0x44, 0x45, 0x46, 0x47,
-        0xBB, 0xBB, 0xAA, 0xAA, 0x99, 0x99, 0x88, 0x88,
-        0x44, 0x44, 0x55, 0x55, 0x66, 0x66, 0x77, 0x77,
+        0x48, 0x49, 0x4A, 0x4B, 0x4C, 0x4D, 0x4E, 0x4F, 0x40, 0x41, 0x42, 0x43, 0x44, 0x45, 0x46, 0x47, 0xBB, 0xBB,
+        0xAA, 0xAA, 0x99, 0x99, 0x88, 0x88, 0x44, 0x44, 0x55, 0x55, 0x66, 0x66, 0x77, 0x77,
     ];
     let server_sk = [
-        0x68, 0x69, 0x6A, 0x6B, 0x6C, 0x6D, 0x6E, 0x6F,
-        0x60, 0x61, 0x62, 0x63, 0x64, 0x65, 0x66, 0x67,
-        0xDD, 0xDD, 0xCC, 0xCC, 0xAA, 0xAA, 0xBB, 0xBB,
+        0x68, 0x69, 0x6A, 0x6B, 0x6C, 0x6D, 0x6E, 0x6F, 0x60, 0x61, 0x62, 0x63, 0x64, 0x65, 0x66, 0x67, 0xDD, 0xDD,
+        0xCC, 0xCC, 0xAA, 0xAA, 0xBB, 0xBB,
     ];
 
     let client_pk = gost3410::public_key(&client_sk).unwrap();
@@ -384,10 +392,8 @@ fn test_gost_hls_cmac_with_association() {
     // 64-byte K_EM.
     let mut k_em = vec![0u8; 64];
     k_em[32..].copy_from_slice(&[
-        0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08,
-        0x09, 0x0A, 0x0B, 0x0C, 0x0D, 0x0E, 0x0F, 0x10,
-        0x11, 0x12, 0x13, 0x14, 0x15, 0x16, 0x17, 0x18,
-        0x19, 0x1A, 0x1B, 0x1C, 0x1D, 0x1E, 0x1F, 0x20,
+        0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08, 0x09, 0x0A, 0x0B, 0x0C, 0x0D, 0x0E, 0x0F, 0x10, 0x11, 0x12,
+        0x13, 0x14, 0x15, 0x16, 0x17, 0x18, 0x19, 0x1A, 0x1B, 0x1C, 0x1D, 0x1E, 0x1F, 0x20,
     ]);
 
     let assoc = AssociationLn::new(AssociationLnConfig {
@@ -427,10 +433,8 @@ fn test_gost_hls_signature_with_association() {
 
     // Server's signing key (32 bytes).
     let server_sk = vec![
-        0x68, 0x69, 0x6A, 0x6B, 0x6C, 0x6D, 0x6E, 0x6F,
-        0x60, 0x61, 0x62, 0x63, 0x64, 0x65, 0x66, 0x67,
-        0xDD, 0xDD, 0xCC, 0xCC, 0xAA, 0xAA, 0xBB, 0xBB,
-        0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+        0x68, 0x69, 0x6A, 0x6B, 0x6C, 0x6D, 0x6E, 0x6F, 0x60, 0x61, 0x62, 0x63, 0x64, 0x65, 0x66, 0x67, 0xDD, 0xDD,
+        0xCC, 0xCC, 0xAA, 0xAA, 0xBB, 0xBB, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
     ];
 
     let assoc = AssociationLn::new(AssociationLnConfig {
@@ -514,15 +518,12 @@ fn test_kdf_tree_various_lengths() {
 #[test]
 fn test_vko_round_trip() {
     let alice_sk = [
-        0x68, 0x69, 0x6A, 0x6B, 0x6C, 0x6D, 0x6E, 0x6F,
-        0x60, 0x61, 0x62, 0x63, 0x64, 0x65, 0x66, 0x67,
-        0xDD, 0xDD, 0xCC, 0xCC,
+        0x68, 0x69, 0x6A, 0x6B, 0x6C, 0x6D, 0x6E, 0x6F, 0x60, 0x61, 0x62, 0x63, 0x64, 0x65, 0x66, 0x67, 0xDD, 0xDD,
+        0xCC, 0xCC,
     ];
     let bob_sk = [
-        0x48, 0x49, 0x4A, 0x4B, 0x4C, 0x4D, 0x4E, 0x4F,
-        0x40, 0x41, 0x42, 0x43, 0x44, 0x45, 0x46, 0x47,
-        0xBB, 0xBB, 0xAA, 0xAA, 0x99, 0x99, 0x88, 0x88,
-        0x44, 0x44, 0x55, 0x55, 0x66, 0x66, 0x77, 0x77,
+        0x48, 0x49, 0x4A, 0x4B, 0x4C, 0x4D, 0x4E, 0x4F, 0x40, 0x41, 0x42, 0x43, 0x44, 0x45, 0x46, 0x47, 0xBB, 0xBB,
+        0xAA, 0xAA, 0x99, 0x99, 0x88, 0x88, 0x44, 0x44, 0x55, 0x55, 0x66, 0x66, 0x77, 0x77,
     ];
 
     let alice_pk = gost3410::public_key(&alice_sk).unwrap();

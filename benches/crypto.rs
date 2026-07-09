@@ -49,14 +49,7 @@ fn bench_gost_cmac(c: &mut Criterion) {
 
     c.bench_function("Kuznyechik CMAC", |b| {
         b.iter(|| {
-            hls::gost_cmac(
-                black_box(&k_em),
-                black_box(&iv),
-                0x10,
-                black_box(&data),
-                black_box(&data),
-            )
-            .unwrap();
+            hls::gost_cmac(black_box(&k_em), black_box(&iv), 0x10, black_box(&data), black_box(&data)).unwrap();
         });
     });
 }
@@ -67,8 +60,7 @@ fn bench_ecdsa_sign_p256(c: &mut Criterion) {
 
     c.bench_function("ECDSA P-256 sign", |b| {
         b.iter(|| {
-            signature::ecdsa_sign(black_box(SecuritySuite::Suite1), black_box(&sk), black_box(msg))
-                .unwrap();
+            signature::ecdsa_sign(black_box(SecuritySuite::Suite1), black_box(&sk), black_box(msg)).unwrap();
         });
     });
 }
@@ -77,23 +69,14 @@ fn bench_ecdsa_verify_p256(c: &mut Criterion) {
     use p256::ecdsa::SigningKey;
     let sk = [0x11u8; 32];
     let signing = SigningKey::from_bytes(&sk.into()).unwrap();
-    let pk = signing
-        .verifying_key()
-        .to_sec1_point(false)
-        .as_bytes()
-        .to_vec();
+    let pk = signing.verifying_key().to_sec1_point(false).as_bytes().to_vec();
     let msg = b"benchmark message for ECDSA P-256 verification";
     let sig = signature::ecdsa_sign(SecuritySuite::Suite1, &sk, msg).unwrap();
 
     c.bench_function("ECDSA P-256 verify", |b| {
         b.iter(|| {
-            signature::ecdsa_verify(
-                black_box(SecuritySuite::Suite1),
-                black_box(&pk),
-                black_box(msg),
-                black_box(&sig),
-            )
-            .unwrap();
+            signature::ecdsa_verify(black_box(SecuritySuite::Suite1), black_box(&pk), black_box(msg), black_box(&sig))
+                .unwrap();
         });
     });
 }
