@@ -10,8 +10,6 @@
 //!   authenticated_read_only(4), authenticated_write_only(5), authenticated_read_and_write(6)
 //! - Method: no_access(0), access(1), authenticated_access(2)
 
-use crate::types::CosemDataType;
-
 /// Access mode for an attribute (IEC 62056-5-3, 5.3.7.2.2).
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum AttributeAccessMode {
