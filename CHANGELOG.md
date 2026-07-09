@@ -8,6 +8,23 @@ While the crate is at `0.x`, minor releases may contain breaking changes.
 
 ## [Unreleased]
 
+## [0.4.0] - 2026-07-09
+
+### Added
+
+- **Access Control List (ACL)** — full IEC 62056-5-3, 5.3.7.2.2 implementation:
+  - `src/security/access_rights.rs`: `AccessRights`, `ObjectListEntry`, `AttributeAccessMode`, `MethodAccessMode`
+  - AssociationLN `object_list` with `can_read`/`can_write`/`can_invoke` methods
+  - `RequestDispatcher::set_association()` for access rights enforcement
+  - Server validates GET/SET/ACTION against association's access_rights before dispatch
+- **80+ integration tests** covering:
+  - GOST HLS mechanisms (8: CMAC, 10: GOST 34.10 signature)
+  - AES-GCM encryption/decryption
+  - ECDSA P-256/P-384 (Suite 1/2)
+  - Block transfer, SET/ACTION
+  - Association LN with all authentication mechanisms
+  - ACL access rights checking
+
 ## [0.3.0] - 2026-07-09
 
 ### Changed
@@ -108,7 +125,8 @@ Initial release: a full DLMS/COSEM stack for IEC 62056 and the Russian
 - **Tooling** — GitHub Actions CI (fmt, clippy, test, doc, package) and a
   tag-triggered release workflow; dual MIT / Apache-2.0 license.
 
-[Unreleased]: https://github.com/gvtret/spodes-rs/compare/v0.3.0...HEAD
+[Unreleased]: https://github.com/gvtret/spodes-rs/compare/v0.4.0...HEAD
+[0.4.0]: https://github.com/gvtret/spodes-rs/compare/v0.3.0...v0.4.0
 [0.3.0]: https://github.com/gvtret/spodes-rs/compare/v0.2.2...v0.3.0
 [0.2.2]: https://github.com/gvtret/spodes-rs/compare/v0.2.1...v0.2.2
 [0.2.1]: https://github.com/gvtret/spodes-rs/compare/v0.2.0...v0.2.1

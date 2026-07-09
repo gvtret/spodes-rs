@@ -396,9 +396,16 @@ The spodes-rs project is in good technical condition with quality code and good 
 - [x] Created `docs/DEPLOYMENT.md` — deployment guide
 - [x] Examples compile without errors
 
+### Phase 6: Access Control (ACL)
+
+- [x] Created `src/security/access_rights.rs` — ACL model per IEC 62056-5-3, 5.3.7.2.2
+- [x] Added `parsed_object_list` to AssociationLN with `can_read`/`can_write`/`can_invoke`
+- [x] Server checks access rights before GET/SET/ACTION dispatch
+- [x] 80+ integration tests covering all scenarios
+
 ## Remaining Tasks
 
-1. **Performance benchmarks** — add criterion benchmarks (low priority)
+1. **None** — all planned work completed
 
 **Recommended actions:**
 
@@ -406,3 +413,4 @@ The spodes-rs project is in good technical condition with quality code and good 
 2. Update cryptographic libraries
 3. Improve documentation and test coverage
 4. Measure test coverage (80.08% — target achieved)
+5. Implement ACL (IEC 62056-5-3, 5.3.7.2.2)

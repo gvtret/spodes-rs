@@ -82,6 +82,7 @@ Implements xDLMS services and the security model.
 - **Key agreement:** ECDH (NIST P-256/P-384) and GOST VKO
 - **Digital signatures:** ECDSA and GOST 34.10-2018
 - **Hashing:** SHA-256, SHA-384, Streebog-256
+- **Access rights** (`access_rights`): ACL model per IEC 62056-5-3, 5.3.7.2.2 — `ObjectListEntry`, `AttributeAccessMode`, `MethodAccessMode`
 
 ### 4. Drivers
 
@@ -91,7 +92,7 @@ High-level wrappers for client and server operations.
 
 - **`ClientSession`** — blocking client driver. Binds transport, services, and ciphering into round-trip GET/SET/ACTION/associate/release calls.
 
-- **`RequestDispatcher`** — server dispatcher. Routes incoming GET/SET/ACTION APDUs to addressed COSEM objects and returns response APDUs.
+- **`RequestDispatcher`** — server dispatcher. Routes incoming GET/SET/ACTION APDUs to addressed COSEM objects and returns response APDUs. Supports access rights checking via `set_association()` — when an Association LN is set, all requests are validated against the `object_list` access_rights before dispatch.
 
 ### 5. SPODUS Profile
 
