@@ -1,7 +1,6 @@
 use criterion::{black_box, criterion_group, criterion_main, Criterion};
 use spodes_rs::classes::data::Data;
 use spodes_rs::classes::register::Register;
-use spodes_rs::interface::InterfaceClass;
 use spodes_rs::obis::ObisCode;
 use spodes_rs::serialization::{deserialize_object, serialize_object};
 use spodes_rs::types::CosemDataType;

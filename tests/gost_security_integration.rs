@@ -13,9 +13,8 @@ use spodes_rs::classes::association_ln::{
 };
 use spodes_rs::classes::data::Data;
 use spodes_rs::classes::register::Register;
-use spodes_rs::interface::InterfaceClass;
 use spodes_rs::obis::ObisCode;
-use spodes_rs::security::{gost3410, hls, AuthMechanism, SecurityPolicy, SecuritySuite};
+use spodes_rs::security::{gost3410, hls, SecurityPolicy, SecuritySuite};
 use spodes_rs::server::RequestDispatcher;
 use spodes_rs::service::ciphering::{self, SecurityContext};
 use spodes_rs::service::get::{GetDataResult, GetResponse};
@@ -156,8 +155,8 @@ fn test_gost_kdf_tree() {
 #[test]
 fn test_aes_gcm_encrypt_decrypt_round_trip() {
     let key = [0x01u8; 16]; // AES-128
-    let iv = [0x02u8; 12];
-    let aad = [0x03u8; 8];
+    let _iv = [0x02u8; 12];
+    let _aad = [0x03u8; 8];
     let plaintext = b"Hello, DLMS/COSEM world!";
 
     let ctx = SecurityContext::for_suite(

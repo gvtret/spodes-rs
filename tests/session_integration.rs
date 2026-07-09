@@ -11,7 +11,6 @@ use spodes_rs::classes::association_ln::{
 };
 use spodes_rs::classes::data::Data;
 use spodes_rs::classes::register::Register;
-use spodes_rs::interface::InterfaceClass;
 use spodes_rs::obis::ObisCode;
 use spodes_rs::security::{AuthMechanism, SecuritySuite};
 use spodes_rs::server::RequestDispatcher;
@@ -252,14 +251,14 @@ fn test_server_multiple_registers() {
     // Voltage
     server.add(Box::new(Register::new(
         ObisCode::new(1, 0, 12, 7, 0, 0xFF),
-        CosemDataType::LongUnsigned(230_0),
+        CosemDataType::LongUnsigned(2300),
         CosemDataType::Long(0),
     )));
 
     // Current
     server.add(Box::new(Register::new(
         ObisCode::new(1, 0, 11, 7, 0, 0xFF),
-        CosemDataType::LongUnsigned(15_0),
+        CosemDataType::LongUnsigned(150),
         CosemDataType::Long(0),
     )));
 
@@ -280,10 +279,10 @@ fn test_server_multiple_registers() {
     assert_eq!(reactive, CosemDataType::DoubleLongUnsigned(25_000));
 
     let voltage = get_value(&mut session, 3, ObisCode::new(1, 0, 12, 7, 0, 0xFF), 2);
-    assert_eq!(voltage, CosemDataType::LongUnsigned(230_0));
+    assert_eq!(voltage, CosemDataType::LongUnsigned(2300));
 
     let current = get_value(&mut session, 3, ObisCode::new(1, 0, 11, 7, 0, 0xFF), 2);
-    assert_eq!(current, CosemDataType::LongUnsigned(15_0));
+    assert_eq!(current, CosemDataType::LongUnsigned(150));
 }
 
 // ---------------------------------------------------------------------------
@@ -300,11 +299,8 @@ fn test_get_nonexistent_object() {
     let result = session.get(1, missing, 2);
     // Server returns an error response (object-undefined) or the session fails.
     // Both are acceptable — the important thing is we don't get a valid Data value.
-    match result {
-        Ok(GetResponse::Normal { result: GetDataResult::Data(_), .. }) => {
-            panic!("expected error for non-existent object");
-        }
-        _ => {} // Error or AccessResult is fine
+    if let Ok(GetResponse::Normal { result: GetDataResult::Data(_), .. }) = result {
+        panic!("expected error for non-existent object");
     }
 }
 

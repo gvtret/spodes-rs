@@ -47,7 +47,7 @@ impl InterfaceClass for WritableData {
     fn methods(&self) -> Vec<(u8, String)> {
         vec![]
     }
-    fn serialize_ber(&self, buf: &mut Vec<u8>) -> Result<(), BerError> {
+    fn serialize_ber(&self, _buf: &mut Vec<u8>) -> Result<(), BerError> {
         Ok(())
     }
     fn deserialize_ber(&mut self, _data: &[u8]) -> Result<(), BerError> {
@@ -115,6 +115,30 @@ fn build_meter_server() -> RequestDispatcher {
 // ===========================================================================
 
 #[test]
+fn test_set_writable_data_attribute() {
+    let mut server = RequestDispatcher::new();
+    server.add(Box::new(WritableData::new(
+        ObisCode::new(0, 0, 96, 1, 0, 0xFF),
+        CosemDataType::OctetString(b"old_value".to_vec()),
+    )));
+
+    let link = LoopbackLink::new(server);
+    let mut session = ClientSession::new(link);
+
+    // WritableData supports SET on attribute 2.
+    let obis = ObisCode::new(0, 0, 96, 1, 0, 0xFF);
+    let result = session.set(1, obis.clone(), 2, CosemDataType::OctetString(b"new_value".to_vec()));
+    assert!(result.is_ok());
+
+    // Value should be updated.
+    let value = match session.get(1, obis, 2) {
+        Ok(GetResponse::Normal { result: GetDataResult::Data(v), .. }) => v,
+        other => panic!("unexpected: {other:?}"),
+    };
+    assert_eq!(value, CosemDataType::OctetString(b"new_value".to_vec()));
+}
+
+#[test]
 fn test_set_data_attribute_returns_not_writable() {
     let mut server = RequestDispatcher::new();
     server.add(Box::new(Data::new(
@@ -175,10 +199,7 @@ fn test_action_on_data_object() {
     let obis = ObisCode::new(0, 0, 96, 1, 0, 0xFF);
     let result = session.action(1, obis, 1, None);
     // Either error or method-not-available response is acceptable.
-    match result {
-        Ok(_) => {}  // Response received
-        Err(_) => {} // Error is fine
-    }
+    let _ = result;
 }
 
 #[test]
@@ -193,10 +214,7 @@ fn test_action_with_parameters() {
     let params = CosemDataType::Structure(vec![CosemDataType::Unsigned(1), CosemDataType::Unsigned(2)]);
     let result = session.action(1, obis, 1, Some(params));
     // Acceptable outcomes: error or method-not-available.
-    match result {
-        Ok(_) => {}
-        Err(_) => {}
-    }
+    let _ = result;
 }
 
 // ===========================================================================
@@ -262,7 +280,7 @@ fn test_set_block_transfer_data_not_writable() {
     let link = LoopbackLink::new(server);
     let mut session = ClientSession::new(link);
 
-    let large_value = CosemDataType::Array((0..50).map(|i| CosemDataType::Unsigned(i)).collect());
+    let large_value = CosemDataType::Array((0..50).map(CosemDataType::Unsigned).collect());
     let obis = ObisCode::new(1, 0, 99, 1, 0, 0xFF);
     let result = session.set(1, obis.clone(), 2, large_value);
     assert!(result.is_ok());
