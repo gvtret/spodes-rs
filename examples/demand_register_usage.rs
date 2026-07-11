@@ -2,35 +2,26 @@ use spodes_rs::classes::demand_register::{DemandRegister, DemandRegisterConfig};
 use spodes_rs::interface::InterfaceClass;
 use spodes_rs::obis::ObisCode;
 use spodes_rs::serialization::{deserialize_object, serialize_object};
+use spodes_rs::types::attrs::ScalerUnit;
 use spodes_rs::types::CosemDataType;
 
 fn main() {
-    // Создаём OBIS-код для DemandRegister
     let obis = ObisCode::new(1, 0, 1, 8, 2, 255);
 
-    // Инициализируем конфигурацию DemandRegister
     let config = DemandRegisterConfig {
         logical_name: obis.clone(),
-        current_average_value: CosemDataType::DoubleLong(3000), // Текущее значение: 3000
-        last_average_value: CosemDataType::DoubleLong(2500),    // Последнее значение: 2500
-        scaler_unit: CosemDataType::OctetString(vec![0x00, 0x1B]), // Единица: Wh
-        status: CosemDataType::Unsigned(1),                     // Статус: действительное измерение
+        current_average_value: CosemDataType::DoubleLong(3000),
+        last_average_value: CosemDataType::DoubleLong(2500),
+        scaler_unit: ScalerUnit::new(0, 0x1B),
+        status: CosemDataType::Unsigned(1),
         capture_time: CosemDataType::DateTime(vec![
-            0x07, 0xE5, 0x05, 0x01, // Год: 2025, Месяц: 5, День: 1
-            0x02, // День недели: вторник
-            0x10, 0x30, 0x00, // Час: 16, Минуты: 30, Секунды: 0
-            0x00, // Сотые доли секунды: 0
-            0x00, 0x00, 0x00, // Отклонение от UTC: 0
+            0x07, 0xE5, 0x05, 0x01, 0x02, 0x10, 0x30, 0x00, 0x00, 0x00, 0x00, 0x00,
         ]),
         start_time_current: CosemDataType::DateTime(vec![
-            0x07, 0xE5, 0x05, 0x01, // Год: 2025, Месяц: 5, День: 1
-            0x02, // День недели: вторник
-            0x10, 0x00, 0x00, // Час: 16, Минуты: 0, Секунды: 0
-            0x00, // Сотые доли секунды: 0
-            0x00, 0x00, 0x00, // Отклонение от UTC: 0
+            0x07, 0xE5, 0x05, 0x01, 0x02, 0x10, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
         ]),
-        period: CosemDataType::DoubleLongUnsigned(3600), // Период: 1 час
-        number_of_periods: CosemDataType::LongUnsigned(24), // 24 периода в сутки
+        period: 3600,
+        number_of_periods: 24,
     };
 
     // Создаём объект DemandRegister
@@ -72,12 +63,12 @@ fn main() {
         logical_name: obis.clone(),
         current_average_value: CosemDataType::Null,
         last_average_value: CosemDataType::Null,
-        scaler_unit: CosemDataType::Null,
+        scaler_unit: ScalerUnit::new(0, 0),
         status: CosemDataType::Null,
         capture_time: CosemDataType::Null,
         start_time_current: CosemDataType::Null,
-        period: CosemDataType::Null,
-        number_of_periods: CosemDataType::Null,
+        period: 0,
+        number_of_periods: 0,
     };
     let mut deserialized = DemandRegister::new(config);
     deserialize_object(&mut deserialized, &serialized).expect("Deserialization failed");

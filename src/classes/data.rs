@@ -1,28 +1,36 @@
 use crate::interface::InterfaceClass;
 use crate::obis::ObisCode;
+use crate::types::attrs::Choice;
 use crate::types::{BerError, CosemDataType};
 use serde::{Deserialize, Serialize};
 use std::any::Any;
 
 /// The `Data` interface class (class_id = 1) holding simple data such as
 /// identifiers or static parameters, per IEC 62056-6-2.
+///
+/// Attributes (IEC 62056-6-2, Table 5):
+/// - attr 1: logical_name (octet-string) — OBIS code
+/// - attr 2: value (CHOICE) — any COSEM data type
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct Data {
     logical_name: ObisCode,
-    value: CosemDataType,
+    value: Choice,
 }
 
 impl Data {
     /// Creates a new `Data` object.
-    ///
-    /// # Arguments
-    /// * `logical_name` - The object's OBIS code.
-    /// * `value` - The object value as a `CosemDataType`.
-    ///
-    /// # Returns
-    /// A new `Data`.
-    pub fn new(logical_name: ObisCode, value: CosemDataType) -> Self {
+    pub fn new(logical_name: ObisCode, value: Choice) -> Self {
         Data { logical_name, value }
+    }
+
+    /// Returns the value attribute (attr 2).
+    pub fn value(&self) -> &Choice {
+        &self.value
+    }
+
+    /// Sets the value attribute (attr 2).
+    pub fn set_value(&mut self, value: Choice) {
+        self.value = value;
     }
 }
 

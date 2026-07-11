@@ -18,6 +18,7 @@ use spodes_rs::service::get::{GetDataResult, GetResponse};
 use spodes_rs::session::ClientSession;
 use spodes_rs::transport::DataLinkLayer;
 use spodes_rs::types::CosemDataType;
+use spodes_rs::types::attrs::ScalerUnit;
 
 // ---------------------------------------------------------------------------
 // Test infrastructure
@@ -52,7 +53,7 @@ fn build_meter_server() -> RequestDispatcher {
     let serial = ObisCode::new(0, 0, 96, 1, 0, 0xFF);
     let energy = ObisCode::new(1, 0, 1, 8, 0, 0xFF);
     server.add(Box::new(Data::new(serial, CosemDataType::OctetString(b"METER-001".to_vec()))));
-    server.add(Box::new(Register::new(energy, CosemDataType::DoubleLongUnsigned(123_456), CosemDataType::Long(0))));
+    server.add(Box::new(Register::new(energy, CosemDataType::DoubleLongUnsigned(123_456), ScalerUnit::new(0, 0))));
     server
 }
 
@@ -231,35 +232,35 @@ fn test_server_multiple_registers() {
     server.add(Box::new(Register::new(
         ObisCode::new(1, 0, 1, 8, 0, 0xFF),
         CosemDataType::DoubleLongUnsigned(100_000),
-        CosemDataType::Long(0),
+        ScalerUnit::new(0, 0),
     )));
 
     // Active energy export
     server.add(Box::new(Register::new(
         ObisCode::new(1, 0, 2, 8, 0, 0xFF),
         CosemDataType::DoubleLongUnsigned(50_000),
-        CosemDataType::Long(0),
+        ScalerUnit::new(0, 0),
     )));
 
     // Reactive energy import
     server.add(Box::new(Register::new(
         ObisCode::new(1, 0, 3, 8, 0, 0xFF),
         CosemDataType::DoubleLongUnsigned(25_000),
-        CosemDataType::Long(0),
+        ScalerUnit::new(0, 0),
     )));
 
     // Voltage
     server.add(Box::new(Register::new(
         ObisCode::new(1, 0, 12, 7, 0, 0xFF),
         CosemDataType::LongUnsigned(2300),
-        CosemDataType::Long(0),
+        ScalerUnit::new(0, 0),
     )));
 
     // Current
     server.add(Box::new(Register::new(
         ObisCode::new(1, 0, 11, 7, 0, 0xFF),
         CosemDataType::LongUnsigned(150),
-        CosemDataType::Long(0),
+        ScalerUnit::new(0, 0),
     )));
 
     let link = LoopbackLink::new(server);
@@ -314,7 +315,7 @@ fn test_multiple_sequential_gets() {
     server.add(Box::new(Register::new(
         ObisCode::new(1, 0, 1, 8, 0, 0xFF),
         CosemDataType::DoubleLongUnsigned(42),
-        CosemDataType::Long(0),
+        ScalerUnit::new(0, 0),
     )));
 
     let link = LoopbackLink::new(server);

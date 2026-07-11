@@ -2,24 +2,19 @@ use spodes_rs::classes::extended_register::ExtendedRegister;
 use spodes_rs::interface::InterfaceClass;
 use spodes_rs::obis::ObisCode;
 use spodes_rs::serialization::{deserialize_object, serialize_object};
+use spodes_rs::types::attrs::ScalerUnit;
 use spodes_rs::types::CosemDataType;
 
 fn main() {
-    // Создаём OBIS-код для ExtendedRegister
     let obis = ObisCode::new(1, 0, 1, 8, 1, 255);
 
-    // Инициализируем ExtendedRegister
     let mut extended_register = ExtendedRegister::new(
         obis.clone(),
-        CosemDataType::DoubleLong(2000),              // Значение: 2000
-        CosemDataType::OctetString(vec![0x00, 0x1B]), // Единица: Wh
-        CosemDataType::Unsigned(1),                   // Статус: действительное измерение
+        CosemDataType::DoubleLong(2000),
+        ScalerUnit::new(0, 0x1B),
+        CosemDataType::Unsigned(1),
         CosemDataType::DateTime(vec![
-            0x07, 0xE5, 0x05, 0x01, // Год: 2025, Месяц: 5, День: 1
-            0x02, // День недели: вторник
-            0x10, 0x30, 0x00, // Час: 16, Минуты: 30, Секунды: 0
-            0x00, // Сотые доли секунды: 0
-            0x00, 0x00, 0x00, // Отклонение от UTC: 0
+            0x07, 0xE5, 0x05, 0x01, 0x02, 0x10, 0x30, 0x00, 0x00, 0x00, 0x00, 0x00,
         ]),
     );
 
@@ -58,7 +53,7 @@ fn main() {
     let mut deserialized = ExtendedRegister::new(
         obis.clone(),
         CosemDataType::Null,
-        CosemDataType::Null,
+        ScalerUnit::new(0, 0),
         CosemDataType::Null,
         CosemDataType::Null,
     );

@@ -3,11 +3,12 @@ use spodes_rs::interface::InterfaceClass;
 use spodes_rs::obis::ObisCode;
 use spodes_rs::serialization::{deserialize_object, serialize_object};
 use spodes_rs::types::CosemDataType;
+use spodes_rs::types::attrs::ScalerUnit;
 
 fn main() {
     let obis = ObisCode::new(1, 0, 1, 8, 0, 255);
     let value = CosemDataType::DoubleLong(1000);
-    let scaler_unit = CosemDataType::OctetString(vec![0x00, 0x1B]);
+    let scaler_unit = ScalerUnit::new(0, 0x1B);
     let mut register = Register::new(obis.clone(), value, scaler_unit);
 
     println!("Register object: {:?}", register);
@@ -18,7 +19,7 @@ fn main() {
     let serialized = serialize_object(&register).expect("Serialization failed");
     println!("Serialized register: {:?}", serialized);
 
-    let mut deserialized = Register::new(obis, CosemDataType::Null, CosemDataType::Null);
+    let mut deserialized = Register::new(obis, CosemDataType::Null, ScalerUnit::new(0, 0));
     deserialize_object(&mut deserialized, &serialized).expect("Deserialization failed");
     println!("Deserialized register: {:?}", deserialized);
 

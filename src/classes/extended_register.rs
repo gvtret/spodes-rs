@@ -1,5 +1,6 @@
 use crate::interface::InterfaceClass;
 use crate::obis::ObisCode;
+use crate::types::attrs::{Choice, ScalerUnit};
 use crate::types::{BerError, CosemDataType};
 use serde::{Deserialize, Serialize};
 use std::any::Any;
@@ -7,35 +8,52 @@ use std::any::Any;
 /// The `ExtendedRegister` interface class (class_id = 4): the current value of a
 /// measured quantity with extra metadata such as status and capture time, per
 /// IEC 62056-6-2.
+///
+/// Attributes (IEC 62056-6-2, Table 9):
+/// - attr 1: logical_name (octet-string) — OBIS code
+/// - attr 2: value (CHOICE) — any numeric type
+/// - attr 3: scaler_unit (scal_unit_type) — {scaler, unit}
+/// - attr 4: status (CHOICE) — measurement status
+/// - attr 5: capture_time (octet-string) — date-time
 #[derive(Clone, Serialize, Deserialize, Debug)]
 pub struct ExtendedRegister {
     logical_name: ObisCode,
-    value: CosemDataType,
-    scaler_unit: CosemDataType,
-    status: CosemDataType,
-    capture_time: CosemDataType,
+    value: Choice,
+    scaler_unit: ScalerUnit,
+    status: Choice,
+    capture_time: Choice,
 }
 
 impl ExtendedRegister {
     /// Creates a new `ExtendedRegister` object.
-    ///
-    /// # Arguments
-    /// * `logical_name` - The object's OBIS code.
-    /// * `value` - The current value (e.g. CosemDataType::DoubleLong).
-    /// * `scaler_unit` - The unit and scaler (CosemDataType::OctetString).
-    /// * `status` - The measurement status (e.g. CosemDataType::Unsigned).
-    /// * `capture_time` - The value capture time (CosemDataType::DateTime).
-    ///
-    /// # Returns
-    /// A new `ExtendedRegister`.
     pub fn new(
         logical_name: ObisCode,
-        value: CosemDataType,
-        scaler_unit: CosemDataType,
-        status: CosemDataType,
-        capture_time: CosemDataType,
+        value: Choice,
+        scaler_unit: ScalerUnit,
+        status: Choice,
+        capture_time: Choice,
     ) -> Self {
         ExtendedRegister { logical_name, value, scaler_unit, status, capture_time }
+    }
+
+    /// Returns the value attribute (attr 2).
+    pub fn value(&self) -> &Choice {
+        &self.value
+    }
+
+    /// Returns the scaler_unit attribute (attr 3).
+    pub fn scaler_unit(&self) -> &ScalerUnit {
+        &self.scaler_unit
+    }
+
+    /// Returns the status attribute (attr 4).
+    pub fn status(&self) -> &Choice {
+        &self.status
+    }
+
+    /// Returns the capture_time attribute (attr 5).
+    pub fn capture_time(&self) -> &Choice {
+        &self.capture_time
     }
 
     /// Resets the register value to 0 and clears the status and capture time.
@@ -91,15 +109,9 @@ impl ExtendedRegister {
     /// * `Ok(CosemDataType::Null)` - On a successful capture.
     /// * `Err(String)` - On error.
     fn capture(&mut self) -> Result<CosemDataType, String> {
-        // Update the status (here 1 is assumed to mean a successful measurement).
         self.status = CosemDataType::Unsigned(1);
-        // Set the capture time (example: 2025-05-01 00:00:00).
         self.capture_time = CosemDataType::DateTime(vec![
-            0x07, 0xE5, 0x05, 0x01, // year 2025, month 5, day 1
-            0x02, // day of week: Tuesday
-            0x00, 0x00, 0x00, // hour 0, minute 0, second 0
-            0x00, // hundredths of a second: 0
-            0x00, 0x00, 0x00, // deviation from UTC: 0
+            0x07, 0xE5, 0x05, 0x01, 0x02, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
         ]);
         Ok(CosemDataType::Null)
     }
@@ -122,7 +134,7 @@ impl InterfaceClass for ExtendedRegister {
         vec![
             (1, CosemDataType::OctetString(self.logical_name.to_bytes())),
             (2, self.value.clone()),
-            (3, self.scaler_unit.clone()),
+            (3, self.scaler_unit.clone().into()),
             (4, self.status.clone()),
             (5, self.capture_time.clone()),
         ]
@@ -168,7 +180,7 @@ impl InterfaceClass for ExtendedRegister {
                     return Err(BerError::InvalidTag);
                 }
                 self.value = seq[2].clone();
-                self.scaler_unit = seq[3].clone();
+                self.scaler_unit = ScalerUnit::try_from(&seq[3]).map_err(|_| BerError::InvalidValue)?;
                 self.status = seq[4].clone();
                 self.capture_time = seq[5].clone();
                 return Ok(());

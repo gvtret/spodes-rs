@@ -1,5 +1,6 @@
 use crate::interface::InterfaceClass;
 use crate::obis::ObisCode;
+use crate::types::attrs::{Choice, ScalerUnit};
 use crate::types::{BerError, CosemDataType};
 use serde::{Deserialize, Serialize};
 use std::any::Any;
@@ -10,37 +11,48 @@ pub struct DemandRegisterConfig {
     /// Attribute 1: the object's logical name (OBIS code).
     pub logical_name: ObisCode,
     /// Attribute 2: the demand value being accumulated in the current period.
-    pub current_average_value: CosemDataType,
+    pub current_average_value: Choice,
     /// Attribute 3: the demand value computed for the last completed period.
-    pub last_average_value: CosemDataType,
+    pub last_average_value: Choice,
     /// Attribute 4: `scaler_unit` structure { scaler, unit } for both values.
-    pub scaler_unit: CosemDataType,
+    pub scaler_unit: ScalerUnit,
     /// Attribute 5: status of the register at capture time.
-    pub status: CosemDataType,
+    pub status: Choice,
     /// Attribute 6: the time `last_average_value` was captured (date-time).
-    pub capture_time: CosemDataType,
+    pub capture_time: Choice,
     /// Attribute 7: start time of the current demand period (date-time).
-    pub start_time_current: CosemDataType,
+    pub start_time_current: Choice,
     /// Attribute 8: the demand-integration period, in seconds (double-long-unsigned).
-    pub period: CosemDataType,
+    pub period: u32,
     /// Attribute 9: number of periods used for the sliding-demand computation.
-    pub number_of_periods: CosemDataType,
+    pub number_of_periods: u16,
 }
 
 /// The `DemandRegister` interface class (class_id = 5) managing measured demand
 /// quantities such as the maximum power over a period, with support for
 /// measurement periods and capture time, per IEC 62056-6-2.
+///
+/// Attributes (IEC 62056-6-2, Table 10):
+/// - attr 1: logical_name (octet-string) — OBIS code
+/// - attr 2: current_average_value (CHOICE) — current period demand
+/// - attr 3: last_average_value (CHOICE) — last completed period demand
+/// - attr 4: scaler_unit (scal_unit_type) — {scaler, unit}
+/// - attr 5: status (CHOICE) — measurement status
+/// - attr 6: capture_time (octet-string) — date-time
+/// - attr 7: start_time_current (octet-string) — date-time
+/// - attr 8: period (double-long-unsigned) — integration period in seconds
+/// - attr 9: number_of_periods (long-unsigned) — periods for sliding demand
 #[derive(Clone, Serialize, Deserialize, Debug)]
 pub struct DemandRegister {
     logical_name: ObisCode,
-    current_average_value: CosemDataType,
-    last_average_value: CosemDataType,
-    scaler_unit: CosemDataType,
-    status: CosemDataType,
-    capture_time: CosemDataType,
-    start_time_current: CosemDataType,
-    period: CosemDataType,
-    number_of_periods: CosemDataType,
+    current_average_value: Choice,
+    last_average_value: Choice,
+    scaler_unit: ScalerUnit,
+    status: Choice,
+    capture_time: Choice,
+    start_time_current: Choice,
+    period: u32,
+    number_of_periods: u16,
 }
 
 impl DemandRegister {
@@ -67,10 +79,6 @@ impl DemandRegister {
 
     /// Resets `current_average_value` and `last_average_value` to 0, and clears
     /// the status, capture time and current-period start time.
-    ///
-    /// # Returns
-    /// * `Ok(CosemDataType::Null)` - On successful reset.
-    /// * `Err(String)` - If the value type does not support reset.
     fn reset(&mut self) -> Result<CosemDataType, String> {
         match &self.current_average_value {
             CosemDataType::Integer(_) => {
@@ -159,12 +167,12 @@ impl InterfaceClass for DemandRegister {
             (1, CosemDataType::OctetString(self.logical_name.to_bytes())),
             (2, self.current_average_value.clone()),
             (3, self.last_average_value.clone()),
-            (4, self.scaler_unit.clone()),
+            (4, self.scaler_unit.clone().into()),
             (5, self.status.clone()),
             (6, self.capture_time.clone()),
             (7, self.start_time_current.clone()),
-            (8, self.period.clone()),
-            (9, self.number_of_periods.clone()),
+            (8, CosemDataType::DoubleLongUnsigned(self.period)),
+            (9, CosemDataType::LongUnsigned(self.number_of_periods)),
         ]
     }
 
@@ -209,12 +217,18 @@ impl InterfaceClass for DemandRegister {
                 }
                 self.current_average_value = seq[2].clone();
                 self.last_average_value = seq[3].clone();
-                self.scaler_unit = seq[4].clone();
+                self.scaler_unit = ScalerUnit::try_from(&seq[4]).map_err(|_| BerError::InvalidValue)?;
                 self.status = seq[5].clone();
                 self.capture_time = seq[6].clone();
                 self.start_time_current = seq[7].clone();
-                self.period = seq[8].clone();
-                self.number_of_periods = seq[9].clone();
+                self.period = match &seq[8] {
+                    CosemDataType::DoubleLongUnsigned(v) => *v,
+                    _ => return Err(BerError::InvalidTag),
+                };
+                self.number_of_periods = match &seq[9] {
+                    CosemDataType::LongUnsigned(v) => *v,
+                    _ => return Err(BerError::InvalidTag),
+                };
                 return Ok(());
             }
             return Err(BerError::InvalidLength);

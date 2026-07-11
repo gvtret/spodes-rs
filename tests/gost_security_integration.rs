@@ -21,6 +21,7 @@ use spodes_rs::service::get::{GetDataResult, GetResponse};
 use spodes_rs::session::ClientSession;
 use spodes_rs::transport::DataLinkLayer;
 use spodes_rs::types::CosemDataType;
+use spodes_rs::types::attrs::ScalerUnit;
 
 // ---------------------------------------------------------------------------
 // Test infrastructure
@@ -57,7 +58,7 @@ fn build_meter_server() -> RequestDispatcher {
     server.add(Box::new(Register::new(
         ObisCode::new(1, 0, 1, 8, 0, 0xFF),
         CosemDataType::DoubleLongUnsigned(123_456),
-        CosemDataType::Long(0),
+        ScalerUnit::new(0, 0),
     )));
     server
 }

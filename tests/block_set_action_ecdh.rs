@@ -16,6 +16,7 @@ use spodes_rs::server::RequestDispatcher;
 use spodes_rs::service::get::{GetDataResult, GetRequest, GetResponse};
 use spodes_rs::service::{invoke_id_and_priority, AttributeDescriptor};
 use spodes_rs::session::ClientSession;
+use spodes_rs::types::attrs::ScalerUnit;
 use spodes_rs::transport::DataLinkLayer;
 use spodes_rs::types::{BerError, CosemDataType};
 
@@ -105,7 +106,7 @@ fn build_meter_server() -> RequestDispatcher {
     server.add(Box::new(Register::new(
         ObisCode::new(1, 0, 1, 8, 0, 0xFF),
         CosemDataType::DoubleLongUnsigned(123_456),
-        CosemDataType::Long(0),
+        ScalerUnit::new(0, 0),
     )));
     server
 }
@@ -168,7 +169,7 @@ fn test_set_register_returns_not_writable() {
     server.add(Box::new(Register::new(
         ObisCode::new(1, 0, 1, 8, 0, 0xFF),
         CosemDataType::DoubleLongUnsigned(100),
-        CosemDataType::Long(0),
+        ScalerUnit::new(0, 0),
     )));
 
     let link = LoopbackLink::new(server);

@@ -1,30 +1,48 @@
 use crate::interface::InterfaceClass;
 use crate::obis::ObisCode;
+use crate::types::attrs::{Choice, ScalerUnit};
 use crate::types::{BerError, CosemDataType};
 use serde::{Deserialize, Serialize};
 use std::any::Any;
 
 /// The `Register` interface class (class_id = 3): the current value of a
 /// measured quantity and its associated unit, per IEC 62056-6-2.
+///
+/// Attributes (IEC 62056-6-2, Table 8):
+/// - attr 1: logical_name (octet-string) — OBIS code
+/// - attr 2: value (CHOICE) — any numeric type
+/// - attr 3: scaler_unit (scal_unit_type) — {scaler, unit}
 #[derive(Clone, Serialize, Deserialize, Debug)]
 pub struct Register {
     logical_name: ObisCode,
-    value: CosemDataType,
-    scaler_unit: CosemDataType,
+    value: Choice,
+    scaler_unit: ScalerUnit,
 }
 
 impl Register {
     /// Creates a new `Register` object.
-    ///
-    /// # Arguments
-    /// * `logical_name` - The object's OBIS code.
-    /// * `value` - The current value (e.g. CosemDataType::DoubleLong).
-    /// * `scaler_unit` - The unit and scaler (CosemDataType::OctetString).
-    ///
-    /// # Returns
-    /// A new `Register`.
-    pub fn new(logical_name: ObisCode, value: CosemDataType, scaler_unit: CosemDataType) -> Self {
+    pub fn new(logical_name: ObisCode, value: Choice, scaler_unit: ScalerUnit) -> Self {
         Register { logical_name, value, scaler_unit }
+    }
+
+    /// Returns the value attribute (attr 2).
+    pub fn value(&self) -> &Choice {
+        &self.value
+    }
+
+    /// Sets the value attribute (attr 2).
+    pub fn set_value(&mut self, value: Choice) {
+        self.value = value;
+    }
+
+    /// Returns the scaler_unit attribute (attr 3).
+    pub fn scaler_unit(&self) -> &ScalerUnit {
+        &self.scaler_unit
+    }
+
+    /// Sets the scaler_unit attribute (attr 3).
+    pub fn set_scaler_unit(&mut self, scaler_unit: ScalerUnit) {
+        self.scaler_unit = scaler_unit;
     }
 
     /// Resets the register value to 0.
@@ -80,7 +98,7 @@ impl InterfaceClass for Register {
         vec![
             (1, CosemDataType::OctetString(self.logical_name.to_bytes())),
             (2, self.value.clone()),
-            (3, self.scaler_unit.clone()),
+            (3, self.scaler_unit.clone().into()),
         ]
     }
 
@@ -122,7 +140,7 @@ impl InterfaceClass for Register {
                         return Err(BerError::InvalidTag);
                     }
                     self.value = seq[2].clone();
-                    self.scaler_unit = seq[3].clone();
+                    self.scaler_unit = ScalerUnit::try_from(&seq[3]).map_err(|_| BerError::InvalidValue)?;
                     return Ok(());
                 }
             }

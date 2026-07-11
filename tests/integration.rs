@@ -16,6 +16,7 @@ use spodes_rs::interface::InterfaceClass;
 use spodes_rs::obis::ObisCode;
 use spodes_rs::serialization::{deserialize_object, serialize_object};
 use spodes_rs::types::CosemDataType;
+use spodes_rs::types::attrs::ScalerUnit;
 use std::sync::Arc;
 
 #[test]
@@ -36,16 +37,16 @@ fn test_data_serialization_deserialization() {
 fn test_register_serialization_deserialization() {
     let obis = ObisCode::new(1, 0, 1, 8, 0, 255);
     let value = CosemDataType::DoubleLong(1000);
-    let scaler_unit = CosemDataType::OctetString(vec![0x00, 0x1B]);
+    let scaler_unit = ScalerUnit::new(0, 0x1B);
     let register = Register::new(obis.clone(), value.clone(), scaler_unit.clone());
 
     let serialized = serialize_object(&register).expect("Serialization failed");
-    let mut deserialized = Register::new(obis, CosemDataType::Null, CosemDataType::Null);
+    let mut deserialized = Register::new(obis, CosemDataType::Null, ScalerUnit::new(0, 0));
     deserialize_object(&mut deserialized, &serialized).expect("Deserialization failed");
 
     assert_eq!(deserialized.logical_name(), register.logical_name());
     assert_eq!(deserialized.attributes()[1].1, value);
-    assert_eq!(deserialized.attributes()[2].1, scaler_unit);
+    assert_eq!(deserialized.attributes()[2].1, CosemDataType::Structure(vec![CosemDataType::Integer(0), CosemDataType::Enum(0x1B)]));
 }
 
 #[test]
@@ -109,7 +110,7 @@ fn test_profile_generic_serialization_deserialization() {
 fn test_register_reset_method() {
     let obis = ObisCode::new(1, 0, 1, 8, 0, 255);
     let value = CosemDataType::DoubleLong(1000);
-    let scaler_unit = CosemDataType::OctetString(vec![0x00, 0x1B]);
+    let scaler_unit = ScalerUnit::new(0, 0x1B);
     let mut register = Register::new(obis, value, scaler_unit);
 
     let result = register.invoke_method(1, None).expect("Reset method failed");
@@ -314,7 +315,7 @@ fn test_clock_adjust_to_preset_time() {
 fn test_extended_register_serialization_deserialization() {
     let obis = ObisCode::new(1, 0, 1, 8, 1, 255);
     let value = CosemDataType::DoubleLong(2000);
-    let scaler_unit = CosemDataType::OctetString(vec![0x00, 0x1B]);
+    let scaler_unit = ScalerUnit::new(0, 0x1B);
     let status = CosemDataType::Unsigned(1);
     let capture_time = CosemDataType::DateTime(vec![
         0x07, 0xE5, 0x05, 0x01, // Год: 2025, Месяц: 5, День: 1
@@ -331,7 +332,7 @@ fn test_extended_register_serialization_deserialization() {
     let mut deserialized = ExtendedRegister::new(
         obis.clone(),
         CosemDataType::Null,
-        CosemDataType::Null,
+        ScalerUnit::new(0, 0),
         CosemDataType::Null,
         CosemDataType::Null,
     );
@@ -339,7 +340,7 @@ fn test_extended_register_serialization_deserialization() {
 
     assert_eq!(deserialized.logical_name(), extended_register.logical_name());
     assert_eq!(deserialized.attributes()[1].1, value);
-    assert_eq!(deserialized.attributes()[2].1, scaler_unit);
+    assert_eq!(deserialized.attributes()[2].1, CosemDataType::Structure(vec![CosemDataType::Integer(0), CosemDataType::Enum(0x1B)]));
     assert_eq!(deserialized.attributes()[3].1, status);
     assert_eq!(deserialized.attributes()[4].1, capture_time);
 }
@@ -348,7 +349,7 @@ fn test_extended_register_serialization_deserialization() {
 fn test_extended_register_reset_method() {
     let obis = ObisCode::new(1, 0, 1, 8, 1, 255);
     let value = CosemDataType::DoubleLong(2000);
-    let scaler_unit = CosemDataType::OctetString(vec![0x00, 0x1B]);
+    let scaler_unit = ScalerUnit::new(0, 0x1B);
     let status = CosemDataType::Unsigned(1);
     let capture_time = CosemDataType::DateTime(vec![
         0x07, 0xE5, 0x05, 0x01, // Год: 2025, Месяц: 5, День: 1
@@ -370,7 +371,7 @@ fn test_extended_register_reset_method() {
 fn test_extended_register_capture_method() {
     let obis = ObisCode::new(1, 0, 1, 8, 1, 255);
     let value = CosemDataType::DoubleLong(2000);
-    let scaler_unit = CosemDataType::OctetString(vec![0x00, 0x1B]);
+    let scaler_unit = ScalerUnit::new(0, 0x1B);
     let status = CosemDataType::Null;
     let capture_time = CosemDataType::Null;
     let mut extended_register = ExtendedRegister::new(obis, value, scaler_unit, status, capture_time);
@@ -390,7 +391,7 @@ fn test_demand_register_serialization_deserialization() {
     let obis = ObisCode::new(1, 0, 1, 8, 2, 255);
     let current_average_value = CosemDataType::DoubleLong(3000);
     let last_average_value = CosemDataType::DoubleLong(2500);
-    let scaler_unit = CosemDataType::OctetString(vec![0x00, 0x1B]);
+    let scaler_unit = ScalerUnit::new(0, 0x1B);
     let status = CosemDataType::Unsigned(1);
     let capture_time = CosemDataType::DateTime(vec![
         0x07, 0xE5, 0x05, 0x01, // Год: 2025, Месяц: 5, День: 1
@@ -406,8 +407,8 @@ fn test_demand_register_serialization_deserialization() {
         0x00, // Сотые доли секунды: 0
         0x00, 0x00, 0x00, // Отклонение от UTC: 0
     ]);
-    let period = CosemDataType::DoubleLongUnsigned(3600);
-    let number_of_periods = CosemDataType::LongUnsigned(24);
+    let period = 3600u32;
+    let number_of_periods = 24u16;
 
     let config = DemandRegisterConfig {
         logical_name: obis.clone(),
@@ -417,8 +418,8 @@ fn test_demand_register_serialization_deserialization() {
         status: status.clone(),
         capture_time: capture_time.clone(),
         start_time_current: start_time_current.clone(),
-        period: period.clone(),
-        number_of_periods: number_of_periods.clone(),
+        period,
+        number_of_periods,
     };
     let demand_register = DemandRegister::new(config);
 
@@ -427,12 +428,12 @@ fn test_demand_register_serialization_deserialization() {
         logical_name: obis.clone(),
         current_average_value: CosemDataType::Null,
         last_average_value: CosemDataType::Null,
-        scaler_unit: CosemDataType::Null,
+        scaler_unit: ScalerUnit::new(0, 0),
         status: CosemDataType::Null,
         capture_time: CosemDataType::Null,
         start_time_current: CosemDataType::Null,
-        period: CosemDataType::Null,
-        number_of_periods: CosemDataType::Null,
+        period: 0,
+        number_of_periods: 0,
     };
     let mut deserialized = DemandRegister::new(config);
     deserialize_object(&mut deserialized, &serialized).expect("Deserialization failed");
@@ -440,12 +441,12 @@ fn test_demand_register_serialization_deserialization() {
     assert_eq!(deserialized.logical_name(), demand_register.logical_name());
     assert_eq!(deserialized.attributes()[1].1, current_average_value);
     assert_eq!(deserialized.attributes()[2].1, last_average_value);
-    assert_eq!(deserialized.attributes()[3].1, scaler_unit);
+    assert_eq!(deserialized.attributes()[3].1, CosemDataType::Structure(vec![CosemDataType::Integer(0), CosemDataType::Enum(0x1B)]));
     assert_eq!(deserialized.attributes()[4].1, status);
     assert_eq!(deserialized.attributes()[5].1, capture_time);
     assert_eq!(deserialized.attributes()[6].1, start_time_current);
-    assert_eq!(deserialized.attributes()[7].1, period);
-    assert_eq!(deserialized.attributes()[8].1, number_of_periods);
+    assert_eq!(deserialized.attributes()[7].1, CosemDataType::DoubleLongUnsigned(period));
+    assert_eq!(deserialized.attributes()[8].1, CosemDataType::LongUnsigned(number_of_periods));
 }
 
 #[test]
@@ -453,7 +454,7 @@ fn test_demand_register_reset_method() {
     let obis = ObisCode::new(1, 0, 1, 8, 2, 255);
     let current_average_value = CosemDataType::DoubleLong(3000);
     let last_average_value = CosemDataType::DoubleLong(2500);
-    let scaler_unit = CosemDataType::OctetString(vec![0x00, 0x1B]);
+    let scaler_unit = ScalerUnit::new(0, 0x1B);
     let status = CosemDataType::Unsigned(1);
     let capture_time = CosemDataType::DateTime(vec![
         0x07, 0xE5, 0x05, 0x01, // Год: 2025, Месяц: 5, День: 1
@@ -469,8 +470,8 @@ fn test_demand_register_reset_method() {
         0x00, // Сотые доли секунды: 0
         0x00, 0x00, 0x00, // Отклонение от UTC: 0
     ]);
-    let period = CosemDataType::DoubleLongUnsigned(3600);
-    let number_of_periods = CosemDataType::LongUnsigned(24);
+    let period = 3600u32;
+    let number_of_periods = 24u16;
 
     let config = DemandRegisterConfig {
         logical_name: obis,
@@ -499,12 +500,12 @@ fn test_demand_register_next_period_method() {
     let obis = ObisCode::new(1, 0, 1, 8, 2, 255);
     let current_average_value = CosemDataType::DoubleLong(3000);
     let last_average_value = CosemDataType::DoubleLong(2500);
-    let scaler_unit = CosemDataType::OctetString(vec![0x00, 0x1B]);
+    let scaler_unit = ScalerUnit::new(0, 0x1B);
     let status = CosemDataType::Null;
     let capture_time = CosemDataType::Null;
     let start_time_current = CosemDataType::Null;
-    let period = CosemDataType::DoubleLongUnsigned(3600);
-    let number_of_periods = CosemDataType::LongUnsigned(24);
+    let period = 3600u32;
+    let number_of_periods = 24u16;
 
     let config = DemandRegisterConfig {
         logical_name: obis,
