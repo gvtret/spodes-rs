@@ -3,7 +3,7 @@ use std::fmt;
 
 /// An OBIS code (Object Identification System) used by COSEM to identify
 /// objects. It is the six-octet `a.b.c.d.e.f` value group.
-#[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]
+#[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq)]
 pub struct ObisCode {
     a: u8,
     b: u8,
