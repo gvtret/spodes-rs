@@ -15,8 +15,10 @@ use spodes_rs::classes::special_days_table::{SpecialDaysTable, SpecialDaysTableC
 use spodes_rs::interface::InterfaceClass;
 use spodes_rs::obis::ObisCode;
 use spodes_rs::serialization::{deserialize_object, serialize_object};
+use spodes_rs::types::attrs::{DateTime, SortMethod};
 use spodes_rs::types::CosemDataType;
 use spodes_rs::types::attrs::ScalerUnit;
+use spodes_rs::types::attrs::SortMethod;
 use std::sync::Arc;
 
 #[test]
@@ -64,8 +66,8 @@ fn test_profile_generic_serialization_deserialization() {
     ])];
     let capture_objects = vec![];
     let capture_period = 3600;
-    let sort_method = 1;
-    let sort_object = CosemDataType::Null;
+    let sort_method = SortMethod::Fifo;
+    let sort_object = None;
     let entries_in_use = 1;
     let profile_entries = 100;
 
@@ -89,8 +91,8 @@ fn test_profile_generic_serialization_deserialization() {
         buffer: vec![],
         capture_objects: vec![],
         capture_period: 0,
-        sort_method: 0,
-        sort_object: CosemDataType::Null,
+        sort_method: SortMethod::Fifo,
+        sort_object: None,
         entries_in_use: 0,
         profile_entries: 0,
     };
@@ -130,8 +132,8 @@ fn test_profile_generic_capture_method() {
         buffer: vec![],
         capture_objects,
         capture_period: 3600,
-        sort_method: 1,
-        sort_object: CosemDataType::Null,
+        sort_method: SortMethod::Fifo,
+        sort_object: None,
         entries_in_use: 0,
         profile_entries: 100,
     };

@@ -1,5 +1,6 @@
 use crate::interface::InterfaceClass;
 use crate::obis::ObisCode;
+use crate::types::attrs::{CaptureObjectDefinition, Choice, SortMethod};
 use crate::types::{BerError, CosemDataType};
 use serde::{Deserialize, Serialize};
 use std::any::Any;
@@ -15,7 +16,7 @@ pub struct ProfileGenericConfig {
     /// `get_buffer_by_range` and `get_buffer_by_index` methods.
     pub version: u8,
     /// Attribute 2: the captured data buffer (array of entry structures).
-    pub buffer: Vec<CosemDataType>,
+    pub buffer: Vec<Choice>,
     /// Attribute 3: the objects captured into each buffer entry, paired with the
     /// captured attribute index.
     #[serde(skip)]
@@ -23,9 +24,9 @@ pub struct ProfileGenericConfig {
     /// Attribute 4: the capturing period, in seconds (0 = event-driven).
     pub capture_period: u32,
     /// Attribute 5: sort method (1 = FIFO, 2 = LIFO, 3 = largest, 4 = smallest).
-    pub sort_method: u8,
+    pub sort_method: SortMethod,
     /// Attribute 6: `capture_object_definition` used as the sort key.
-    pub sort_object: CosemDataType,
+    pub sort_object: Option<CaptureObjectDefinition>,
     /// Attribute 7: number of entries currently stored in the buffer.
     pub entries_in_use: u32,
     /// Attribute 8: maximum number of entries the buffer can hold.
@@ -56,12 +57,12 @@ impl fmt::Debug for ProfileGenericConfig {
 pub struct ProfileGeneric {
     version: u8,
     logical_name: ObisCode,
-    buffer: Vec<CosemDataType>,
+    buffer: Vec<Choice>,
     #[serde(skip)]
     capture_objects: Vec<(Arc<dyn InterfaceClass + Send + Sync>, u8)>,
     capture_period: u32,
-    sort_method: u8,
-    sort_object: CosemDataType,
+    sort_method: SortMethod,
+    sort_object: Option<CaptureObjectDefinition>,
     entries_in_use: u32,
     profile_entries: u32,
 }
@@ -235,8 +236,8 @@ impl InterfaceClass for ProfileGeneric {
             (2, CosemDataType::Array(self.buffer.clone())),
             (3, capture_objects),
             (4, CosemDataType::DoubleLongUnsigned(self.capture_period)),
-            (5, CosemDataType::Unsigned(self.sort_method)),
-            (6, self.sort_object.clone()),
+            (5, CosemDataType::Unsigned(self.sort_method as u8)),
+            (6, self.sort_object.as_ref().map(|c| c.clone().into()).unwrap_or(CosemDataType::Null)),
             (7, CosemDataType::DoubleLongUnsigned(self.entries_in_use)),
             (8, CosemDataType::DoubleLongUnsigned(self.profile_entries)),
         ]
@@ -307,11 +308,11 @@ impl InterfaceClass for ProfileGeneric {
                     return Err(BerError::InvalidTag);
                 }
                 if let CosemDataType::Unsigned(sort_method) = seq[5] {
-                    self.sort_method = sort_method;
+                    self.sort_method = SortMethod::from_u8(sort_method).unwrap_or(SortMethod::Fifo);
                 } else {
                     return Err(BerError::InvalidTag);
                 }
-                self.sort_object = seq[6].clone();
+                self.sort_object = CaptureObjectDefinition::try_from(&seq[6]).ok();
                 if let CosemDataType::DoubleLongUnsigned(entries_in_use) = seq[7] {
                     self.entries_in_use = entries_in_use;
                 } else {
@@ -371,8 +372,8 @@ mod tests {
             buffer: vec![],
             capture_objects: vec![],
             capture_period: 0,
-            sort_method: 0,
-            sort_object: CosemDataType::Null,
+            sort_method: SortMethod::Fifo,
+            sort_object: None,
             entries_in_use: 0,
             profile_entries,
         })

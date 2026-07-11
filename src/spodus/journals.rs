@@ -11,6 +11,7 @@
 use std::sync::Arc;
 
 use crate::classes::data::Data;
+use crate::types::attrs::SortMethod;
 use crate::classes::profile_generic::{ProfileGeneric, ProfileGenericConfig};
 use crate::interface::InterfaceClass;
 use crate::obis::ObisCode;
@@ -112,8 +113,8 @@ impl ExchangeStatusJournal {
             buffer,
             capture_objects: Self::columns(),
             capture_period: 0,
-            sort_method: 0,
-            sort_object: CosemDataType::Null,
+            sort_method: SortMethod::Fifo,
+            sort_object: None,
             entries_in_use,
             profile_entries: 0,
         })
@@ -160,8 +161,8 @@ impl EventJournal {
             buffer,
             capture_objects: columns,
             capture_period: 0,
-            sort_method: 0,
-            sort_object: CosemDataType::Null,
+            sort_method: SortMethod::Fifo,
+            sort_object: None,
             entries_in_use,
             profile_entries: 0,
         })

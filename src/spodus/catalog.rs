@@ -29,16 +29,17 @@ pub mod client_id {
 
 /// The ИВКЭ Clock object (`0.0.1.0.0.255`, IC 8).
 pub fn clock() -> Clock {
+    use crate::types::attrs::DateTime;
     Clock::new(ClockConfig {
         logical_name: ObisCode::new(0, 0, 1, 0, 0, 255),
-        time: CosemDataType::Null,
-        time_zone: CosemDataType::Long(0),
-        status: CosemDataType::Unsigned(0),
-        daylight_savings_begin: CosemDataType::Null,
-        daylight_savings_end: CosemDataType::Null,
-        daylight_savings_deviation: CosemDataType::Integer(0),
-        daylight_savings_enabled: CosemDataType::Boolean(false),
-        clock_base: CosemDataType::Enum(0),
+        time: DateTime([0u8; 12]),
+        time_zone: 0,
+        status: 0,
+        daylight_savings_begin: DateTime([0u8; 12]),
+        daylight_savings_end: DateTime([0u8; 12]),
+        daylight_savings_deviation: 0,
+        daylight_savings_enabled: false,
+        clock_base: 0,
     })
 }
 

@@ -2,27 +2,24 @@ use spodes_rs::classes::clock::{Clock, ClockConfig};
 use spodes_rs::interface::InterfaceClass;
 use spodes_rs::obis::ObisCode;
 use spodes_rs::serialization::{deserialize_object, serialize_object};
+use spodes_rs::types::attrs::DateTime;
 use spodes_rs::types::CosemDataType;
 
 fn main() {
     let obis = ObisCode::new(0, 0, 1, 0, 0, 255);
-    let time = CosemDataType::DateTime(vec![
-        0x07, 0xE5, 0x05, 0x01, // Год: 2025, Месяц: 5, День: 1
-        0x02, // День недели: вторник
-        0x10, 0x25, 0x12, // Час: 16, Минуты: 37, Секунды: 12
-        0x00, // Сотые доли секунды: 0
-        0x00, 0x00, 0x00, // Отклонение от UTC: 0
+    let time = DateTime([
+        0x07, 0xE5, 0x05, 0x01, 0x02, 0x10, 0x25, 0x12, 0x00, 0x00, 0x00, 0x00,
     ]);
     let config = ClockConfig {
         logical_name: obis.clone(),
-        time: time.clone(),
-        time_zone: CosemDataType::Long(180), // +3 часа от UTC
-        status: CosemDataType::Unsigned(1),  // Действительное время
-        daylight_savings_begin: CosemDataType::DateTime(vec![0x00; 12]),
-        daylight_savings_end: CosemDataType::DateTime(vec![0x00; 12]),
-        daylight_savings_deviation: CosemDataType::Integer(60), // +1 час
-        daylight_savings_enabled: CosemDataType::Boolean(true),
-        clock_base: CosemDataType::Unsigned(2), // Внешний источник
+        time,
+        time_zone: 180,
+        status: 1,
+        daylight_savings_begin: DateTime([0x00; 12]),
+        daylight_savings_end: DateTime([0x00; 12]),
+        daylight_savings_deviation: 60,
+        daylight_savings_enabled: true,
+        clock_base: 2,
     };
     let mut clock = Clock::new(config);
 
@@ -36,14 +33,14 @@ fn main() {
 
     let config = ClockConfig {
         logical_name: obis.clone(),
-        time: CosemDataType::Null,
-        time_zone: CosemDataType::Null,
-        status: CosemDataType::Null,
-        daylight_savings_begin: CosemDataType::Null,
-        daylight_savings_end: CosemDataType::Null,
-        daylight_savings_deviation: CosemDataType::Null,
-        daylight_savings_enabled: CosemDataType::Null,
-        clock_base: CosemDataType::Null,
+        time: DateTime([0u8; 12]),
+        time_zone: 0,
+        status: 0,
+        daylight_savings_begin: DateTime([0u8; 12]),
+        daylight_savings_end: DateTime([0u8; 12]),
+        daylight_savings_deviation: 0,
+        daylight_savings_enabled: false,
+        clock_base: 0,
     };
     let mut deserialized = Clock::new(config);
     deserialize_object(&mut deserialized, &serialized).expect("Deserialization failed");

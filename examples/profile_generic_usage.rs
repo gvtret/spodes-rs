@@ -3,6 +3,7 @@ use spodes_rs::classes::profile_generic::{ProfileGeneric, ProfileGenericConfig};
 use spodes_rs::interface::InterfaceClass;
 use spodes_rs::obis::ObisCode;
 use spodes_rs::serialization::{deserialize_object, serialize_object};
+use spodes_rs::types::attrs::SortMethod;
 use spodes_rs::types::CosemDataType;
 use std::sync::Arc;
 
@@ -17,8 +18,8 @@ fn main() {
         buffer: vec![],
         capture_objects,
         capture_period: 3600,
-        sort_method: 1,
-        sort_object: CosemDataType::Null,
+        sort_method: SortMethod::Fifo,
+        sort_object: None,
         entries_in_use: 0,
         profile_entries: 100,
     };
@@ -38,8 +39,8 @@ fn main() {
         buffer: vec![],
         capture_objects: vec![],
         capture_period: 0,
-        sort_method: 0,
-        sort_object: CosemDataType::Null,
+        sort_method: SortMethod::Fifo,
+        sort_object: None,
         entries_in_use: 0,
         profile_entries: 0,
     };

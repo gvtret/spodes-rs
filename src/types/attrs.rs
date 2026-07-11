@@ -187,6 +187,39 @@ impl From<CaptureObjectDefinition> for CosemDataType {
     }
 }
 
+impl TryFrom<&CosemDataType> for CaptureObjectDefinition {
+    type Error = String;
+
+    fn try_from(value: &CosemDataType) -> Result<Self, String> {
+        match value {
+            CosemDataType::Structure(fields) if fields.len() >= 4 => {
+                let class_id = match &fields[0] {
+                    CosemDataType::LongUnsigned(v) => *v,
+                    _ => return Err("class_id must be long-unsigned".to_string()),
+                };
+                let logical_name = match &fields[1] {
+                    CosemDataType::OctetString(bytes) if bytes.len() == 6 => {
+                        ObisCode::new(bytes[0], bytes[1], bytes[2], bytes[3], bytes[4], bytes[5])
+                    }
+                    _ => return Err("logical_name must be 6-byte octet-string".to_string()),
+                };
+                let attribute_index = match &fields[2] {
+                    CosemDataType::Unsigned(v) => *v,
+                    CosemDataType::Integer(v) => *v as u8,
+                    _ => return Err("attribute_index must be unsigned".to_string()),
+                };
+                let data_index = match &fields[3] {
+                    CosemDataType::Unsigned(v) => *v,
+                    CosemDataType::LongUnsigned(v) => *v as u8,
+                    _ => return Err("data_index must be unsigned".to_string()),
+                };
+                Ok(CaptureObjectDefinition { class_id, logical_name, attribute_index, data_index })
+            }
+            _ => Err("expected structure {class_id, logical_name, attribute_index, data_index}".to_string()),
+        }
+    }
+}
+
 /// Sort method for Profile generic (IEC 62056-6-2, 4.3.6.2).
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 pub enum SortMethod {

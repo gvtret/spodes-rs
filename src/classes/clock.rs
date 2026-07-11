@@ -1,5 +1,6 @@
 use crate::interface::InterfaceClass;
 use crate::obis::ObisCode;
+use crate::types::attrs::DateTime;
 use crate::types::{BerError, CosemDataType};
 use serde::{Deserialize, Serialize};
 use std::any::Any;
@@ -9,37 +10,48 @@ use std::any::Any;
 pub struct ClockConfig {
     /// Attribute 1: the object's logical name (OBIS code).
     pub logical_name: ObisCode,
-    /// Attribute 2: the current date and time (date-time).
-    pub time: CosemDataType,
+    /// Attribute 2: the current date and time (date-time, 12 octets).
+    pub time: DateTime,
     /// Attribute 3: deviation of local time from GMT, in minutes (long).
-    pub time_zone: CosemDataType,
+    pub time_zone: i16,
     /// Attribute 4: clock status flags (unsigned bit-string).
-    pub status: CosemDataType,
+    pub status: u8,
     /// Attribute 5: date and time at which daylight saving begins (date-time).
-    pub daylight_savings_begin: CosemDataType,
+    pub daylight_savings_begin: DateTime,
     /// Attribute 6: date and time at which daylight saving ends (date-time).
-    pub daylight_savings_end: CosemDataType,
+    pub daylight_savings_end: DateTime,
     /// Attribute 7: daylight-saving offset added to `time`, in minutes (integer).
-    pub daylight_savings_deviation: CosemDataType,
+    pub daylight_savings_deviation: i8,
     /// Attribute 8: whether daylight saving is applied (boolean).
-    pub daylight_savings_enabled: CosemDataType,
+    pub daylight_savings_enabled: bool,
     /// Attribute 9: the underlying clock base / source (enum).
-    pub clock_base: CosemDataType,
+    pub clock_base: u8,
 }
 
 /// The `Clock` interface class (class_id = 8) managing time and date
 /// per IEC 62056-6-2.
+///
+/// Attributes (IEC 62056-6-2, Table 15):
+/// - attr 1: logical_name (octet-string) — OBIS code
+/// - attr 2: time (date-time) — current date and time
+/// - attr 3: time_zone (long) — deviation from GMT in minutes
+/// - attr 4: status (bit-string) — clock status flags
+/// - attr 5: daylight_savings_begin (date-time)
+/// - attr 6: daylight_savings_end (date-time)
+/// - attr 7: daylight_savings_deviation (integer) — offset in minutes
+/// - attr 8: daylight_savings_enabled (boolean)
+/// - attr 9: clock_base (enum) — clock source
 #[derive(Clone, Serialize, Deserialize, Debug)]
 pub struct Clock {
     logical_name: ObisCode,
-    time: CosemDataType,                       // DateTime
-    time_zone: CosemDataType,                  // Long
-    status: CosemDataType,                     // Unsigned
-    daylight_savings_begin: CosemDataType,     // DateTime
-    daylight_savings_end: CosemDataType,       // DateTime
-    daylight_savings_deviation: CosemDataType, // Integer
-    daylight_savings_enabled: CosemDataType,   // Boolean
-    clock_base: CosemDataType,                 // Enum
+    time: DateTime,
+    time_zone: i16,
+    status: u8,
+    daylight_savings_begin: DateTime,
+    daylight_savings_end: DateTime,
+    daylight_savings_deviation: i8,
+    daylight_savings_enabled: bool,
+    clock_base: u8,
 }
 
 impl Clock {
@@ -64,49 +76,58 @@ impl Clock {
         }
     }
 
+    /// Returns the time attribute (attr 2).
+    pub fn time(&self) -> &DateTime {
+        &self.time
+    }
+
+    /// Returns the time_zone attribute (attr 3).
+    pub fn time_zone(&self) -> i16 {
+        self.time_zone
+    }
+
+    /// Returns the status attribute (attr 4).
+    pub fn status(&self) -> u8 {
+        self.status
+    }
+
+    /// Returns the clock_base attribute (attr 9).
+    pub fn clock_base(&self) -> u8 {
+        self.clock_base
+    }
+
     /// Adjusts the time to the nearest quarter hour (minute 0, 15, 30 or 45).
     fn adjust_to_quarter(&mut self) -> Result<CosemDataType, String> {
-        if let CosemDataType::DateTime(mut dt) = self.time.clone() {
-            if dt.len() == 12 {
-                let minutes = dt[6] as u32;
-                // Round to the nearest quarter hour (0, 15, 30, 45).
-                let new_minutes = if minutes < 8 {
-                    0
-                } else if minutes < 23 {
-                    15
-                } else if minutes < 37 {
-                    30
-                } else {
-                    45
-                };
-                dt[6] = new_minutes as u8;
-                dt[7] = 0; // clear seconds
-                dt[8] = 0; // clear hundredths of a second
-                self.time = CosemDataType::DateTime(dt);
-                return Ok(CosemDataType::Null);
-            }
-        }
-        Err("Invalid DateTime format".to_string())
+        let minutes = self.time.0[6] as u32;
+        let new_minutes = if minutes < 8 {
+            0
+        } else if minutes < 23 {
+            15
+        } else if minutes < 37 {
+            30
+        } else {
+            45
+        };
+        self.time.0[6] = new_minutes as u8;
+        self.time.0[7] = 0;
+        self.time.0[8] = 0;
+        Ok(CosemDataType::Null)
     }
 
     /// Adjusts the time to the nearest minute.
     fn adjust_to_minute(&mut self) -> Result<CosemDataType, String> {
-        if let CosemDataType::DateTime(mut dt) = self.time.clone() {
-            if dt.len() == 12 {
-                dt[7] = 0; // clear seconds
-                dt[8] = 0; // clear hundredths of a second
-                self.time = CosemDataType::DateTime(dt);
-                return Ok(CosemDataType::Null);
-            }
-        }
-        Err("Invalid DateTime format".to_string())
+        self.time.0[7] = 0;
+        self.time.0[8] = 0;
+        Ok(CosemDataType::Null)
     }
 
     /// Sets a preset time.
     fn adjust_to_preset_time(&mut self, params: Option<CosemDataType>) -> Result<CosemDataType, String> {
         if let Some(CosemDataType::DateTime(dt)) = params {
             if dt.len() == 12 {
-                self.time = CosemDataType::DateTime(dt);
+                let mut buf = [0u8; 12];
+                buf.copy_from_slice(&dt);
+                self.time = DateTime(buf);
                 return Ok(CosemDataType::Null);
             }
         }
@@ -115,7 +136,6 @@ impl Clock {
 
     /// Preset-time adjustment (stub).
     fn preset_adjusting_time(&mut self) -> Result<CosemDataType, String> {
-        // Implementation is requirement-specific; a stub for now.
         Ok(CosemDataType::Null)
     }
 }
@@ -136,14 +156,14 @@ impl InterfaceClass for Clock {
     fn attributes(&self) -> Vec<(u8, CosemDataType)> {
         vec![
             (1, CosemDataType::OctetString(self.logical_name.to_bytes())),
-            (2, self.time.clone()),
-            (3, self.time_zone.clone()),
-            (4, self.status.clone()),
-            (5, self.daylight_savings_begin.clone()),
-            (6, self.daylight_savings_end.clone()),
-            (7, self.daylight_savings_deviation.clone()),
-            (8, self.daylight_savings_enabled.clone()),
-            (9, self.clock_base.clone()),
+            (2, CosemDataType::DateTime(self.time.0.to_vec())),
+            (3, CosemDataType::Long(self.time_zone)),
+            (4, CosemDataType::Unsigned(self.status)),
+            (5, CosemDataType::DateTime(self.daylight_savings_begin.0.to_vec())),
+            (6, CosemDataType::DateTime(self.daylight_savings_end.0.to_vec())),
+            (7, CosemDataType::Integer(self.daylight_savings_deviation)),
+            (8, CosemDataType::Boolean(self.daylight_savings_enabled)),
+            (9, CosemDataType::Enum(self.clock_base)),
         ]
     }
 
@@ -191,14 +211,30 @@ impl InterfaceClass for Clock {
                 } else {
                     return Err(BerError::InvalidTag);
                 }
-                self.time = seq[2].clone();
-                self.time_zone = seq[3].clone();
-                self.status = seq[4].clone();
-                self.daylight_savings_begin = seq[5].clone();
-                self.daylight_savings_end = seq[6].clone();
-                self.daylight_savings_deviation = seq[7].clone();
-                self.daylight_savings_enabled = seq[8].clone();
-                self.clock_base = seq[9].clone();
+                // Parse typed attributes from CosemDataType
+                self.time = DateTime::try_from(&seq[2]).map_err(|_| BerError::InvalidValue)?;
+                self.time_zone = match &seq[3] {
+                    CosemDataType::Long(v) => *v,
+                    _ => return Err(BerError::InvalidTag),
+                };
+                self.status = match &seq[4] {
+                    CosemDataType::Unsigned(v) => *v,
+                    _ => return Err(BerError::InvalidTag),
+                };
+                self.daylight_savings_begin = DateTime::try_from(&seq[5]).map_err(|_| BerError::InvalidValue)?;
+                self.daylight_savings_end = DateTime::try_from(&seq[6]).map_err(|_| BerError::InvalidValue)?;
+                self.daylight_savings_deviation = match &seq[7] {
+                    CosemDataType::Integer(v) => *v,
+                    _ => return Err(BerError::InvalidTag),
+                };
+                self.daylight_savings_enabled = match &seq[8] {
+                    CosemDataType::Boolean(v) => *v,
+                    _ => return Err(BerError::InvalidTag),
+                };
+                self.clock_base = match &seq[9] {
+                    CosemDataType::Enum(v) => *v,
+                    _ => return Err(BerError::InvalidTag),
+                };
                 return Ok(());
             }
             return Err(BerError::InvalidLength);
