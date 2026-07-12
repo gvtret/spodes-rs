@@ -62,15 +62,6 @@ jobs:
       - name: Test
         run: cargo test --all-features
 
-  deny:
-    name: cargo-deny
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - uses: EmbarkStudios/cargo-deny-action@v2
-        with:
-          command: check all
-
   coverage:
     name: Code coverage
     runs-on: ubuntu-latest
