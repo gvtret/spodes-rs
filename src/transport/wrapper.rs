@@ -16,6 +16,9 @@
 
 use std::io;
 
+#[cfg(feature = "tracing")]
+use tracing::trace;
+
 use super::{DataLinkLayer, NetworkTransport, PhysicalTransport};
 
 /// The only defined wrapper protocol version.
@@ -144,6 +147,13 @@ impl<T: NetworkTransport> Wrapper<T> {
 
 impl<T: NetworkTransport> DataLinkLayer for Wrapper<T> {
     fn send_apdu(&mut self, apdu: &[u8]) -> io::Result<()> {
+        #[cfg(feature = "tracing")]
+        trace!(
+            source = self.source,
+            dest = self.destination,
+            apdu_len = apdu.len(),
+            "wrapper send"
+        );
         let pdu = encode(self.source, self.destination, apdu);
         self.transport.send(&pdu)
     }
@@ -152,6 +162,13 @@ impl<T: NetworkTransport> DataLinkLayer for Wrapper<T> {
         let mut header_bytes = [0u8; 8];
         read_exact(&mut self.transport, &mut header_bytes)?;
         let header = WrapperHeader::decode(&header_bytes)?;
+        #[cfg(feature = "tracing")]
+        trace!(
+            source = header.source,
+            dest = header.destination,
+            apdu_len = header.length,
+            "wrapper receive"
+        );
         let mut apdu = vec![0u8; header.length as usize];
         read_exact(&mut self.transport, &mut apdu)?;
         Ok(apdu)

@@ -1,6 +1,6 @@
 use crate::interface::InterfaceClass;
 use crate::obis::ObisCode;
-use crate::types::attrs::{Choice, ScalerUnit};
+use crate::types::attrs::{Choice, DateTime, ScalerUnit};
 use crate::types::{BerError, CosemDataType};
 use serde::{Deserialize, Serialize};
 use std::any::Any;
@@ -21,7 +21,7 @@ pub struct ExtendedRegister {
     value: Choice,
     scaler_unit: ScalerUnit,
     status: Choice,
-    capture_time: Choice,
+    capture_time: DateTime,
 }
 
 impl ExtendedRegister {
@@ -31,7 +31,7 @@ impl ExtendedRegister {
         value: Choice,
         scaler_unit: ScalerUnit,
         status: Choice,
-        capture_time: Choice,
+        capture_time: DateTime,
     ) -> Self {
         ExtendedRegister { logical_name, value, scaler_unit, status, capture_time }
     }
@@ -52,7 +52,7 @@ impl ExtendedRegister {
     }
 
     /// Returns the capture_time attribute (attr 5).
-    pub fn capture_time(&self) -> &Choice {
+    pub fn capture_time(&self) -> &DateTime {
         &self.capture_time
     }
 
@@ -66,37 +66,37 @@ impl ExtendedRegister {
             CosemDataType::Integer(_) => {
                 self.value = CosemDataType::Integer(0);
                 self.status = CosemDataType::Null;
-                self.capture_time = CosemDataType::Null;
+                self.capture_time = DateTime::new([0u8; 12]);
                 Ok(CosemDataType::Null)
             }
             CosemDataType::Long(_) => {
                 self.value = CosemDataType::Long(0);
                 self.status = CosemDataType::Null;
-                self.capture_time = CosemDataType::Null;
+                self.capture_time = DateTime::new([0u8; 12]);
                 Ok(CosemDataType::Null)
             }
             CosemDataType::DoubleLong(_) => {
                 self.value = CosemDataType::DoubleLong(0);
                 self.status = CosemDataType::Null;
-                self.capture_time = CosemDataType::Null;
+                self.capture_time = DateTime::new([0u8; 12]);
                 Ok(CosemDataType::Null)
             }
             CosemDataType::Unsigned(_) => {
                 self.value = CosemDataType::Unsigned(0);
                 self.status = CosemDataType::Null;
-                self.capture_time = CosemDataType::Null;
+                self.capture_time = DateTime::new([0u8; 12]);
                 Ok(CosemDataType::Null)
             }
             CosemDataType::LongUnsigned(_) => {
                 self.value = CosemDataType::LongUnsigned(0);
                 self.status = CosemDataType::Null;
-                self.capture_time = CosemDataType::Null;
+                self.capture_time = DateTime::new([0u8; 12]);
                 Ok(CosemDataType::Null)
             }
             CosemDataType::DoubleLongUnsigned(_) => {
                 self.value = CosemDataType::DoubleLongUnsigned(0);
                 self.status = CosemDataType::Null;
-                self.capture_time = CosemDataType::Null;
+                self.capture_time = DateTime::new([0u8; 12]);
                 Ok(CosemDataType::Null)
             }
             _ => Err("Unsupported value type for reset".to_string()),
@@ -110,7 +110,7 @@ impl ExtendedRegister {
     /// * `Err(String)` - On error.
     fn capture(&mut self) -> Result<CosemDataType, String> {
         self.status = CosemDataType::Unsigned(1);
-        self.capture_time = CosemDataType::DateTime(vec![
+        self.capture_time = DateTime::new([
             0x07, 0xE5, 0x05, 0x01, 0x02, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
         ]);
         Ok(CosemDataType::Null)
@@ -136,7 +136,7 @@ impl InterfaceClass for ExtendedRegister {
             (2, self.value.clone()),
             (3, self.scaler_unit.clone().into()),
             (4, self.status.clone()),
-            (5, self.capture_time.clone()),
+            (5, self.capture_time.clone().into()),
         ]
     }
 
@@ -182,7 +182,7 @@ impl InterfaceClass for ExtendedRegister {
                 self.value = seq[2].clone();
                 self.scaler_unit = ScalerUnit::try_from(&seq[3]).map_err(|_| BerError::InvalidValue)?;
                 self.status = seq[4].clone();
-                self.capture_time = seq[5].clone();
+                self.capture_time = DateTime::try_from(&seq[5]).map_err(|_| BerError::InvalidValue)?;
                 return Ok(());
             }
             return Err(BerError::InvalidLength);

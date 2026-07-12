@@ -1,5 +1,6 @@
 use crate::interface::InterfaceClass;
 use crate::obis::ObisCode;
+use crate::types::attrs::ScheduleTableEntry;
 use crate::types::{BerError, CosemDataType};
 use serde::{Deserialize, Serialize};
 use std::any::Any;
@@ -10,7 +11,7 @@ pub struct ScheduleConfig {
     /// Attribute 1: the object's logical name (OBIS code).
     pub logical_name: ObisCode,
     /// Attribute 2: array of `schedule_table_entry` structures.
-    pub entries: Vec<CosemDataType>,
+    pub entries: Vec<ScheduleTableEntry>,
     /// Whether the schedule is currently enabled.
     pub enabled: bool,
 }
@@ -20,7 +21,7 @@ pub struct ScheduleConfig {
 #[derive(Clone, Serialize, Deserialize, Debug)]
 pub struct Schedule {
     logical_name: ObisCode,
-    entries: Vec<CosemDataType>, // Array of Structure (time, action)
+    entries: Vec<ScheduleTableEntry>,
     enabled: bool,               // schedule state (enabled/disabled)
 }
 
@@ -76,7 +77,7 @@ impl InterfaceClass for Schedule {
     fn attributes(&self) -> Vec<(u8, CosemDataType)> {
         vec![
             (1, CosemDataType::OctetString(self.logical_name.to_bytes())),
-            (2, CosemDataType::Array(self.entries.clone())),
+            (2, CosemDataType::Array(self.entries.iter().cloned().map(CosemDataType::from).collect())),
         ]
     }
 
@@ -125,7 +126,11 @@ impl InterfaceClass for Schedule {
                 return Err(BerError::InvalidTag);
             }
             if let CosemDataType::Array(entries) = &seq[2] {
-                self.entries = entries.clone();
+                self.entries = entries
+                    .iter()
+                    .map(ScheduleTableEntry::try_from)
+                    .collect::<Result<Vec<_>, _>>()
+                    .map_err(|_| BerError::InvalidValue)?;
             } else {
                 return Err(BerError::InvalidTag);
             }

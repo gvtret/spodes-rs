@@ -20,6 +20,9 @@
 
 use std::io;
 
+#[cfg(feature = "tracing")]
+use tracing::trace;
+
 use super::{DataLinkLayer, PhysicalTransport};
 
 /// HDLC opening/closing flag.
@@ -426,6 +429,13 @@ impl<T: PhysicalTransport> HdlcLayer<T> {
 
 impl<T: PhysicalTransport> DataLinkLayer for HdlcLayer<T> {
     fn send_apdu(&mut self, apdu: &[u8]) -> io::Result<()> {
+        #[cfg(feature = "tracing")]
+        trace!(
+            send_seq = self.send_seq,
+            recv_seq = self.recv_seq,
+            apdu_len = apdu.len(),
+            "hdlc send"
+        );
         let mut information = Vec::with_capacity(3 + apdu.len());
         information.extend_from_slice(&self.llc());
         information.extend_from_slice(apdu);
@@ -450,6 +460,13 @@ impl<T: PhysicalTransport> DataLinkLayer for HdlcLayer<T> {
         } else {
             info.clone()
         };
+        #[cfg(feature = "tracing")]
+        trace!(
+            send_seq = self.send_seq,
+            recv_seq = self.recv_seq,
+            apdu_len = apdu.len(),
+            "hdlc receive"
+        );
         Ok(apdu)
     }
 }

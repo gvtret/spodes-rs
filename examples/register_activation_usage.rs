@@ -2,6 +2,7 @@ use spodes_rs::classes::register_activation::{RegisterActivation, RegisterActiva
 use spodes_rs::interface::InterfaceClass;
 use spodes_rs::obis::ObisCode;
 use spodes_rs::serialization::{deserialize_object, serialize_object};
+use spodes_rs::types::attrs::{ObjectDefinition, RegisterActMask};
 use spodes_rs::types::CosemDataType;
 
 fn main() {
@@ -11,16 +12,15 @@ fn main() {
     // Инициализируем конфигурацию RegisterActivation
     let config = RegisterActivationConfig {
         logical_name: obis.clone(),
-        register_assignment: vec![CosemDataType::Structure(vec![
-            CosemDataType::LongUnsigned(3),                       // class_id: Register
-            CosemDataType::OctetString(vec![1, 0, 1, 8, 0, 255]), // logical_name
-            CosemDataType::Integer(2),                            // attribute_index
-        ])],
-        mask_list: vec![CosemDataType::Structure(vec![
-            CosemDataType::OctetString(vec![0x54, 0x41, 0x52, 0x49, 0x46, 0x46, 0x31]), // mask_name: "TARIFF1"
-            CosemDataType::Array(vec![CosemDataType::Unsigned(1)]),                     // register_indices
-        ])],
-        active_mask: CosemDataType::OctetString(vec![0x54, 0x41, 0x52, 0x49, 0x46, 0x46, 0x31]), // "TARIFF1"
+        register_assignment: vec![ObjectDefinition {
+            class_id: 3,                       // Register
+            logical_name: ObisCode::new(1, 0, 1, 8, 0, 255),
+        }],
+        mask_list: vec![RegisterActMask {
+            mask_name: vec![0x54, 0x41, 0x52, 0x49, 0x46, 0x46, 0x31], // "TARIFF1"
+            index_list: vec![1],
+        }],
+        active_mask: vec![0x54, 0x41, 0x52, 0x49, 0x46, 0x46, 0x31], // "TARIFF1"
     };
 
     // Создаём объект RegisterActivation
@@ -67,7 +67,7 @@ fn main() {
         logical_name: obis.clone(),
         register_assignment: vec![],
         mask_list: vec![],
-        active_mask: CosemDataType::Null,
+        active_mask: vec![],
     };
     let mut deserialized = RegisterActivation::new(config);
     deserialize_object(&mut deserialized, &serialized).expect("Deserialization failed");

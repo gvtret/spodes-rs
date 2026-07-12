@@ -1,5 +1,6 @@
 use crate::interface::InterfaceClass;
 use crate::obis::ObisCode;
+use crate::types::attrs::DateTime;
 use crate::types::{BerError, CosemDataType};
 use serde::{Deserialize, Serialize};
 use std::any::Any;
@@ -25,7 +26,7 @@ pub struct GsmDiagnosticConfig {
     /// Attribute 7: array of adjacent cell structures.
     pub adjacent_cells: Vec<CosemDataType>,
     /// Attribute 8: capture time of the diagnostic values (date-time).
-    pub capture_time: CosemDataType,
+    pub capture_time: DateTime,
 }
 
 /// `GSM diagnostic` interface class (class_id = 47) per IEC 62056-6-2 §4.7.8.
@@ -43,7 +44,7 @@ pub struct GsmDiagnostic {
     ps_status: u8,
     cell_info: CosemDataType,
     adjacent_cells: Vec<CosemDataType>,
-    capture_time: CosemDataType,
+    capture_time: DateTime,
 }
 
 impl GsmDiagnostic {
@@ -85,7 +86,7 @@ impl InterfaceClass for GsmDiagnostic {
             (5, CosemDataType::Enum(self.ps_status)),
             (6, self.cell_info.clone()),
             (7, CosemDataType::Array(self.adjacent_cells.clone())),
-            (8, self.capture_time.clone()),
+            (8, self.capture_time.clone().into()),
         ]
     }
 
@@ -147,7 +148,8 @@ impl InterfaceClass for GsmDiagnostic {
             CosemDataType::Array(list) => list.clone(),
             _ => return Err(BerError::InvalidTag),
         };
-        self.capture_time = seq[8].clone();
+        self.capture_time = DateTime::try_from(&seq[8])
+            .map_err(|_| BerError::InvalidValue)?;
         Ok(())
     }
 
@@ -200,7 +202,7 @@ mod tests {
                 CosemDataType::Unsigned(7),
             ]),
             adjacent_cells: vec![],
-            capture_time: CosemDataType::OctetString(vec![0; 12]),
+            capture_time: DateTime::new([0; 12]),
         })
     }
 

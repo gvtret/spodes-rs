@@ -1,5 +1,6 @@
 use crate::interface::InterfaceClass;
 use crate::obis::ObisCode;
+use crate::types::attrs::{ObjectDefinition, RegisterActMask};
 use crate::types::{BerError, CosemDataType};
 use serde::{Deserialize, Serialize};
 use std::any::Any;
@@ -10,11 +11,11 @@ pub struct RegisterActivationConfig {
     /// Attribute 1: the object's logical name (OBIS code).
     pub logical_name: ObisCode,
     /// Attribute 2: array of `object_definition` structures the masks may select.
-    pub register_assignment: Vec<CosemDataType>,
+    pub register_assignment: Vec<ObjectDefinition>,
     /// Attribute 3: array of `mask` structures { mask_name, index list }.
-    pub mask_list: Vec<CosemDataType>,
+    pub mask_list: Vec<RegisterActMask>,
     /// Attribute 4: name of the currently active mask.
-    pub active_mask: CosemDataType,
+    pub active_mask: Vec<u8>,
 }
 
 /// The `RegisterActivation` interface class (class_id = 6) managing the
@@ -22,9 +23,9 @@ pub struct RegisterActivationConfig {
 #[derive(Clone, Serialize, Deserialize, Debug)]
 pub struct RegisterActivation {
     logical_name: ObisCode,
-    register_assignment: Vec<CosemDataType>, // Array of Structure (class_id, logical_name, attribute_index)
-    mask_list: Vec<CosemDataType>,           // Array of Structure (mask_name, register_indices)
-    active_mask: CosemDataType,              // OctetString
+    register_assignment: Vec<ObjectDefinition>,
+    mask_list: Vec<RegisterActMask>,
+    active_mask: Vec<u8>,
 }
 
 impl RegisterActivation {
@@ -53,25 +54,14 @@ impl RegisterActivation {
     /// * `Ok(CosemDataType::Null)` - If the mask was added.
     /// * `Err(String)` - If the parameter is invalid or the mask already exists.
     fn add_mask(&mut self, params: Option<CosemDataType>) -> Result<CosemDataType, String> {
-        if let Some(CosemDataType::Structure(mask_data)) = params {
-            if mask_data.len() == 2 {
-                if let CosemDataType::OctetString(mask_name) = &mask_data[0] {
-                    // Check whether a mask with this name already exists.
-                    for existing_mask in &self.mask_list {
-                        if let CosemDataType::Structure(existing_data) = existing_mask {
-                            if let CosemDataType::OctetString(existing_name) = &existing_data[0] {
-                                if existing_name == mask_name {
-                                    return Err("Mask with this name already exists".to_string());
-                                }
-                            }
-                        }
-                    }
-                    self.mask_list.push(CosemDataType::Structure(mask_data));
-                    return Ok(CosemDataType::Null);
-                }
-            }
+        let param = params.ok_or("Invalid mask parameter".to_string())?;
+        let mask = RegisterActMask::try_from(&param)
+            .map_err(|e| format!("Invalid mask parameter: {}", e))?;
+        if self.mask_list.iter().any(|m| m.mask_name == mask.mask_name) {
+            return Err("Mask with this name already exists".to_string());
         }
-        Err("Invalid mask parameter".to_string())
+        self.mask_list.push(mask);
+        Ok(CosemDataType::Null)
     }
 
     /// Removes an activation mask from `mask_list` by name.
@@ -83,28 +73,19 @@ impl RegisterActivation {
     /// * `Ok(CosemDataType::Null)` - If the mask was removed.
     /// * `Err(String)` - If the mask was not found or the parameter is invalid.
     fn delete_mask(&mut self, params: Option<CosemDataType>) -> Result<CosemDataType, String> {
-        if let Some(CosemDataType::OctetString(mask_name)) = params {
-            let initial_len = self.mask_list.len();
-            self.mask_list.retain(|mask| {
-                if let CosemDataType::Structure(data) = mask {
-                    if let CosemDataType::OctetString(existing_name) = &data[0] {
-                        return existing_name != &mask_name;
-                    }
-                }
-                true
-            });
-            if self.mask_list.len() < initial_len {
-                // If the currently active mask was removed, clear active_mask.
-                if let CosemDataType::OctetString(active_mask_name) = &self.active_mask {
-                    if active_mask_name == &mask_name {
-                        self.active_mask = CosemDataType::Null;
-                    }
-                }
-                return Ok(CosemDataType::Null);
+        let mask_name = match params {
+            Some(CosemDataType::OctetString(name)) => name,
+            _ => return Err("Invalid mask name parameter".to_string()),
+        };
+        let initial_len = self.mask_list.len();
+        self.mask_list.retain(|m| m.mask_name != mask_name);
+        if self.mask_list.len() < initial_len {
+            if self.active_mask == mask_name {
+                self.active_mask.clear();
             }
-            return Err("Mask not found".to_string());
+            return Ok(CosemDataType::Null);
         }
-        Err("Invalid mask name parameter".to_string())
+        Err("Mask not found".to_string())
     }
 }
 
@@ -124,9 +105,13 @@ impl InterfaceClass for RegisterActivation {
     fn attributes(&self) -> Vec<(u8, CosemDataType)> {
         vec![
             (1, CosemDataType::OctetString(self.logical_name.to_bytes())),
-            (2, CosemDataType::Array(self.register_assignment.clone())),
-            (3, CosemDataType::Array(self.mask_list.clone())),
-            (4, self.active_mask.clone()),
+            (2, CosemDataType::Array(
+                self.register_assignment.iter().map(|od| CosemDataType::from(od.clone())).collect(),
+            )),
+            (3, CosemDataType::Array(
+                self.mask_list.iter().map(|m| CosemDataType::from(m.clone())).collect(),
+            )),
+            (4, CosemDataType::OctetString(self.active_mask.clone())),
         ]
     }
 
@@ -169,17 +154,29 @@ impl InterfaceClass for RegisterActivation {
                 } else {
                     return Err(BerError::InvalidTag);
                 }
-                if let CosemDataType::Array(register_assignment) = &seq[2] {
-                    self.register_assignment = register_assignment.clone();
+                if let CosemDataType::Array(items) = &seq[2] {
+                    self.register_assignment = items
+                        .iter()
+                        .map(ObjectDefinition::try_from)
+                        .collect::<Result<Vec<_>, _>>()
+                        .map_err(|_| BerError::InvalidValue)?;
                 } else {
                     return Err(BerError::InvalidTag);
                 }
-                if let CosemDataType::Array(mask_list) = &seq[3] {
-                    self.mask_list = mask_list.clone();
+                if let CosemDataType::Array(items) = &seq[3] {
+                    self.mask_list = items
+                        .iter()
+                        .map(RegisterActMask::try_from)
+                        .collect::<Result<Vec<_>, _>>()
+                        .map_err(|_| BerError::InvalidValue)?;
                 } else {
                     return Err(BerError::InvalidTag);
                 }
-                self.active_mask = seq[4].clone();
+                if let CosemDataType::OctetString(bytes) = &seq[4] {
+                    self.active_mask = bytes.clone();
+                } else {
+                    return Err(BerError::InvalidTag);
+                }
                 return Ok(());
             }
             return Err(BerError::InvalidLength);

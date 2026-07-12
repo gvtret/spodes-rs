@@ -14,18 +14,27 @@
 //! `SC ‖ AK ‖ plaintext` (authentication only). The GCM tag is truncated to 12
 //! octets (security suite 0, AES-GCM-128).
 //!
+//! For GOST ciphering (Р 1323565.1), Kuznyechik CTR+CMAC is used with a
+//! 16-byte CMAC tag.
+//!
 //! Validated against the authenticated-encryption test vector of IEC 62056-5-3
 //! Annex E.5.
 
 use aead::AeadInOut;
 use aes_gcm::aead::consts::U12;
 use aes_gcm::aes::{Aes128, Aes256};
-use aes_gcm::{AesGcm, KeyInit, Nonce, Tag};
+use aes_gcm::{AesGcm, Nonce, Tag};
+use aes_gcm::KeyInit as AesKeyInit;
+use cmac::Cmac;
+use cipher::block::{BlockCipherEncrypt, BlockCipherDecrypt};
+use kuznyechik::Kuznyechik;
 
 /// AES-128-GCM with a 96-bit (12-octet) authentication tag.
 type Aes128Gcm12 = AesGcm<Aes128, U12, U12>;
 /// AES-256-GCM with a 96-bit (12-octet) authentication tag.
 type Aes256Gcm12 = AesGcm<Aes256, U12, U12>;
+/// Kuznyechik CMAC type.
+type KuznyechikCmac = Cmac<Kuznyechik>;
 
 /// Bit masks of the security control byte (SC), IEC 62056-5-3 Table 27.
 pub mod security_control {
@@ -39,6 +48,14 @@ pub mod security_control {
     pub const COMPRESSION: u8 = 0x80;
     /// Convenience value: authenticated encryption with security suite 0.
     pub const AUTHENTICATED_ENCRYPTION: u8 = AUTHENTICATION | ENCRYPTION;
+}
+
+/// GOST security suite identifier (Р 1323565.1, suite id = 0x0D).
+pub const GOST_SUITE_ID: u8 = 0x0D;
+
+/// Checks if the security control byte indicates a GOST suite.
+pub fn is_gost_suite(sc: u8) -> bool {
+    (sc & 0x0F) == GOST_SUITE_ID
 }
 
 /// Ciphered-APDU tags for service-specific global ciphering.
@@ -254,6 +271,255 @@ pub fn unprotect(ctx: &mut SecurityContext, apdu: &[u8]) -> Result<(u8, Vec<u8>)
     Ok((ciphered_tag, plaintext))
 }
 
+// ============================================================================
+// GOST ciphering (Р 1323565.1): Kuznyechik CTR + CMAC
+// ============================================================================
+
+/// GOST-authenticated encryption using Kuznyechik CTR+CMAC (Р 1323565.1).
+///
+/// - Encryption: Kuznyechik in CTR mode (IV = system_title ‖ IC).
+/// - Authentication: Kuznyechik CMAC over `SC ‖ AK ‖ ciphertext`.
+/// - Tag: 16-byte full CMAC output.
+///
+/// Returns the encrypted APDU with the GOST tag appended.
+pub fn gost_protect(ctx: &SecurityContext, ciphered_tag: u8, plaintext: &[u8]) -> Result<Vec<u8>, CipherError> {
+    if ctx.encryption_key.len() != 32 {
+        return Err(CipherError::InvalidKey);
+    }
+    let sc = ctx.security_control;
+    let iv = ctx.iv()?;
+    let nonce = build_gost_nonce(&iv);
+
+    match (ctx.authentication(), ctx.encryption()) {
+        (true, true) => {
+            // Encrypt with CTR, then compute CMAC over SC ‖ AK ‖ ciphertext.
+            let ciphertext = gost_ctr_encrypt(&ctx.encryption_key, &nonce, plaintext)?;
+            let aad = [[sc].as_ref(), &ctx.authentication_key, &ciphertext].concat();
+            let tag = gost_cmac_tag(&ctx.encryption_key, &aad)?;
+            let mut body = Vec::with_capacity(5 + ciphertext.len() + 16);
+            body.push(sc);
+            body.extend_from_slice(&ctx.invocation_counter.to_be_bytes());
+            body.extend_from_slice(&ciphertext);
+            body.extend_from_slice(&tag);
+            let mut apdu = vec![ciphered_tag];
+            push_length(body.len(), &mut apdu);
+            apdu.extend_from_slice(&body);
+            Ok(apdu)
+        }
+        (true, false) => {
+            // Authentication only: CMAC over SC ‖ AK ‖ plaintext.
+            let aad = [[sc].as_ref(), &ctx.authentication_key, plaintext].concat();
+            let tag = gost_cmac_tag(&ctx.encryption_key, &aad)?;
+            let mut body = Vec::with_capacity(5 + plaintext.len() + 16);
+            body.push(sc);
+            body.extend_from_slice(&ctx.invocation_counter.to_be_bytes());
+            body.extend_from_slice(plaintext);
+            body.extend_from_slice(&tag);
+            let mut apdu = vec![ciphered_tag];
+            push_length(body.len(), &mut apdu);
+            apdu.extend_from_slice(&body);
+            Ok(apdu)
+        }
+        (false, true) => {
+            // Encryption only: no tag.
+            let ciphertext = gost_ctr_encrypt(&ctx.encryption_key, &nonce, plaintext)?;
+            let mut body = Vec::with_capacity(5 + ciphertext.len());
+            body.push(sc);
+            body.extend_from_slice(&ctx.invocation_counter.to_be_bytes());
+            body.extend_from_slice(&ciphertext);
+            let mut apdu = vec![ciphered_tag];
+            push_length(body.len(), &mut apdu);
+            apdu.extend_from_slice(&body);
+            Ok(apdu)
+        }
+        (false, false) => {
+            let mut body = Vec::with_capacity(5 + plaintext.len());
+            body.push(sc);
+            body.extend_from_slice(&ctx.invocation_counter.to_be_bytes());
+            body.extend_from_slice(plaintext);
+            let mut apdu = vec![ciphered_tag];
+            push_length(body.len(), &mut apdu);
+            apdu.extend_from_slice(&body);
+            Ok(apdu)
+        }
+    }
+}
+
+/// Removes GOST ciphering from an APDU, returning `(ciphered_tag, plaintext)`.
+pub fn gost_unprotect(ctx: &mut SecurityContext, apdu: &[u8]) -> Result<(u8, Vec<u8>), CipherError> {
+    let ciphered_tag = *apdu.first().ok_or(CipherError::Truncated)?;
+    let (len, header) = read_length(&apdu[1..]).ok_or(CipherError::Truncated)?;
+    let body = apdu.get(1 + header..1 + header + len).ok_or(CipherError::Truncated)?;
+    if body.len() < 5 {
+        return Err(CipherError::Truncated);
+    }
+    let sc = body[0];
+    ctx.security_control = sc;
+    ctx.invocation_counter = u32::from_be_bytes([body[1], body[2], body[3], body[4]]);
+    let protected = &body[5..];
+    let iv = ctx.iv()?;
+    let nonce = build_gost_nonce(&iv);
+
+    let plaintext = match (ctx.authentication(), ctx.encryption()) {
+        (true, true) => {
+            if protected.len() < 16 {
+                return Err(CipherError::Truncated);
+            }
+            let (ct, tag) = protected.split_at(protected.len() - 16);
+            let aad = [[sc].as_ref(), &ctx.authentication_key, ct].concat();
+            let expected_tag = gost_cmac_tag(&ctx.encryption_key, &aad)?;
+            if tag != expected_tag.as_slice() {
+                return Err(CipherError::AuthenticationFailed);
+            }
+            gost_ctr_decrypt(&ctx.encryption_key, &nonce, ct)?
+        }
+        (true, false) => {
+            if protected.len() < 16 {
+                return Err(CipherError::Truncated);
+            }
+            let (plain, tag) = protected.split_at(protected.len() - 16);
+            let aad = [[sc].as_ref(), &ctx.authentication_key, plain].concat();
+            let expected_tag = gost_cmac_tag(&ctx.encryption_key, &aad)?;
+            if tag != expected_tag.as_slice() {
+                return Err(CipherError::AuthenticationFailed);
+            }
+            plain.to_vec()
+        }
+        (false, true) => {
+            gost_ctr_decrypt(&ctx.encryption_key, &nonce, protected)?
+        }
+        (false, false) => protected.to_vec(),
+    };
+    Ok((ciphered_tag, plaintext))
+}
+
+/// Kuznyechik CTR-mode encryption.
+fn gost_ctr_encrypt(key: &[u8], nonce: &[u8; 16], plaintext: &[u8]) -> Result<Vec<u8>, CipherError> {
+    use cipher::BlockCipherEncrypt;
+    let cipher = Kuznyechik::new_from_slice(key).map_err(|_| CipherError::InvalidKey)?;
+    let mut ciphertext = plaintext.to_vec();
+    let mut counter = *nonce;
+
+    for chunk in ciphertext.chunks_mut(16) {
+        // Encrypt counter block to get keystream
+        let mut keystream = cipher::Array::from(counter);
+        cipher.encrypt_block(&mut keystream);
+        let ks: [u8; 16] = keystream.into();
+        // XOR plaintext with keystream
+        for (i, byte) in chunk.iter_mut().enumerate() {
+            *byte ^= ks[i];
+        }
+        // Increment counter (big-endian)
+        increment_counter(&mut counter);
+    }
+    Ok(ciphertext)
+}
+
+/// Kuznyechik CTR-mode decryption (same as encryption for CTR).
+fn gost_ctr_decrypt(key: &[u8], nonce: &[u8; 16], ciphertext: &[u8]) -> Result<Vec<u8>, CipherError> {
+    // CTR mode decryption is identical to encryption
+    gost_ctr_encrypt(key, nonce, ciphertext)
+}
+
+/// Kuznyechik CMAC tag computation (16 bytes).
+/// Implements CMAC manually using Kuznyechik block cipher (GOST R 34.13-2015).
+fn gost_cmac_tag(key: &[u8], data: &[u8]) -> Result<Vec<u8>, CipherError> {
+    if key.len() != 32 {
+        return Err(CipherError::InvalidKey);
+    }
+
+    let cipher = Kuznyechik::new_from_slice(key).map_err(|_| CipherError::InvalidKey)?;
+
+    // Generate subkeys K1 and K2
+    let mut l = cipher::Array::from([0u8; 16]);
+    cipher.clone().encrypt_block(&mut l);
+    let l_bytes: [u8; 16] = l.into();
+
+    let k1 = ghash_subkey(&l_bytes);
+    let k2 = ghash_subkey(&k1);
+
+    // Process data in 16-byte blocks
+    let mut state = [0u8; 16];
+    let mut chunks: Vec<&[u8]> = data.chunks(16).collect();
+    let last_block = data.chunks(16).last();
+
+    if data.is_empty() || last_block.map_or(false, |b| b.len() == 16) {
+        // Data is empty or last block is full
+        for chunk in &chunks {
+            xor_blocks(&mut state, chunk);
+            let mut block = cipher::Array::from(state);
+            cipher.clone().encrypt_block(&mut block);
+            state = block.into();
+        }
+        if !data.is_empty() && last_block.map_or(false, |b| b.len() == 16) {
+            // XOR K1 into state before final block
+            xor_blocks(&mut state, &k1);
+            let mut block = cipher::Array::from(state);
+            cipher.clone().encrypt_block(&mut block);
+            state = block.into();
+        }
+    } else {
+        // Last block is partial - pad and XOR K2
+        let mut padded = [0u8; 16];
+        padded[..chunks.last().unwrap().len()].copy_from_slice(chunks.last().unwrap());
+        padded[chunks.last().unwrap().len()] = 0x80; // padding
+
+        for chunk in &chunks[..chunks.len() - 1] {
+            xor_blocks(&mut state, chunk);
+            let mut block = cipher::Array::from(state);
+            cipher.clone().encrypt_block(&mut block);
+            state = block.into();
+        }
+        // Process last padded block with K2
+        xor_blocks(&mut state, &padded);
+        xor_blocks(&mut state, &k2);
+        let mut block = cipher::Array::from(state);
+        cipher.clone().encrypt_block(&mut block);
+        state = block.into();
+    }
+
+    Ok(state.to_vec())
+}
+
+/// GHASH subkey derivation for CMAC (doubles the block in GF(2^128)).
+fn ghash_subkey(l: &[u8; 16]) -> [u8; 16] {
+    let mut result = [0u8; 16];
+    let carry = l[0] & 0x80 != 0;
+    for i in 0..16 {
+        result[i] = (l[i] << 1) | if i + 1 < 16 { l[i + 1] >> 7 } else { 0 };
+    }
+    if carry {
+        result[15] ^= 0x87; // x^128 + x^7 + x^2 + x + 1
+    }
+    result
+}
+
+/// XOR two 16-byte blocks.
+fn xor_blocks(a: &mut [u8; 16], b: &[u8]) {
+    for i in 0..16.min(b.len()) {
+        a[i] ^= b[i];
+    }
+}
+
+/// Builds a 16-byte nonce from the 12-byte IV (system_title ‖ IC).
+/// The GOST CTR mode uses a 128-bit block, so we extend the 96-bit IV
+/// with zeros to form the counter initial value.
+fn build_gost_nonce(iv: &[u8; 12]) -> [u8; 16] {
+    let mut nonce = [0u8; 16];
+    nonce[..12].copy_from_slice(iv);
+    nonce
+}
+
+/// Increments a 128-bit counter in big-endian.
+fn increment_counter(counter: &mut [u8; 16]) {
+    for i in (0..16).rev() {
+        counter[i] = counter[i].wrapping_add(1);
+        if counter[i] != 0 {
+            break;
+        }
+    }
+}
+
 /// Encrypts `buf` in place and returns the 12-octet authentication tag.
 fn gcm_encrypt_in_place(key: &[u8], iv: &[u8; 12], aad: &[u8], buf: &mut [u8]) -> Result<[u8; 12], CipherError> {
     let nonce = Nonce::<U12>::from(*iv);
@@ -448,5 +714,94 @@ mod tests {
         assert_eq!(&apdu[7..7 + plaintext.len()], plaintext.as_slice());
         let (_, recovered) = unprotect(&mut c.clone(), &apdu).unwrap();
         assert_eq!(recovered, plaintext);
+    }
+
+    // ========================================================================
+    // GOST ciphering tests (Р 1323565.1: Kuznyechik CTR+CMAC)
+    // ========================================================================
+
+    fn gost_ctx() -> SecurityContext {
+        SecurityContext {
+            security_control: security_control::AUTHENTICATED_ENCRYPTION | GOST_SUITE_ID,
+            encryption_key: hex(b"8899aabbccddeeff00112233445566778899aabbccddeeff0011223344556677"),
+            authentication_key: hex(b"bddc7e4ac4e164e40785d8c147b4a883bddc7e4ac4e164e40785d8c147b4a883"),
+            system_title: hex(b"4D4D4D0000BC614E"),
+            invocation_counter: 0x01234567,
+        }
+    }
+
+    #[test]
+    fn gost_protect_unprotect_round_trip() {
+        let plaintext = hex(b"C001C100080000010000FF0200");
+        let apdu = gost_protect(&gost_ctx(), glo::GET_REQUEST, &plaintext).unwrap();
+        let (tag, recovered) = gost_unprotect(&mut gost_ctx(), &apdu).unwrap();
+        assert_eq!(tag, glo::GET_REQUEST);
+        assert_eq!(recovered, plaintext);
+    }
+
+    #[test]
+    fn gost_protect_unprotect_with_auth_only() {
+        let mut c = gost_ctx();
+        c.security_control = security_control::AUTHENTICATION | GOST_SUITE_ID;
+        let plaintext = hex(b"0800065F1F0400007C1F04000007");
+        let apdu = gost_protect(&c, glo::GET_RESPONSE, &plaintext).unwrap();
+        // Plaintext should be visible in the clear (auth only, no encryption)
+        assert_eq!(&apdu[7..7 + plaintext.len()], plaintext.as_slice());
+        let (_, recovered) = gost_unprotect(&mut c, &apdu).unwrap();
+        assert_eq!(recovered, plaintext);
+    }
+
+    #[test]
+    fn gost_protect_unprotect_encryption_only() {
+        let mut c = gost_ctx();
+        c.security_control = security_control::ENCRYPTION | GOST_SUITE_ID;
+        let plaintext = hex(b"C001C100080000010000FF0200");
+        let apdu = gost_protect(&c, glo::SET_REQUEST, &plaintext).unwrap();
+        // Ciphertext should not match plaintext
+        assert_ne!(&apdu[7..7 + plaintext.len()], plaintext.as_slice());
+        let (_, recovered) = gost_unprotect(&mut c, &apdu).unwrap();
+        assert_eq!(recovered, plaintext);
+    }
+
+    #[test]
+    fn gost_detects_tampering() {
+        let plaintext = hex(b"0800065F1F0400007C1F04000007");
+        let mut apdu = gost_protect(&gost_ctx(), glo::GET_RESPONSE, &plaintext).unwrap();
+        let n = apdu.len();
+        apdu[n - 1] ^= 0x01; // corrupt the CMAC tag
+        assert_eq!(gost_unprotect(&mut gost_ctx(), &apdu), Err(CipherError::AuthenticationFailed));
+    }
+
+    #[test]
+    fn gost_wrong_key_fails() {
+        let mut c = gost_ctx();
+        c.encryption_key = hex(b"0000000000000000000000000000000000000000000000000000000000000000");
+        let plaintext = hex(b"C001C100");
+        let apdu = gost_protect(&c, glo::GET_REQUEST, &plaintext).unwrap();
+        // Different key should fail CMAC verification
+        assert_eq!(gost_unprotect(&mut gost_ctx(), &apdu), Err(CipherError::AuthenticationFailed));
+    }
+
+    #[test]
+    fn is_gost_suite_detection() {
+        assert!(is_gost_suite(GOST_SUITE_ID));
+        assert!(is_gost_suite(0x30 | GOST_SUITE_ID));
+        assert!(!is_gost_suite(0x30)); // AES suite 0
+        assert!(!is_gost_suite(0x31)); // AES suite 1
+    }
+
+    #[test]
+    fn gost_counter_increment() {
+        let mut counter = [0xFFu8; 16];
+        increment_counter(&mut counter);
+        assert_eq!(counter, [0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00]);
+    }
+
+    #[test]
+    fn gost_cmac_produces_16_octet_tag() {
+        let key = hex(b"8899aabbccddeeff00112233445566778899aabbccddeeff0011223344556677");
+        let data = hex(b"0102030405");
+        let tag = gost_cmac_tag(&key, &data).unwrap();
+        assert_eq!(tag.len(), 16);
     }
 }

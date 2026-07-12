@@ -1,16 +1,28 @@
 [package]
 name = "spodes-rs"
-version = "0.4.0"
+version = "0.5.0"
 authors = ["trgv <trgv@tavrida.com>"]
 edition = "2021"
 rust-version = "1.85"
 description = "A pure-Rust DLMS/COSEM stack: interface classes, transport, xDLMS services and security (IEC 62056 and the СТО 34.01-5.1-006-2023 / Р 1323565.1 GOST profiles)."
 license = "GPL-3.0-or-later"
 repository = "https://github.com/gvtret/spodes-rs"
+homepage = "https://gvtret.github.io/spodes-rs/"
+documentation = "https://docs.rs/spodes-rs"
 readme = "README.md"
 keywords = ["dlms", "cosem", "iec62056", "metering", "gost"]
-categories = ["encoding", "embedded", "network-programming"]
-exclude = ["/docs"]
+categories = ["encoding", "network-programming"]
+exclude = ["/docs", "/inner_docs", "/coverage"]
+
+[package.metadata.docs.rs]
+all-features = true
+rustdoc-args = ["--cfg", "docsrs"]
+
+[features]
+default = ["gost", "nist"]
+gost = []
+nist = []
+tracing = ["dep:tracing"]
 
 [dependencies]
 serde = { version = "1.0", features = ["derive"] }
@@ -19,6 +31,7 @@ md-5 = "0.11"
 sha2 = "0.11"
 streebog = "0.11"
 kuznyechik = "0.9"
+cipher = "0.5"
 cmac = "0.8"
 p256 = { version = "0.14", features = ["ecdsa", "ecdh"] }
 p384 = { version = "0.14", features = ["ecdsa", "ecdh"] }
@@ -30,6 +43,8 @@ hmac = "0.13"
 aes-gcm = "0.11"
 aead = "0.6"
 rand = "0.9.4"
+subtle = "2"
+tracing = { version = "0.1", optional = true }
 
 [dev-dependencies]
 criterion = { version = "0.5", features = ["html_reports"] }
@@ -107,5 +122,17 @@ name = "tcp_server"
 path = "examples/tcp_server.rs"
 
 [[example]]
+name = "push_sender"
+path = "examples/push_sender.rs"
+
+[[example]]
+name = "push_listener"
+path = "examples/push_listener.rs"
+
+[[example]]
 name = "udp_client"
 path = "examples/udp_client.rs"
+
+[[example]]
+name = "udp_server"
+path = "examples/udp_server.rs"

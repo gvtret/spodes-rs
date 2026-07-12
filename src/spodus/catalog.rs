@@ -7,6 +7,7 @@
 use crate::classes::association_ln::{
     AssociationLn, AssociationLnConfig, AssociationLnVersion, AuthenticationMechanism,
 };
+use crate::types::attrs::{AssociatedPartnersId, ContextName, SapAssignmentEntry, XDLMSContextInfo};
 use crate::classes::clock::{Clock, ClockConfig};
 use crate::classes::sap_assignment::{SapAssignment, SapAssignmentConfig};
 use crate::classes::security_setup::{SecuritySetup, SecuritySetupConfig};
@@ -45,7 +46,7 @@ pub fn clock() -> Clock {
 
 /// The SAP-assignment object (§10.1.8, `0.0.41.0.0.255`, IC 17) listing the
 /// logical devices of the ИВКЭ.
-pub fn sap_assignment(sap_assignment_list: Vec<CosemDataType>) -> SapAssignment {
+pub fn sap_assignment(sap_assignment_list: Vec<SapAssignmentEntry>) -> SapAssignment {
     SapAssignment::new(SapAssignmentConfig { logical_name: obis::sap_assignment(), sap_assignment_list })
 }
 
@@ -71,13 +72,20 @@ pub fn association(obis: ObisCode, mechanism: AuthenticationMechanism, security_
         logical_name: obis,
         version: AssociationLnVersion::Version1,
         object_list: vec![],
-        associated_partners_id: CosemDataType::Null,
-        application_context_name: CosemDataType::Null,
-        xdlms_context_info: CosemDataType::Null,
+        associated_partners_id: AssociatedPartnersId { client_sap: 0, server_sap: 0 },
+        application_context_name: ContextName::OctetString(vec![]),
+        xdlms_context_info: XDLMSContextInfo {
+            conformance: vec![],
+            max_receive_pdu_size: 0xFFFF,
+            max_send_pdu_size: 0xFFFF,
+            dlms_version_number: 6,
+            quality_of_service: 0,
+            cyphering_info: vec![],
+        },
         authentication_mechanism: mechanism,
         secret: CosemDataType::OctetString(vec![]),
-        association_status: CosemDataType::Enum(0),
-        security_setup_reference: CosemDataType::OctetString(security_setup_ref.to_bytes()),
+        association_status: 0,
+        security_setup_reference: security_setup_ref,
         user_list: vec![],
         current_user: CosemDataType::Null,
     })

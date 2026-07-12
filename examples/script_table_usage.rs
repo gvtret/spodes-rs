@@ -2,6 +2,7 @@ use spodes_rs::classes::script_table::{ScriptTable, ScriptTableConfig};
 use spodes_rs::interface::InterfaceClass;
 use spodes_rs::obis::ObisCode;
 use spodes_rs::serialization::{deserialize_object, serialize_object};
+use spodes_rs::types::attrs::{ActionSpecification, Script};
 use spodes_rs::types::CosemDataType;
 
 fn main() {
@@ -10,14 +11,17 @@ fn main() {
 
     // Создаём список скриптов
     // Каждый скрипт — структура с идентификатором и действием
-    let scripts = vec![CosemDataType::Structure(vec![
-        CosemDataType::LongUnsigned(1), // script_identifier
-        CosemDataType::Structure(vec![
-            CosemDataType::LongUnsigned(3),                       // class_id: Register
-            CosemDataType::OctetString(vec![1, 0, 1, 8, 0, 255]), // logical_name
-            CosemDataType::Integer(1),                            // method_index: reset
-        ]), // action
-    ])];
+    let action = ActionSpecification {
+        service_id: 1,
+        class_id: 3,                                    // Register
+        logical_name: ObisCode::new(1, 0, 1, 8, 0, 255),
+        index: 1,                                       // method_index: reset
+        parameter: CosemDataType::Null,
+    };
+    let scripts = vec![Script {
+        script_identifier: 1,
+        actions: vec![action],
+    }];
 
     // Создаём конфигурацию ScriptTable
     let config = ScriptTableConfig { logical_name: obis.clone(), scripts: scripts.clone() };

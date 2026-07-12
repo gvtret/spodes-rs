@@ -1,5 +1,6 @@
 use crate::interface::InterfaceClass;
 use crate::obis::ObisCode;
+use crate::types::attrs::{ActionSet, ValueDefinition};
 use crate::types::{BerError, CosemDataType};
 use serde::{Deserialize, Serialize};
 use std::any::Any;
@@ -12,9 +13,9 @@ pub struct RegisterMonitorConfig {
     /// Attribute 2: array of threshold values, of the monitored attribute's type.
     pub thresholds: Vec<CosemDataType>,
     /// Attribute 3: `value_definition` structure { class_id, logical_name, attribute_index }.
-    pub monitored_value: CosemDataType,
+    pub monitored_value: ValueDefinition,
     /// Attribute 4: array of `action_set` structures paired with the thresholds.
-    pub actions: Vec<CosemDataType>,
+    pub actions: Vec<ActionSet>,
 }
 
 /// `Register monitor` interface class (class_id = 21, version = 0) per
@@ -26,8 +27,8 @@ pub struct RegisterMonitorConfig {
 pub struct RegisterMonitor {
     logical_name: ObisCode,
     thresholds: Vec<CosemDataType>,
-    monitored_value: CosemDataType,
-    actions: Vec<CosemDataType>,
+    monitored_value: ValueDefinition,
+    actions: Vec<ActionSet>,
 }
 
 impl RegisterMonitor {
@@ -59,8 +60,8 @@ impl InterfaceClass for RegisterMonitor {
         vec![
             (1, CosemDataType::OctetString(self.logical_name.to_bytes())),
             (2, CosemDataType::Array(self.thresholds.clone())),
-            (3, self.monitored_value.clone()),
-            (4, CosemDataType::Array(self.actions.clone())),
+            (3, CosemDataType::from(self.monitored_value.clone())),
+            (4, CosemDataType::Array(self.actions.iter().map(|a| CosemDataType::from(a.clone())).collect())),
         ]
     }
 
@@ -114,9 +115,15 @@ impl InterfaceClass for RegisterMonitor {
             CosemDataType::Array(list) => list.clone(),
             _ => return Err(BerError::InvalidTag),
         };
-        self.monitored_value = seq[3].clone();
+        self.monitored_value = ValueDefinition::try_from(&seq[3])
+            .map_err(|_| BerError::InvalidTag)?;
         self.actions = match &seq[4] {
-            CosemDataType::Array(list) => list.clone(),
+            CosemDataType::Array(list) => {
+                list.iter()
+                    .map(ActionSet::try_from)
+                    .collect::<Result<Vec<_>, _>>()
+                    .map_err(|_| BerError::InvalidTag)?
+            }
             _ => return Err(BerError::InvalidTag),
         };
         Ok(())
@@ -148,26 +155,27 @@ fn write_length(length: usize, buf: &mut Vec<u8>) -> Result<(), BerError> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::types::attrs::ActionItem;
 
     fn sample() -> RegisterMonitor {
         RegisterMonitor::new(RegisterMonitorConfig {
             logical_name: ObisCode::new(0, 0, 16, 1, 0, 255),
             thresholds: vec![CosemDataType::LongUnsigned(230), CosemDataType::LongUnsigned(250)],
-            monitored_value: CosemDataType::Structure(vec![
-                CosemDataType::LongUnsigned(3),
-                CosemDataType::OctetString(vec![1, 0, 32, 7, 0, 255]),
-                CosemDataType::Integer(2),
-            ]),
-            actions: vec![CosemDataType::Structure(vec![
-                CosemDataType::Structure(vec![
-                    CosemDataType::OctetString(vec![0, 0, 10, 0, 1, 255]),
-                    CosemDataType::LongUnsigned(1),
-                ]),
-                CosemDataType::Structure(vec![
-                    CosemDataType::OctetString(vec![0, 0, 10, 0, 1, 255]),
-                    CosemDataType::LongUnsigned(2),
-                ]),
-            ])],
+            monitored_value: ValueDefinition {
+                class_id: 3,
+                logical_name: ObisCode::new(1, 0, 32, 7, 0, 255),
+                attribute_index: 2,
+            },
+            actions: vec![ActionSet {
+                action_up: ActionItem {
+                    script_logical_name: ObisCode::new(0, 0, 10, 0, 1, 255),
+                    script_selector: 1,
+                },
+                action_down: ActionItem {
+                    script_logical_name: ObisCode::new(0, 0, 10, 0, 1, 255),
+                    script_selector: 2,
+                },
+            }],
         })
     }
 

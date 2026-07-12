@@ -1,5 +1,6 @@
 use crate::interface::InterfaceClass;
 use crate::obis::ObisCode;
+use crate::types::attrs::NeighborDiscoverySetup;
 use crate::types::{BerError, CosemDataType};
 use serde::{Deserialize, Serialize};
 use std::any::Any;
@@ -14,11 +15,11 @@ pub struct Ipv6SetupConfig {
     /// Attribute 3: address configuration mode (enum).
     pub address_config_mode: u8,
     /// Attribute 4: array of unicast IPv6 addresses (octet-string, 16 octets).
-    pub unicast_ipv6_addresses: Vec<CosemDataType>,
+    pub unicast_ipv6_addresses: Vec<Vec<u8>>,
     /// Attribute 5: array of multicast IPv6 addresses.
-    pub multicast_ipv6_addresses: Vec<CosemDataType>,
+    pub multicast_ipv6_addresses: Vec<Vec<u8>>,
     /// Attribute 6: array of gateway IPv6 addresses.
-    pub gateway_ipv6_addresses: Vec<CosemDataType>,
+    pub gateway_ipv6_addresses: Vec<Vec<u8>>,
     /// Attribute 7: primary DNS address (octet-string).
     pub primary_dns_address: Vec<u8>,
     /// Attribute 8: secondary DNS address (octet-string).
@@ -26,7 +27,7 @@ pub struct Ipv6SetupConfig {
     /// Attribute 9: traffic class (0..63).
     pub traffic_class: u8,
     /// Attribute 10: array of neighbor discovery setup structures.
-    pub neighbor_discovery_setup: Vec<CosemDataType>,
+    pub neighbor_discovery_setup: Vec<NeighborDiscoverySetup>,
 }
 
 /// `IPv6 setup` interface class (class_id = 48, version = 0) per IEC 62056-6-2
@@ -36,13 +37,13 @@ pub struct Ipv6Setup {
     logical_name: ObisCode,
     dl_reference: Vec<u8>,
     address_config_mode: u8,
-    unicast_ipv6_addresses: Vec<CosemDataType>,
-    multicast_ipv6_addresses: Vec<CosemDataType>,
-    gateway_ipv6_addresses: Vec<CosemDataType>,
+    unicast_ipv6_addresses: Vec<Vec<u8>>,
+    multicast_ipv6_addresses: Vec<Vec<u8>>,
+    gateway_ipv6_addresses: Vec<Vec<u8>>,
     primary_dns_address: Vec<u8>,
     secondary_dns_address: Vec<u8>,
     traffic_class: u8,
-    neighbor_discovery_setup: Vec<CosemDataType>,
+    neighbor_discovery_setup: Vec<NeighborDiscoverySetup>,
 }
 
 impl Ipv6Setup {
@@ -64,10 +65,10 @@ impl Ipv6Setup {
 
     /// Method 1: `add_IPv6_address` — adds a unicast IPv6 address.
     fn add_ipv6_address(&mut self, data: CosemDataType) -> Result<CosemDataType, String> {
-        match data {
-            CosemDataType::OctetString(_) => {
-                if !self.unicast_ipv6_addresses.contains(&data) {
-                    self.unicast_ipv6_addresses.push(data);
+        match &data {
+            CosemDataType::OctetString(addr) => {
+                if !self.unicast_ipv6_addresses.contains(addr) {
+                    self.unicast_ipv6_addresses.push(addr.clone());
                 }
                 Ok(CosemDataType::Null)
             }
@@ -77,8 +78,12 @@ impl Ipv6Setup {
 
     /// Method 2: `remove_IPv6_address` — removes a unicast IPv6 address.
     fn remove_ipv6_address(&mut self, data: CosemDataType) -> Result<CosemDataType, String> {
+        let addr = match &data {
+            CosemDataType::OctetString(v) => v.clone(),
+            _ => return Err("remove_IPv6_address expects an octet-string".to_string()),
+        };
         let before = self.unicast_ipv6_addresses.len();
-        self.unicast_ipv6_addresses.retain(|a| a != &data);
+        self.unicast_ipv6_addresses.retain(|a| *a != addr);
         if self.unicast_ipv6_addresses.len() == before {
             return Err("IPv6 address not found".to_string());
         }
@@ -104,13 +109,13 @@ impl InterfaceClass for Ipv6Setup {
             (1, CosemDataType::OctetString(self.logical_name.to_bytes())),
             (2, CosemDataType::OctetString(self.dl_reference.clone())),
             (3, CosemDataType::Enum(self.address_config_mode)),
-            (4, CosemDataType::Array(self.unicast_ipv6_addresses.clone())),
-            (5, CosemDataType::Array(self.multicast_ipv6_addresses.clone())),
-            (6, CosemDataType::Array(self.gateway_ipv6_addresses.clone())),
+            (4, CosemDataType::Array(self.unicast_ipv6_addresses.iter().cloned().map(CosemDataType::OctetString).collect())),
+            (5, CosemDataType::Array(self.multicast_ipv6_addresses.iter().cloned().map(CosemDataType::OctetString).collect())),
+            (6, CosemDataType::Array(self.gateway_ipv6_addresses.iter().cloned().map(CosemDataType::OctetString).collect())),
             (7, CosemDataType::OctetString(self.primary_dns_address.clone())),
             (8, CosemDataType::OctetString(self.secondary_dns_address.clone())),
             (9, CosemDataType::Unsigned(self.traffic_class)),
-            (10, CosemDataType::Array(self.neighbor_discovery_setup.clone())),
+            (10, CosemDataType::Array(self.neighbor_discovery_setup.iter().cloned().map(CosemDataType::from).collect())),
         ]
     }
 
@@ -164,16 +169,16 @@ impl InterfaceClass for Ipv6Setup {
             CosemDataType::Enum(v) => v,
             _ => return Err(BerError::InvalidTag),
         };
-        self.unicast_ipv6_addresses = take_array(&seq[4])?;
-        self.multicast_ipv6_addresses = take_array(&seq[5])?;
-        self.gateway_ipv6_addresses = take_array(&seq[6])?;
+        self.unicast_ipv6_addresses = take_octet_string_array(&seq[4])?;
+        self.multicast_ipv6_addresses = take_octet_string_array(&seq[5])?;
+        self.gateway_ipv6_addresses = take_octet_string_array(&seq[6])?;
         self.primary_dns_address = take_octet_string(&seq[7])?;
         self.secondary_dns_address = take_octet_string(&seq[8])?;
         self.traffic_class = match seq[9] {
             CosemDataType::Unsigned(v) => v,
             _ => return Err(BerError::InvalidTag),
         };
-        self.neighbor_discovery_setup = take_array(&seq[10])?;
+        self.neighbor_discovery_setup = take_nds_array(&seq[10])?;
         Ok(())
     }
 
@@ -197,9 +202,25 @@ fn take_octet_string(value: &CosemDataType) -> Result<Vec<u8>, BerError> {
     }
 }
 
-fn take_array(value: &CosemDataType) -> Result<Vec<CosemDataType>, BerError> {
+fn take_octet_string_array(value: &CosemDataType) -> Result<Vec<Vec<u8>>, BerError> {
     match value {
-        CosemDataType::Array(list) => Ok(list.clone()),
+        CosemDataType::Array(list) => list
+            .iter()
+            .map(|item| match item {
+                CosemDataType::OctetString(v) => Ok(v.clone()),
+                _ => Err(BerError::InvalidTag),
+            })
+            .collect(),
+        _ => Err(BerError::InvalidTag),
+    }
+}
+
+fn take_nds_array(value: &CosemDataType) -> Result<Vec<NeighborDiscoverySetup>, BerError> {
+    match value {
+        CosemDataType::Array(list) => list
+            .iter()
+            .map(|item| NeighborDiscoverySetup::try_from(item).map_err(|_| BerError::InvalidValue))
+            .collect(),
         _ => Err(BerError::InvalidTag),
     }
 }

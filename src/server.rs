@@ -14,6 +14,9 @@
 use crate::classes::association_ln::AssociationLn;
 use crate::interface::InterfaceClass;
 use crate::obis::ObisCode;
+
+#[cfg(feature = "tracing")]
+use tracing::{debug, warn};
 use crate::service::action::{ActionRequest, ActionResponse};
 use crate::service::error::{service_error, state_error, ExceptionResponse};
 use crate::service::get::{GetDataResult, GetRequest, GetResponse};
@@ -77,6 +80,12 @@ impl RequestDispatcher {
 
     /// Registers an object.
     pub fn add(&mut self, object: Box<dyn InterfaceClass>) {
+        #[cfg(feature = "tracing")]
+        debug!(
+            class_id = object.class_id(),
+            logical_name = %object.logical_name(),
+            "registering COSEM object"
+        );
         self.objects.push(object);
     }
 
@@ -84,6 +93,8 @@ impl RequestDispatcher {
     /// When an association is set, all GET/SET/ACTION requests are checked
     /// against the association's object_list access_rights.
     pub fn set_association(&mut self, assoc: AssociationLn) {
+        #[cfg(feature = "tracing")]
+        debug!("setting association for access rights checking");
         self.association = Some(assoc);
     }
 
@@ -130,12 +141,37 @@ impl RequestDispatcher {
         let attr_id = d.attribute_id;
         // Check access rights first.
         if !self.check_read(d.class_id, &d.instance_id, attr_id) {
+            #[cfg(feature = "tracing")]
+            warn!(
+                class_id = d.class_id,
+                instance = %d.instance_id,
+                attr_id,
+                "GET denied by access rights"
+            );
             return GetDataResult::AccessResult(data_access_result::READ_WRITE_DENIED);
         }
         match self.find(d.class_id, &d.instance_id) {
-            None => GetDataResult::AccessResult(data_access_result::OBJECT_UNDEFINED),
+            None => {
+                #[cfg(feature = "tracing")]
+                debug!(
+                    class_id = d.class_id,
+                    instance = %d.instance_id,
+                    attr_id,
+                    "GET: object undefined"
+                );
+                GetDataResult::AccessResult(data_access_result::OBJECT_UNDEFINED)
+            }
             Some(obj) => match obj.attributes().into_iter().find(|(id, _)| *id as i8 == attr_id) {
-                Some((_, value)) => GetDataResult::Data(value),
+                Some((_, value)) => {
+                    #[cfg(feature = "tracing")]
+                    debug!(
+                        class_id = d.class_id,
+                        instance = %d.instance_id,
+                        attr_id,
+                        "GET: success"
+                    );
+                    GetDataResult::Data(value)
+                }
                 None => GetDataResult::AccessResult(data_access_result::OBJECT_UNAVAILABLE),
             },
         }
@@ -146,12 +182,37 @@ impl RequestDispatcher {
     fn write_attribute(&mut self, d: &AttributeDescriptor, value: crate::types::CosemDataType) -> u8 {
         // Check access rights first.
         if !self.check_write(d.class_id, &d.instance_id, d.attribute_id) {
+            #[cfg(feature = "tracing")]
+            warn!(
+                class_id = d.class_id,
+                instance = %d.instance_id,
+                attr_id = d.attribute_id,
+                "SET denied by access rights"
+            );
             return data_access_result::READ_WRITE_DENIED;
         }
         match self.find(d.class_id, &d.instance_id) {
-            None => data_access_result::OBJECT_UNDEFINED,
+            None => {
+                #[cfg(feature = "tracing")]
+                debug!(
+                    class_id = d.class_id,
+                    instance = %d.instance_id,
+                    attr_id = d.attribute_id,
+                    "SET: object undefined"
+                );
+                data_access_result::OBJECT_UNDEFINED
+            }
             Some(obj) => match obj.set_attribute(d.attribute_id as u8, value) {
-                Ok(()) => data_access_result::SUCCESS,
+                Ok(()) => {
+                    #[cfg(feature = "tracing")]
+                    debug!(
+                        class_id = d.class_id,
+                        instance = %d.instance_id,
+                        attr_id = d.attribute_id,
+                        "SET: success"
+                    );
+                    data_access_result::SUCCESS
+                }
                 Err(_) => data_access_result::READ_WRITE_DENIED,
             },
         }
@@ -166,14 +227,57 @@ impl RequestDispatcher {
     ) -> (u8, Option<GetDataResult>) {
         // Check method access rights first.
         if !self.check_invoke(d.class_id, &d.instance_id, d.method_id) {
+            #[cfg(feature = "tracing")]
+            warn!(
+                class_id = d.class_id,
+                instance = %d.instance_id,
+                method_id = d.method_id,
+                "ACTION denied by access rights"
+            );
             return (data_access_result::READ_WRITE_DENIED, None);
         }
         match self.find(d.class_id, &d.instance_id) {
-            None => (data_access_result::OBJECT_UNDEFINED, None),
+            None => {
+                #[cfg(feature = "tracing")]
+                debug!(
+                    class_id = d.class_id,
+                    instance = %d.instance_id,
+                    method_id = d.method_id,
+                    "ACTION: object undefined"
+                );
+                (data_access_result::OBJECT_UNDEFINED, None)
+            }
             Some(obj) => match obj.invoke_method(d.method_id as u8, params) {
-                Ok(crate::types::CosemDataType::Null) => (data_access_result::SUCCESS, None),
-                Ok(value) => (data_access_result::SUCCESS, Some(GetDataResult::Data(value))),
-                Err(_) => (data_access_result::OTHER_REASON, None),
+                Ok(crate::types::CosemDataType::Null) => {
+                    #[cfg(feature = "tracing")]
+                    debug!(
+                        class_id = d.class_id,
+                        instance = %d.instance_id,
+                        method_id = d.method_id,
+                        "ACTION: success"
+                    );
+                    (data_access_result::SUCCESS, None)
+                }
+                Ok(value) => {
+                    #[cfg(feature = "tracing")]
+                    debug!(
+                        class_id = d.class_id,
+                        instance = %d.instance_id,
+                        method_id = d.method_id,
+                        "ACTION: success (with return value)"
+                    );
+                    (data_access_result::SUCCESS, Some(GetDataResult::Data(value)))
+                }
+                Err(_) => {
+                    #[cfg(feature = "tracing")]
+                    warn!(
+                        class_id = d.class_id,
+                        instance = %d.instance_id,
+                        method_id = d.method_id,
+                        "ACTION: method returned error"
+                    );
+                    (data_access_result::OTHER_REASON, None)
+                }
             },
         }
     }

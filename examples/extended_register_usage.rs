@@ -2,7 +2,7 @@ use spodes_rs::classes::extended_register::ExtendedRegister;
 use spodes_rs::interface::InterfaceClass;
 use spodes_rs::obis::ObisCode;
 use spodes_rs::serialization::{deserialize_object, serialize_object};
-use spodes_rs::types::attrs::ScalerUnit;
+use spodes_rs::types::attrs::{DateTime, ScalerUnit};
 use spodes_rs::types::CosemDataType;
 
 fn main() {
@@ -13,7 +13,7 @@ fn main() {
         CosemDataType::DoubleLong(2000),
         ScalerUnit::new(0, 0x1B),
         CosemDataType::Unsigned(1),
-        CosemDataType::DateTime(vec![
+        DateTime::new([
             0x07, 0xE5, 0x05, 0x01, 0x02, 0x10, 0x30, 0x00, 0x00, 0x00, 0x00, 0x00,
         ]),
     );
@@ -55,7 +55,7 @@ fn main() {
         CosemDataType::Null,
         ScalerUnit::new(0, 0),
         CosemDataType::Null,
-        CosemDataType::Null,
+        DateTime::new([0u8; 12]),
     );
     deserialize_object(&mut deserialized, &serialized).expect("Deserialization failed");
 

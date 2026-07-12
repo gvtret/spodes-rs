@@ -8,6 +8,44 @@ While the crate is at `0.x`, minor releases may contain breaking changes.
 
 ## [Unreleased]
 
+## [0.5.0] - 2026-07-12
+
+### Added
+
+- **38 typed COSEM attribute structs** for IEC 62056-6-2 (Blue Book):
+  - Access rights: `AccessRight`, `AttributeAccessItem`, `MethodAccessItem`
+  - Association LN: `ObjectListElement`, `AssociatedPartnersId`, `ContextName`, `XDLMSContextInfo`
+  - Register Monitor / Limiter: `ValueDefinition`, `ActionItem`, `ActionSet`, `EmergencyProfile`, `LimiterAction`
+  - Script Table: `Script`, `ActionSpecification`
+  - Schedule: `ScheduleTableEntry`
+  - Special Days: `SpecialDayEntry`
+  - Activity Calendar: `SeasonProfile`, `WeekProfile`, `DayProfile`, `DayProfileAction`
+  - Push Setup: `SendDestinationAndMethod`, `CommunicationWindow`
+  - Register Activation: `ObjectDefinition`, `RegisterActMask`
+  - Image Transfer: `ImageToActivateInfo`
+  - Single Action Schedule: `ExecutedScript`
+  - SAP Assignment: `SapAssignmentEntry`
+  - GSM Diagnostic: `GsmAdjacentCell`
+  - Data Protection: `ProtectionObject`
+  - IPv4: `IpOption`
+  - IPv6: `NeighborDiscoverySetup`
+- **63 unit tests** for all typed attribute conversions (round-trip, BER, error cases)
+- **Push examples**: `push_listener.rs`, `push_sender.rs`
+- **GitHub Pages** deployment workflow for rustdoc
+- **Version bump** workflow with dry-run support
+
+### Security
+
+- Fixed timing attack vulnerability in constant-time comparison for authentication tags.
+- Removed potentially panicking `unwrap()` calls in favour of explicit error handling.
+
+### Changed
+
+- All 15 class files updated to use typed structs instead of generic `CosemDataType`:
+  - AssociationLN, Limiter, PushSetup, ActivityCalendar, ScriptTable, Schedule
+  - SpecialDaysTable, RegisterActivation, RegisterMonitor, SingleActionSchedule
+  - ImageTransfer, GsmDiagnostic, ExtendedRegister, SapAssignment, IPv4/IPv6 Setup
+
 ## [0.4.0] - 2026-07-09
 
 ### Added
@@ -125,7 +163,8 @@ Initial release: a full DLMS/COSEM stack for IEC 62056 and the Russian
 - **Tooling** — GitHub Actions CI (fmt, clippy, test, doc, package) and a
   tag-triggered release workflow; dual MIT / Apache-2.0 license.
 
-[Unreleased]: https://github.com/gvtret/spodes-rs/compare/v0.4.0...HEAD
+[Unreleased]: https://github.com/gvtret/spodes-rs/compare/v0.5.0...HEAD
+[0.5.0]: https://github.com/gvtret/spodes-rs/compare/v0.4.0...v0.5.0
 [0.4.0]: https://github.com/gvtret/spodes-rs/compare/v0.3.0...v0.4.0
 [0.3.0]: https://github.com/gvtret/spodes-rs/compare/v0.2.2...v0.3.0
 [0.2.2]: https://github.com/gvtret/spodes-rs/compare/v0.2.1...v0.2.2

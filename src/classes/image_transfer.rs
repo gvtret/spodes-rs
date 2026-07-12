@@ -1,5 +1,6 @@
 use crate::interface::InterfaceClass;
 use crate::obis::ObisCode;
+use crate::types::attrs::ImageToActivateInfo;
 use crate::types::{BerError, CosemDataType};
 use serde::{Deserialize, Serialize};
 use std::any::Any;
@@ -40,7 +41,7 @@ pub struct ImageTransferConfig {
     /// Attribute 6: image transfer status (see [`transfer_status`]).
     pub image_transfer_status: u8,
     /// Attribute 7: array of `image_to_activate_info` structures.
-    pub image_to_activate_info: Vec<CosemDataType>,
+    pub image_to_activate_info: Vec<ImageToActivateInfo>,
 }
 
 /// `Image transfer` interface class (class_id = 18, version = 0) per
@@ -56,7 +57,7 @@ pub struct ImageTransfer {
     image_first_not_transferred_block_number: u32,
     image_transfer_enabled: bool,
     image_transfer_status: u8,
-    image_to_activate_info: Vec<CosemDataType>,
+    image_to_activate_info: Vec<ImageToActivateInfo>,
 }
 
 impl ImageTransfer {
@@ -169,7 +170,9 @@ impl InterfaceClass for ImageTransfer {
             (4, CosemDataType::DoubleLongUnsigned(self.image_first_not_transferred_block_number)),
             (5, CosemDataType::Boolean(self.image_transfer_enabled)),
             (6, CosemDataType::Enum(self.image_transfer_status)),
-            (7, CosemDataType::Array(self.image_to_activate_info.clone())),
+            (7, CosemDataType::Array(
+                self.image_to_activate_info.iter().cloned().map(CosemDataType::from).collect(),
+            )),
         ]
     }
 
@@ -244,7 +247,11 @@ impl InterfaceClass for ImageTransfer {
             _ => return Err(BerError::InvalidTag),
         };
         self.image_to_activate_info = match &seq[7] {
-            CosemDataType::Array(list) => list.clone(),
+            CosemDataType::Array(list) => list
+                .iter()
+                .map(ImageToActivateInfo::try_from)
+                .collect::<Result<Vec<_>, _>>()
+                .map_err(|_| BerError::InvalidValue)?,
             _ => return Err(BerError::InvalidTag),
         };
         Ok(())

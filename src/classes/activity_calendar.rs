@@ -1,5 +1,6 @@
 use crate::interface::InterfaceClass;
 use crate::obis::ObisCode;
+use crate::types::attrs::{DayProfile, SeasonProfile, WeekProfile};
 use crate::types::{BerError, CosemDataType};
 use serde::{Deserialize, Serialize};
 use std::any::Any;
@@ -12,19 +13,19 @@ pub struct ActivityCalendarConfig {
     /// Attribute 2: name of the active calendar.
     pub calendar_name_active: Vec<u8>,
     /// Attribute 3: active season profile (array of `season` structures).
-    pub season_profile_active: Vec<CosemDataType>,
+    pub season_profile_active: Vec<SeasonProfile>,
     /// Attribute 4: active week profile table (array).
-    pub week_profile_table_active: Vec<CosemDataType>,
+    pub week_profile_table_active: Vec<WeekProfile>,
     /// Attribute 5: active day profile table (array).
-    pub day_profile_table_active: Vec<CosemDataType>,
+    pub day_profile_table_active: Vec<DayProfile>,
     /// Attribute 6: name of the passive calendar.
     pub calendar_name_passive: Vec<u8>,
     /// Attribute 7: passive season profile (array).
-    pub season_profile_passive: Vec<CosemDataType>,
+    pub season_profile_passive: Vec<SeasonProfile>,
     /// Attribute 8: passive week profile table (array).
-    pub week_profile_table_passive: Vec<CosemDataType>,
+    pub week_profile_table_passive: Vec<WeekProfile>,
     /// Attribute 9: passive day profile table (array).
-    pub day_profile_table_passive: Vec<CosemDataType>,
+    pub day_profile_table_passive: Vec<DayProfile>,
     /// Attribute 10: date-time at which the passive calendar becomes active.
     pub activate_passive_calendar_time: Vec<u8>,
 }
@@ -36,13 +37,13 @@ pub struct ActivityCalendarConfig {
 pub struct ActivityCalendar {
     logical_name: ObisCode,
     calendar_name_active: Vec<u8>,
-    season_profile_active: Vec<CosemDataType>,
-    week_profile_table_active: Vec<CosemDataType>,
-    day_profile_table_active: Vec<CosemDataType>,
+    season_profile_active: Vec<SeasonProfile>,
+    week_profile_table_active: Vec<WeekProfile>,
+    day_profile_table_active: Vec<DayProfile>,
     calendar_name_passive: Vec<u8>,
-    season_profile_passive: Vec<CosemDataType>,
-    week_profile_table_passive: Vec<CosemDataType>,
-    day_profile_table_passive: Vec<CosemDataType>,
+    season_profile_passive: Vec<SeasonProfile>,
+    week_profile_table_passive: Vec<WeekProfile>,
+    day_profile_table_passive: Vec<DayProfile>,
     activate_passive_calendar_time: Vec<u8>,
 }
 
@@ -91,13 +92,13 @@ impl InterfaceClass for ActivityCalendar {
         vec![
             (1, CosemDataType::OctetString(self.logical_name.to_bytes())),
             (2, CosemDataType::OctetString(self.calendar_name_active.clone())),
-            (3, CosemDataType::Array(self.season_profile_active.clone())),
-            (4, CosemDataType::Array(self.week_profile_table_active.clone())),
-            (5, CosemDataType::Array(self.day_profile_table_active.clone())),
+            (3, CosemDataType::Array(self.season_profile_active.iter().map(|s| s.clone().into()).collect())),
+            (4, CosemDataType::Array(self.week_profile_table_active.iter().map(|w| w.clone().into()).collect())),
+            (5, CosemDataType::Array(self.day_profile_table_active.iter().map(|d| d.clone().into()).collect())),
             (6, CosemDataType::OctetString(self.calendar_name_passive.clone())),
-            (7, CosemDataType::Array(self.season_profile_passive.clone())),
-            (8, CosemDataType::Array(self.week_profile_table_passive.clone())),
-            (9, CosemDataType::Array(self.day_profile_table_passive.clone())),
+            (7, CosemDataType::Array(self.season_profile_passive.iter().map(|s| s.clone().into()).collect())),
+            (8, CosemDataType::Array(self.week_profile_table_passive.iter().map(|w| w.clone().into()).collect())),
+            (9, CosemDataType::Array(self.day_profile_table_passive.iter().map(|d| d.clone().into()).collect())),
             (10, CosemDataType::OctetString(self.activate_passive_calendar_time.clone())),
         ]
     }
@@ -148,13 +149,13 @@ impl InterfaceClass for ActivityCalendar {
             return Err(BerError::InvalidTag);
         }
         self.calendar_name_active = take_octet_string(&seq[2])?;
-        self.season_profile_active = take_array(&seq[3])?;
-        self.week_profile_table_active = take_array(&seq[4])?;
-        self.day_profile_table_active = take_array(&seq[5])?;
+        self.season_profile_active = take_typed_array(&seq[3])?;
+        self.week_profile_table_active = take_typed_array(&seq[4])?;
+        self.day_profile_table_active = take_typed_array(&seq[5])?;
         self.calendar_name_passive = take_octet_string(&seq[6])?;
-        self.season_profile_passive = take_array(&seq[7])?;
-        self.week_profile_table_passive = take_array(&seq[8])?;
-        self.day_profile_table_passive = take_array(&seq[9])?;
+        self.season_profile_passive = take_typed_array(&seq[7])?;
+        self.week_profile_table_passive = take_typed_array(&seq[8])?;
+        self.day_profile_table_passive = take_typed_array(&seq[9])?;
         self.activate_passive_calendar_time = take_octet_string(&seq[10])?;
         Ok(())
     }
@@ -178,9 +179,12 @@ fn take_octet_string(value: &CosemDataType) -> Result<Vec<u8>, BerError> {
     }
 }
 
-fn take_array(value: &CosemDataType) -> Result<Vec<CosemDataType>, BerError> {
+fn take_typed_array<T: for<'a> TryFrom<&'a CosemDataType, Error = String>>(value: &CosemDataType) -> Result<Vec<T>, BerError> {
     match value {
-        CosemDataType::Array(list) => Ok(list.clone()),
+        CosemDataType::Array(list) => list
+            .iter()
+            .map(|item| T::try_from(item).map_err(|_| BerError::InvalidTag))
+            .collect(),
         _ => Err(BerError::InvalidTag),
     }
 }
@@ -207,13 +211,21 @@ mod tests {
         ActivityCalendar::new(ActivityCalendarConfig {
             logical_name: ObisCode::new(0, 0, 13, 0, 0, 255),
             calendar_name_active: b"ACT".to_vec(),
-            season_profile_active: vec![CosemDataType::OctetString(b"summer".to_vec())],
+            season_profile_active: vec![SeasonProfile {
+                season_profile_name: b"summer".to_vec(),
+                season_start: vec![1, 1],
+                week_name: b"w1".to_vec(),
+            }],
             week_profile_table_active: vec![],
             day_profile_table_active: vec![],
             calendar_name_passive: b"PAS".to_vec(),
-            season_profile_passive: vec![CosemDataType::OctetString(b"winter".to_vec())],
-            week_profile_table_passive: vec![CosemDataType::Null],
-            day_profile_table_passive: vec![CosemDataType::Null],
+            season_profile_passive: vec![SeasonProfile {
+                season_profile_name: b"winter".to_vec(),
+                season_start: vec![7, 1],
+                week_name: b"w2".to_vec(),
+            }],
+            week_profile_table_passive: vec![],
+            day_profile_table_passive: vec![],
             activate_passive_calendar_time: vec![0; 12],
         })
     }
@@ -243,6 +255,11 @@ mod tests {
         let mut obj = sample();
         obj.invoke_method(1, None).unwrap();
         assert_eq!(obj.attributes()[1].1, CosemDataType::OctetString(b"PAS".to_vec()));
-        assert_eq!(obj.attributes()[2].1, CosemDataType::Array(vec![CosemDataType::OctetString(b"winter".to_vec())]));
+        let expected_passive: CosemDataType = SeasonProfile {
+            season_profile_name: b"winter".to_vec(),
+            season_start: vec![7, 1],
+            week_name: b"w2".to_vec(),
+        }.into();
+        assert_eq!(obj.attributes()[2].1, CosemDataType::Array(vec![expected_passive]));
     }
 }

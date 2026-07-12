@@ -1,5 +1,6 @@
 use crate::interface::InterfaceClass;
 use crate::obis::ObisCode;
+use crate::types::attrs::SpecialDayEntry;
 use crate::types::{BerError, CosemDataType};
 use serde::{Deserialize, Serialize};
 use std::any::Any;
@@ -10,7 +11,7 @@ pub struct SpecialDaysTableConfig {
     /// Attribute 1: the object's logical name (OBIS code).
     pub logical_name: ObisCode,
     /// Attribute 2: array of `special_day` entries { index, date, day_id }.
-    pub entries: Vec<CosemDataType>,
+    pub entries: Vec<SpecialDayEntry>,
 }
 
 /// The `SpecialDaysTable` interface class (class_id = 11, version = 0) managing a
@@ -18,7 +19,7 @@ pub struct SpecialDaysTableConfig {
 #[derive(Clone, Serialize, Deserialize, Debug)]
 pub struct SpecialDaysTable {
     logical_name: ObisCode,
-    entries: Vec<CosemDataType>,
+    entries: Vec<SpecialDayEntry>,
 }
 
 impl SpecialDaysTable {
@@ -27,26 +28,19 @@ impl SpecialDaysTable {
         SpecialDaysTable { logical_name: config.logical_name, entries: config.entries }
     }
 
-    fn insert(&mut self, date: CosemDataType) -> Result<CosemDataType, String> {
-        match date {
-            CosemDataType::DateTime(ref dt) if dt.len() == 12 => {
-                self.entries.push(date);
-                Ok(CosemDataType::Null)
-            }
-            CosemDataType::DateTime(_) => Err("Invalid DateTime length".to_string()),
-            _ => Err("Expected DateTime for insert".to_string()),
+    fn insert(&mut self, data: CosemDataType) -> Result<CosemDataType, String> {
+        let entry = SpecialDayEntry::try_from(&data)?;
+        if entry.specialday_date.len() != 12 {
+            return Err("Invalid DateTime length".to_string());
         }
+        self.entries.push(entry);
+        Ok(CosemDataType::Null)
     }
 
-    fn delete(&mut self, date: CosemDataType) -> Result<CosemDataType, String> {
-        match date {
-            CosemDataType::DateTime(ref dt) if dt.len() == 12 => {
-                self.entries.retain(|entry| entry != &CosemDataType::DateTime(dt.clone()));
-                Ok(CosemDataType::Null)
-            }
-            CosemDataType::DateTime(_) => Err("Invalid DateTime length".to_string()),
-            _ => Err("Expected DateTime for delete".to_string()),
-        }
+    fn delete(&mut self, data: CosemDataType) -> Result<CosemDataType, String> {
+        let entry = SpecialDayEntry::try_from(&data)?;
+        self.entries.retain(|e| e.index != entry.index);
+        Ok(CosemDataType::Null)
     }
 }
 
@@ -66,7 +60,7 @@ impl InterfaceClass for SpecialDaysTable {
     fn attributes(&self) -> Vec<(u8, CosemDataType)> {
         vec![
             (1, CosemDataType::OctetString(self.logical_name.to_bytes())),
-            (2, CosemDataType::Array(self.entries.clone())),
+            (2, CosemDataType::Array(self.entries.iter().cloned().map(Into::into).collect())),
         ]
     }
 
@@ -113,16 +107,16 @@ impl InterfaceClass for SpecialDaysTable {
                 return Err(BerError::InvalidTag);
             }
             if let CosemDataType::Array(entries) = &seq[2] {
+                let mut parsed = Vec::new();
                 for entry in entries {
-                    if let CosemDataType::DateTime(dt) = entry {
-                        if dt.len() != 12 {
-                            return Err(BerError::InvalidLength);
-                        }
-                    } else {
-                        return Err(BerError::InvalidTag);
+                    let special_entry =
+                        SpecialDayEntry::try_from(entry).map_err(|_| BerError::InvalidValue)?;
+                    if special_entry.specialday_date.len() != 12 {
+                        return Err(BerError::InvalidLength);
                     }
+                    parsed.push(special_entry);
                 }
-                self.entries = entries.clone();
+                self.entries = parsed;
             } else {
                 return Err(BerError::InvalidTag);
             }

@@ -1,3 +1,5 @@
+//! BER serialization and deserialization helpers for COSEM interface classes.
+
 use crate::interface::InterfaceClass;
 use crate::types::BerError;
 

@@ -1,5 +1,6 @@
 use crate::interface::InterfaceClass;
 use crate::obis::ObisCode;
+use crate::types::attrs::IpOption;
 use crate::types::{BerError, CosemDataType};
 use serde::{Deserialize, Serialize};
 use std::any::Any;
@@ -14,9 +15,9 @@ pub struct Ipv4SetupConfig {
     /// Attribute 3: the IPv4 address.
     pub ip_address: u32,
     /// Attribute 4: array of multicast IP addresses (double-long-unsigned).
-    pub multicast_ip_address: Vec<CosemDataType>,
+    pub multicast_ip_address: Vec<u32>,
     /// Attribute 5: array of IP options.
-    pub ip_options: Vec<CosemDataType>,
+    pub ip_options: Vec<IpOption>,
     /// Attribute 6: subnet mask.
     pub subnet_mask: u32,
     /// Attribute 7: gateway IP address.
@@ -36,8 +37,8 @@ pub struct Ipv4Setup {
     logical_name: ObisCode,
     dl_reference: Vec<u8>,
     ip_address: u32,
-    multicast_ip_address: Vec<CosemDataType>,
-    ip_options: Vec<CosemDataType>,
+    multicast_ip_address: Vec<u32>,
+    ip_options: Vec<IpOption>,
     subnet_mask: u32,
     gateway_ip_address: u32,
     use_dhcp_flag: bool,
@@ -64,21 +65,24 @@ impl Ipv4Setup {
 
     /// Method 1: `add_mc_IP_address` — adds a multicast IP address.
     fn add_mc_ip_address(&mut self, data: CosemDataType) -> Result<CosemDataType, String> {
-        match data {
-            CosemDataType::DoubleLongUnsigned(_) => {
-                if !self.multicast_ip_address.contains(&data) {
-                    self.multicast_ip_address.push(data);
-                }
-                Ok(CosemDataType::Null)
-            }
-            _ => Err("add_mc_IP_address expects a double-long-unsigned".to_string()),
+        let addr = match &data {
+            CosemDataType::DoubleLongUnsigned(v) => *v,
+            _ => return Err("add_mc_IP_address expects a double-long-unsigned".to_string()),
+        };
+        if !self.multicast_ip_address.contains(&addr) {
+            self.multicast_ip_address.push(addr);
         }
+        Ok(CosemDataType::Null)
     }
 
     /// Method 2: `delete_mc_IP_address` — removes a multicast IP address.
     fn delete_mc_ip_address(&mut self, data: CosemDataType) -> Result<CosemDataType, String> {
+        let addr = match &data {
+            CosemDataType::DoubleLongUnsigned(v) => *v,
+            _ => return Err("delete_mc_IP_address expects a double-long-unsigned".to_string()),
+        };
         let before = self.multicast_ip_address.len();
-        self.multicast_ip_address.retain(|a| a != &data);
+        self.multicast_ip_address.retain(|a| *a != addr);
         if self.multicast_ip_address.len() == before {
             return Err("Multicast IP address not found".to_string());
         }
@@ -110,8 +114,8 @@ impl InterfaceClass for Ipv4Setup {
             (1, CosemDataType::OctetString(self.logical_name.to_bytes())),
             (2, CosemDataType::OctetString(self.dl_reference.clone())),
             (3, CosemDataType::DoubleLongUnsigned(self.ip_address)),
-            (4, CosemDataType::Array(self.multicast_ip_address.clone())),
-            (5, CosemDataType::Array(self.ip_options.clone())),
+            (4, CosemDataType::Array(self.multicast_ip_address.iter().copied().map(CosemDataType::DoubleLongUnsigned).collect())),
+            (5, CosemDataType::Array(self.ip_options.iter().cloned().map(CosemDataType::from).collect())),
             (6, CosemDataType::DoubleLongUnsigned(self.subnet_mask)),
             (7, CosemDataType::DoubleLongUnsigned(self.gateway_ip_address)),
             (8, CosemDataType::Boolean(self.use_dhcp_flag)),
@@ -174,8 +178,8 @@ impl InterfaceClass for Ipv4Setup {
             _ => return Err(BerError::InvalidTag),
         };
         self.ip_address = take_dlu(&seq[3])?;
-        self.multicast_ip_address = take_array(&seq[4])?;
-        self.ip_options = take_array(&seq[5])?;
+        self.multicast_ip_address = take_dlu_array(&seq[4])?;
+        self.ip_options = take_ip_option_array(&seq[5])?;
         self.subnet_mask = take_dlu(&seq[6])?;
         self.gateway_ip_address = take_dlu(&seq[7])?;
         self.use_dhcp_flag = match seq[8] {
@@ -208,9 +212,25 @@ fn take_dlu(value: &CosemDataType) -> Result<u32, BerError> {
     }
 }
 
-fn take_array(value: &CosemDataType) -> Result<Vec<CosemDataType>, BerError> {
+fn take_dlu_array(value: &CosemDataType) -> Result<Vec<u32>, BerError> {
     match value {
-        CosemDataType::Array(list) => Ok(list.clone()),
+        CosemDataType::Array(list) => list
+            .iter()
+            .map(|item| match item {
+                CosemDataType::DoubleLongUnsigned(v) => Ok(*v),
+                _ => Err(BerError::InvalidTag),
+            })
+            .collect(),
+        _ => Err(BerError::InvalidTag),
+    }
+}
+
+fn take_ip_option_array(value: &CosemDataType) -> Result<Vec<IpOption>, BerError> {
+    match value {
+        CosemDataType::Array(list) => list
+            .iter()
+            .map(|item| IpOption::try_from(item).map_err(|_| BerError::InvalidValue))
+            .collect(),
         _ => Err(BerError::InvalidTag),
     }
 }
@@ -260,7 +280,7 @@ mod tests {
     #[test]
     fn round_trip() {
         let mut obj = sample();
-        obj.multicast_ip_address = vec![CosemDataType::DoubleLongUnsigned(0xE0000001)];
+        obj.multicast_ip_address = vec![0xE0000001];
         let mut buf = Vec::new();
         obj.serialize_ber(&mut buf).unwrap();
         let mut decoded = sample();

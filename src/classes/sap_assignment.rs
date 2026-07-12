@@ -1,5 +1,6 @@
 use crate::interface::InterfaceClass;
 use crate::obis::ObisCode;
+use crate::types::attrs::SapAssignmentEntry;
 use crate::types::{BerError, CosemDataType};
 use serde::{Deserialize, Serialize};
 use std::any::Any;
@@ -11,7 +12,7 @@ pub struct SapAssignmentConfig {
     pub logical_name: ObisCode,
     /// Attribute 2: array of `sap_assignment` structures
     /// { SAP: long-unsigned, logical_device_name: octet-string }.
-    pub sap_assignment_list: Vec<CosemDataType>,
+    pub sap_assignment_list: Vec<SapAssignmentEntry>,
 }
 
 /// `SAP assignment` interface class (class_id = 17, version = 0) per
@@ -19,7 +20,7 @@ pub struct SapAssignmentConfig {
 #[derive(Clone, Serialize, Deserialize, Debug)]
 pub struct SapAssignment {
     logical_name: ObisCode,
-    sap_assignment_list: Vec<CosemDataType>,
+    sap_assignment_list: Vec<SapAssignmentEntry>,
 }
 
 impl SapAssignment {
@@ -39,22 +40,13 @@ impl SapAssignment {
             },
             _ => return Err("Expected structure { SAP, logical_device_name }".to_string()),
         };
-        self.sap_assignment_list.retain(|e| sap_of(e) != Some(sap));
+        self.sap_assignment_list.retain(|e| e.sap != sap);
         if !ldn.is_empty() {
-            self.sap_assignment_list.push(data);
+            let entry = SapAssignmentEntry::try_from(&data)?;
+            self.sap_assignment_list.push(entry);
         }
         Ok(CosemDataType::Null)
     }
-}
-
-/// Extracts the SAP from a `sap_assignment` structure.
-fn sap_of(entry: &CosemDataType) -> Option<u16> {
-    if let CosemDataType::Structure(fields) = entry {
-        if let Some(CosemDataType::LongUnsigned(sap)) = fields.first() {
-            return Some(*sap);
-        }
-    }
-    None
 }
 
 impl InterfaceClass for SapAssignment {
@@ -73,7 +65,7 @@ impl InterfaceClass for SapAssignment {
     fn attributes(&self) -> Vec<(u8, CosemDataType)> {
         vec![
             (1, CosemDataType::OctetString(self.logical_name.to_bytes())),
-            (2, CosemDataType::Array(self.sap_assignment_list.clone())),
+            (2, CosemDataType::Array(self.sap_assignment_list.iter().cloned().map(CosemDataType::from).collect())),
         ]
     }
 
@@ -123,7 +115,12 @@ impl InterfaceClass for SapAssignment {
             return Err(BerError::InvalidTag);
         }
         self.sap_assignment_list = match &seq[2] {
-            CosemDataType::Array(list) => list.clone(),
+            CosemDataType::Array(list) => {
+                list.iter()
+                    .map(SapAssignmentEntry::try_from)
+                    .collect::<Result<Vec<_>, _>>()
+                    .map_err(|_| BerError::InvalidValue)?
+            }
             _ => return Err(BerError::InvalidTag),
         };
         Ok(())
@@ -162,10 +159,10 @@ mod tests {
     fn sample() -> SapAssignment {
         SapAssignment::new(SapAssignmentConfig {
             logical_name: ObisCode::new(0, 0, 41, 0, 0, 255),
-            sap_assignment_list: vec![CosemDataType::Structure(vec![
-                CosemDataType::LongUnsigned(1),
-                CosemDataType::OctetString(b"MANLD".to_vec()),
-            ])],
+            sap_assignment_list: vec![SapAssignmentEntry {
+                sap: 1,
+                logical_device_name: b"MANLD".to_vec(),
+            }],
         })
     }
 

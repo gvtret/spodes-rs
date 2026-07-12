@@ -1,5 +1,6 @@
 use crate::interface::InterfaceClass;
 use crate::obis::ObisCode;
+use crate::types::attrs::ProtectionObject;
 use crate::types::{BerError, CosemDataType};
 use serde::{Deserialize, Serialize};
 use std::any::Any;
@@ -12,11 +13,11 @@ pub struct DataProtectionConfig {
     /// Attribute 2: protected data buffer (octet-string).
     pub protection_buffer: Vec<u8>,
     /// Attribute 3: array of protection object list entries.
-    pub protection_object_list: Vec<CosemDataType>,
+    pub protection_object_list: Vec<ProtectionObject>,
     /// Attribute 4: array of GET protection parameters.
-    pub protection_parameters_get: Vec<CosemDataType>,
+    pub protection_parameters_get: Vec<Vec<u8>>,
     /// Attribute 5: array of SET protection parameters.
-    pub protection_parameters_set: Vec<CosemDataType>,
+    pub protection_parameters_set: Vec<Vec<u8>>,
     /// Attribute 6: the protection required for the operations (enum).
     pub required_protection: u8,
 }
@@ -33,9 +34,9 @@ pub struct DataProtectionConfig {
 pub struct DataProtection {
     logical_name: ObisCode,
     protection_buffer: Vec<u8>,
-    protection_object_list: Vec<CosemDataType>,
-    protection_parameters_get: Vec<CosemDataType>,
-    protection_parameters_set: Vec<CosemDataType>,
+    protection_object_list: Vec<ProtectionObject>,
+    protection_parameters_get: Vec<Vec<u8>>,
+    protection_parameters_set: Vec<Vec<u8>>,
     required_protection: u8,
 }
 
@@ -95,9 +96,9 @@ impl InterfaceClass for DataProtection {
         vec![
             (1, CosemDataType::OctetString(self.logical_name.to_bytes())),
             (2, CosemDataType::OctetString(self.protection_buffer.clone())),
-            (3, CosemDataType::Array(self.protection_object_list.clone())),
-            (4, CosemDataType::Array(self.protection_parameters_get.clone())),
-            (5, CosemDataType::Array(self.protection_parameters_set.clone())),
+            (3, CosemDataType::Array(self.protection_object_list.iter().cloned().map(CosemDataType::from).collect())),
+            (4, CosemDataType::Array(self.protection_parameters_get.iter().cloned().map(CosemDataType::OctetString).collect())),
+            (5, CosemDataType::Array(self.protection_parameters_set.iter().cloned().map(CosemDataType::OctetString).collect())),
             (6, CosemDataType::Enum(self.required_protection)),
         ]
     }
@@ -155,9 +156,9 @@ impl InterfaceClass for DataProtection {
             CosemDataType::OctetString(v) => v.clone(),
             _ => return Err(BerError::InvalidTag),
         };
-        self.protection_object_list = take_array(&seq[3])?;
-        self.protection_parameters_get = take_array(&seq[4])?;
-        self.protection_parameters_set = take_array(&seq[5])?;
+        self.protection_object_list = take_po_array(&seq[3])?;
+        self.protection_parameters_get = take_octet_string_array(&seq[4])?;
+        self.protection_parameters_set = take_octet_string_array(&seq[5])?;
         self.required_protection = match seq[6] {
             CosemDataType::Enum(v) => v,
             _ => return Err(BerError::InvalidTag),
@@ -180,9 +181,25 @@ impl InterfaceClass for DataProtection {
     }
 }
 
-fn take_array(value: &CosemDataType) -> Result<Vec<CosemDataType>, BerError> {
+fn take_po_array(value: &CosemDataType) -> Result<Vec<ProtectionObject>, BerError> {
     match value {
-        CosemDataType::Array(list) => Ok(list.clone()),
+        CosemDataType::Array(list) => list
+            .iter()
+            .map(|item| ProtectionObject::try_from(item).map_err(|_| BerError::InvalidValue))
+            .collect(),
+        _ => Err(BerError::InvalidTag),
+    }
+}
+
+fn take_octet_string_array(value: &CosemDataType) -> Result<Vec<Vec<u8>>, BerError> {
+    match value {
+        CosemDataType::Array(list) => list
+            .iter()
+            .map(|item| match item {
+                CosemDataType::OctetString(v) => Ok(v.clone()),
+                _ => Err(BerError::InvalidTag),
+            })
+            .collect(),
         _ => Err(BerError::InvalidTag),
     }
 }

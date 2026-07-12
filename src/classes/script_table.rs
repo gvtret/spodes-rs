@@ -1,5 +1,6 @@
 use crate::interface::InterfaceClass;
 use crate::obis::ObisCode;
+use crate::types::attrs::Script;
 use crate::types::{BerError, CosemDataType};
 use serde::{Deserialize, Serialize};
 use std::any::Any;
@@ -10,7 +11,7 @@ pub struct ScriptTableConfig {
     /// Attribute 1: the object's logical name (OBIS code).
     pub logical_name: ObisCode,
     /// Attribute 2: array of `script` structures { script_identifier, actions }.
-    pub scripts: Vec<CosemDataType>,
+    pub scripts: Vec<Script>,
 }
 
 /// The `ScriptTable` interface class (class_id = 9) managing scripts that
@@ -19,7 +20,7 @@ pub struct ScriptTableConfig {
 #[derive(Clone, Serialize, Deserialize, Debug)]
 pub struct ScriptTable {
     logical_name: ObisCode,
-    scripts: Vec<CosemDataType>, // Array of Structure (script_identifier, action)
+    scripts: Vec<Script>,
 }
 
 impl ScriptTable {
@@ -45,16 +46,9 @@ impl ScriptTable {
     fn execute(&mut self, params: Option<CosemDataType>) -> Result<CosemDataType, String> {
         if let Some(CosemDataType::LongUnsigned(script_id)) = params {
             for script in &self.scripts {
-                if let CosemDataType::Structure(script_data) = script {
-                    if script_data.len() == 2 {
-                        if let CosemDataType::LongUnsigned(id) = script_data[0] {
-                            if id == script_id {
-                                // The action execution logic (script_data[1]) would go here.
-                                // For the example we return success, assuming the action ran.
-                                return Ok(CosemDataType::Null);
-                            }
-                        }
-                    }
+                if script.script_identifier == script_id {
+                    // The action execution logic would go here.
+                    return Ok(CosemDataType::Null);
                 }
             }
             return Err(format!("Script with ID {} not found", script_id));
@@ -79,7 +73,7 @@ impl InterfaceClass for ScriptTable {
     fn attributes(&self) -> Vec<(u8, CosemDataType)> {
         vec![
             (1, CosemDataType::OctetString(self.logical_name.to_bytes())),
-            (2, CosemDataType::Array(self.scripts.clone())),
+            (2, CosemDataType::Array(self.scripts.iter().cloned().map(CosemDataType::from).collect())),
         ]
     }
 
@@ -123,7 +117,11 @@ impl InterfaceClass for ScriptTable {
                     return Err(BerError::InvalidTag);
                 }
                 if let CosemDataType::Array(scripts) = &seq[2] {
-                    self.scripts = scripts.clone();
+                    self.scripts = scripts
+                        .iter()
+                        .map(Script::try_from)
+                        .collect::<Result<Vec<_>, _>>()
+                        .map_err(|_| BerError::InvalidValue)?;
                 } else {
                     return Err(BerError::InvalidTag);
                 }

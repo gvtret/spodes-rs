@@ -1,5 +1,6 @@
 use crate::interface::InterfaceClass;
 use crate::obis::ObisCode;
+use crate::types::attrs::{CommunicationWindow, SendDestinationAndMethod};
 use crate::types::{BerError, CosemDataType};
 use serde::{Deserialize, Serialize};
 use std::any::Any;
@@ -14,9 +15,9 @@ pub struct PushSetupConfig {
     /// Attribute 2: array of `cosem_object_instance_id` entries to be pushed.
     pub push_object_list: Vec<CosemDataType>,
     /// Attribute 3: `send_destination_and_method` structure.
-    pub send_destination_and_method: CosemDataType,
+    pub send_destination_and_method: SendDestinationAndMethod,
     /// Attribute 4: array of communication windows.
-    pub communication_window: Vec<CosemDataType>,
+    pub communication_window: Vec<CommunicationWindow>,
     /// Attribute 5: randomisation start interval, in seconds.
     pub randomisation_start_interval: u16,
     /// Attribute 6: number of retries.
@@ -54,8 +55,8 @@ pub struct PushSetup {
     version: u8,
     logical_name: ObisCode,
     push_object_list: Vec<CosemDataType>,
-    send_destination_and_method: CosemDataType,
-    communication_window: Vec<CosemDataType>,
+    send_destination_and_method: SendDestinationAndMethod,
+    communication_window: Vec<CommunicationWindow>,
     randomisation_start_interval: u16,
     number_of_retries: u8,
     repetition_delay: CosemDataType,
@@ -122,8 +123,10 @@ impl InterfaceClass for PushSetup {
         let mut attrs = vec![
             (1, CosemDataType::OctetString(self.logical_name.to_bytes())),
             (2, CosemDataType::Array(self.push_object_list.clone())),
-            (3, self.send_destination_and_method.clone()),
-            (4, CosemDataType::Array(self.communication_window.clone())),
+            (3, CosemDataType::from(self.send_destination_and_method.clone())),
+            (4, CosemDataType::Array(
+                self.communication_window.iter().map(|cw| CosemDataType::from(cw.clone())).collect(),
+            )),
             (5, CosemDataType::LongUnsigned(self.randomisation_start_interval)),
             (6, CosemDataType::Unsigned(self.number_of_retries)),
             (7, self.repetition_delay.clone()),
@@ -201,9 +204,14 @@ impl InterfaceClass for PushSetup {
             CosemDataType::Array(list) => list.clone(),
             _ => return Err(BerError::InvalidTag),
         };
-        self.send_destination_and_method = seq[3].clone();
+        self.send_destination_and_method = SendDestinationAndMethod::try_from(&seq[3])
+            .map_err(|_| BerError::InvalidValue)?;
         self.communication_window = match &seq[4] {
-            CosemDataType::Array(list) => list.clone(),
+            CosemDataType::Array(list) => list
+                .iter()
+                .map(CommunicationWindow::try_from)
+                .collect::<Result<Vec<_>, _>>()
+                .map_err(|_| BerError::InvalidValue)?,
             _ => return Err(BerError::InvalidTag),
         };
         self.randomisation_start_interval = match seq[5] {
@@ -281,11 +289,11 @@ mod tests {
                 CosemDataType::Integer(2),
                 CosemDataType::LongUnsigned(0),
             ])],
-            send_destination_and_method: CosemDataType::Structure(vec![
-                CosemDataType::Enum(0),
-                CosemDataType::OctetString(b"192.168.0.1:4059".to_vec()),
-                CosemDataType::Enum(0),
-            ]),
+            send_destination_and_method: SendDestinationAndMethod {
+                transport_service: 0,
+                destination: b"192.168.0.1:4059".to_vec(),
+                message: 0,
+            },
             communication_window: vec![],
             randomisation_start_interval: 0,
             number_of_retries: 3,

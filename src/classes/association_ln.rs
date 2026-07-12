@@ -2,11 +2,13 @@ use crate::interface::InterfaceClass;
 use crate::obis::ObisCode;
 use crate::security::access_rights::ObjectListEntry;
 use crate::security::{gost3410, hls, signature, AuthMechanism, SecuritySuite};
+use crate::types::attrs::{AssociatedPartnersId, ContextName, XDLMSContextInfo};
 use crate::types::{BerError, CosemDataType};
 use aead::Aead;
 use aes_gcm::{Aes128Gcm, Aes256Gcm, KeyInit, Nonce};
 use rand::Rng;
 use serde::{Deserialize, Serialize};
+use subtle::ConstantTimeEq;
 use std::any::Any;
 
 /// Versions of the Association LN class.
@@ -62,19 +64,19 @@ pub struct AssociationLnConfig {
     /// Attribute 2: list of the COSEM objects visible within the association.
     pub object_list: Vec<CosemDataType>,
     /// Attribute 3: `associated_partners_id` structure { client SAP, server SAP }.
-    pub associated_partners_id: CosemDataType,
+    pub associated_partners_id: AssociatedPartnersId,
     /// Attribute 4: application context name (naming and ciphering in use).
-    pub application_context_name: CosemDataType,
+    pub application_context_name: ContextName,
     /// Attribute 5: `xDLMS_context_info` structure (conformance, PDU sizes, …).
-    pub xdlms_context_info: CosemDataType,
+    pub xdlms_context_info: XDLMSContextInfo,
     /// Attribute 6: the authentication mechanism negotiated for the association.
     pub authentication_mechanism: AuthenticationMechanism,
     /// Attribute 7: the LLS/HLS secret (password or shared key).
     pub secret: CosemDataType,
     /// Attribute 8: association status (non-associated / association-pending / associated).
-    pub association_status: CosemDataType,
+    pub association_status: u8,
     /// Attribute 9 (versions ≥ 1): OBIS reference to the `Security Setup` object (class 64).
-    pub security_setup_reference: CosemDataType,
+    pub security_setup_reference: ObisCode,
     /// Attribute 10 (version 2): array of `user { id, name }` entries.
     pub user_list: Vec<CosemDataType>,
     /// Attribute 11 (version 2): the currently associated user (structure).
@@ -89,13 +91,13 @@ pub struct AssociationLn {
     logical_name: ObisCode,
     version: AssociationLnVersion,
     object_list: Vec<CosemDataType>,
-    associated_partners_id: CosemDataType,
-    application_context_name: CosemDataType,
-    xdlms_context_info: CosemDataType,
+    associated_partners_id: AssociatedPartnersId,
+    application_context_name: ContextName,
+    xdlms_context_info: XDLMSContextInfo,
     authentication_mechanism: AuthenticationMechanism,
     secret: CosemDataType,
-    association_status: CosemDataType,
-    security_setup_reference: CosemDataType,
+    association_status: u8,
+    security_setup_reference: ObisCode,
     user_list: Vec<CosemDataType>,
     current_user: CosemDataType,
     /// Parsed object_list with structured access rights.
@@ -195,7 +197,12 @@ impl AssociationLn {
         // directly (compatible with the LLS password carried in the AARQ).
         if mechanism == AuthMechanism::Lls {
             return match &self.secret {
-                CosemDataType::OctetString(secret) if secret == &f_stoc => Ok(CosemDataType::Null),
+                CosemDataType::OctetString(secret)
+                    if secret.len() == f_stoc.len()
+                        && secret.ct_eq(f_stoc.as_slice()).into() =>
+                {
+                    Ok(CosemDataType::Null)
+                }
                 _ => Err("LLS authentication failed".to_string()),
             };
         }
@@ -207,11 +214,14 @@ impl AssociationLn {
             // Mechanisms 3/4: f(challenge) = HASH(challenge ‖ secret).
             AuthMechanism::HlsMd5 | AuthMechanism::HlsSha1 => {
                 let secret = self.secret_bytes()?;
-                let expected = hls::hash_legacy(mechanism, stoc, secret).unwrap();
+                let expected =
+                    hls::hash_legacy(mechanism, stoc, secret).ok_or("HLS hash computation failed")?;
                 if expected != f_stoc {
                     return Err("HLS authentication failed: f(StoC) mismatch".to_string());
                 }
-                Ok(CosemDataType::OctetString(hls::hash_legacy(mechanism, ctos, secret).unwrap()))
+                let f_ctos =
+                    hls::hash_legacy(mechanism, ctos, secret).ok_or("HLS hash computation failed")?;
+                Ok(CosemDataType::OctetString(f_ctos))
             }
             // Mechanisms 6/9: f = HASH(secret ‖ ST_a ‖ ST_b ‖ chal_a ‖ chal_b).
             AuthMechanism::HlsSha256 | AuthMechanism::HlsGostStreebog => {
@@ -225,7 +235,7 @@ impl AssociationLn {
                     stoc,
                     ctos,
                 )
-                .unwrap();
+                .ok_or("HLS hash computation failed")?;
                 if expected != f_stoc {
                     return Err("HLS authentication failed: f(StoC) mismatch".to_string());
                 }
@@ -237,7 +247,7 @@ impl AssociationLn {
                     ctos,
                     stoc,
                 )
-                .unwrap();
+                .ok_or("HLS hash computation failed")?;
                 Ok(CosemDataType::OctetString(f_ctos))
             }
             // Mechanism 5: f = SC ‖ IC ‖ GMAC(SC ‖ AK ‖ challenge), 12-octet tag.
@@ -507,16 +517,16 @@ impl InterfaceClass for AssociationLn {
         let mut attrs = vec![
             (1, CosemDataType::OctetString(self.logical_name.to_bytes())),
             (2, CosemDataType::Array(self.object_list.clone())),
-            (3, self.associated_partners_id.clone()),
-            (4, self.application_context_name.clone()),
-            (5, self.xdlms_context_info.clone()),
+            (3, CosemDataType::from(self.associated_partners_id.clone())),
+            (4, CosemDataType::from(self.application_context_name.clone())),
+            (5, CosemDataType::from(self.xdlms_context_info.clone())),
             (6, self.authentication_mechanism_name()),
             (7, self.secret.clone()),
-            (8, self.association_status.clone()),
+            (8, CosemDataType::Enum(self.association_status)),
         ];
         // Attribute 9 (security_setup_reference) is present starting from version 1.
         if matches!(self.version, AssociationLnVersion::Version1 | AssociationLnVersion::Version2) {
-            attrs.push((9, self.security_setup_reference.clone()));
+            attrs.push((9, CosemDataType::OctetString(self.security_setup_reference.to_bytes())));
         }
         // Attributes 10 (user_list) and 11 (current_user) were added in version 2.
         if matches!(self.version, AssociationLnVersion::Version2) {
@@ -589,9 +599,12 @@ impl InterfaceClass for AssociationLn {
             CosemDataType::Array(list) => list.clone(),
             _ => return Err(BerError::InvalidTag),
         };
-        self.associated_partners_id = seq[3].clone();
-        self.application_context_name = seq[4].clone();
-        self.xdlms_context_info = seq[5].clone();
+        self.associated_partners_id = AssociatedPartnersId::try_from(&seq[3])
+            .map_err(|_| BerError::InvalidValue)?;
+        self.application_context_name = ContextName::try_from(&seq[4])
+            .map_err(|_| BerError::InvalidValue)?;
+        self.xdlms_context_info = XDLMSContextInfo::try_from(&seq[5])
+            .map_err(|_| BerError::InvalidValue)?;
         self.authentication_mechanism = match &seq[6] {
             CosemDataType::OctetString(mech) => {
                 let id = *mech.last().ok_or(BerError::InvalidLength)?;
@@ -600,10 +613,19 @@ impl InterfaceClass for AssociationLn {
             _ => return Err(BerError::InvalidTag),
         };
         self.secret = seq[7].clone();
-        self.association_status = seq[8].clone();
+        self.association_status = match &seq[8] {
+            CosemDataType::Enum(v) => *v,
+            CosemDataType::Unsigned(v) => *v,
+            _ => return Err(BerError::InvalidTag),
+        };
         // Attribute 9 (security_setup_reference) is present in versions 1 and 2.
         if seq.len() >= 10 {
-            self.security_setup_reference = seq[9].clone();
+            self.security_setup_reference = match &seq[9] {
+                CosemDataType::OctetString(bytes) if bytes.len() == 6 => {
+                    ObisCode::new(bytes[0], bytes[1], bytes[2], bytes[3], bytes[4], bytes[5])
+                }
+                _ => return Err(BerError::InvalidTag),
+            };
         }
         // Attributes 10 and 11 are present only in version 2.
         self.version = if seq.len() == 12 {
@@ -677,18 +699,25 @@ mod tests {
             logical_name: ObisCode::new(0, 0, 40, 0, 0, 255),
             version,
             object_list: vec![],
-            associated_partners_id: CosemDataType::Structure(vec![
-                CosemDataType::Integer(1),
-                CosemDataType::LongUnsigned(1),
-            ]),
-            application_context_name: CosemDataType::OctetString(vec![
+            associated_partners_id: AssociatedPartnersId {
+                client_sap: 1,
+                server_sap: 1,
+            },
+            application_context_name: ContextName::OctetString(vec![
                 0x09, 0x07, 0x60, 0x85, 0x74, 0x05, 0x08, 0x01, 0x01,
             ]),
-            xdlms_context_info: CosemDataType::Null,
+            xdlms_context_info: XDLMSContextInfo {
+                conformance: vec![],
+                max_receive_pdu_size: 0xFFFF,
+                max_send_pdu_size: 0xFFFF,
+                dlms_version_number: 6,
+                quality_of_service: 0,
+                cyphering_info: vec![],
+            },
             authentication_mechanism: AuthenticationMechanism::HlsSha1,
             secret: CosemDataType::OctetString(b"12345678".to_vec()),
-            association_status: CosemDataType::Enum(0),
-            security_setup_reference: CosemDataType::OctetString(vec![0, 0, 43, 0, 0, 255]),
+            association_status: 0,
+            security_setup_reference: ObisCode::new(0, 0, 43, 0, 0, 255),
             user_list: vec![],
             current_user: CosemDataType::Null,
         })

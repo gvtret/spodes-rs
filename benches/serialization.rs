@@ -3,6 +3,7 @@ use spodes_rs::classes::data::Data;
 use spodes_rs::classes::register::Register;
 use spodes_rs::obis::ObisCode;
 use spodes_rs::serialization::{deserialize_object, serialize_object};
+use spodes_rs::types::attrs::ScalerUnit;
 use spodes_rs::types::CosemDataType;
 
 fn bench_data_serialize(c: &mut Criterion) {
@@ -31,7 +32,7 @@ fn bench_data_deserialize(c: &mut Criterion) {
 
 fn bench_register_serialize(c: &mut Criterion) {
     let obis = ObisCode::new(1, 0, 1, 8, 0, 0xFF);
-    let reg = Register::new(obis, CosemDataType::DoubleLongUnsigned(123_456), CosemDataType::Long(0));
+    let reg = Register::new(obis, CosemDataType::DoubleLongUnsigned(123_456), ScalerUnit::new(0, 0));
 
     c.bench_function("Register serialize", |b| {
         b.iter(|| {
@@ -42,12 +43,12 @@ fn bench_register_serialize(c: &mut Criterion) {
 
 fn bench_register_deserialize(c: &mut Criterion) {
     let obis = ObisCode::new(1, 0, 1, 8, 0, 0xFF);
-    let reg = Register::new(obis, CosemDataType::DoubleLongUnsigned(123_456), CosemDataType::Long(0));
+    let reg = Register::new(obis, CosemDataType::DoubleLongUnsigned(123_456), ScalerUnit::new(0, 0));
     let encoded = serialize_object(&reg).unwrap();
 
     c.bench_function("Register deserialize", |b| {
         b.iter(|| {
-            let mut obj = Register::new(ObisCode::new(0, 0, 0, 0, 0, 0), CosemDataType::Null, CosemDataType::Null);
+            let mut obj = Register::new(ObisCode::new(0, 0, 0, 0, 0, 0), CosemDataType::Null, ScalerUnit::new(0, 0));
             deserialize_object(&mut obj, black_box(&encoded)).unwrap();
         });
     });

@@ -1,5 +1,6 @@
 use crate::interface::InterfaceClass;
 use crate::obis::ObisCode;
+use crate::types::attrs::ExecutedScript;
 use crate::types::{BerError, CosemDataType};
 use serde::{Deserialize, Serialize};
 use std::any::Any;
@@ -10,7 +11,7 @@ pub struct SingleActionScheduleConfig {
     /// Attribute 1: the object's logical name (OBIS code).
     pub logical_name: ObisCode,
     /// Attribute 2: `script` structure { script_logical_name, script_selector }.
-    pub executed_script: CosemDataType,
+    pub executed_script: ExecutedScript,
     /// Attribute 3: schedule type (enum 1..6, defines date/time wildcard handling).
     pub schedule_type: u8,
     /// Attribute 4: array of `execution_time` structures { time, date }.
@@ -25,7 +26,7 @@ pub struct SingleActionScheduleConfig {
 #[derive(Clone, Serialize, Deserialize, Debug)]
 pub struct SingleActionSchedule {
     logical_name: ObisCode,
-    executed_script: CosemDataType,
+    executed_script: ExecutedScript,
     schedule_type: u8,
     execution_time: Vec<CosemDataType>,
 }
@@ -58,7 +59,7 @@ impl InterfaceClass for SingleActionSchedule {
     fn attributes(&self) -> Vec<(u8, CosemDataType)> {
         vec![
             (1, CosemDataType::OctetString(self.logical_name.to_bytes())),
-            (2, self.executed_script.clone()),
+            (2, CosemDataType::from(self.executed_script.clone())),
             (3, CosemDataType::Enum(self.schedule_type)),
             (4, CosemDataType::Array(self.execution_time.clone())),
         ]
@@ -110,7 +111,8 @@ impl InterfaceClass for SingleActionSchedule {
         } else {
             return Err(BerError::InvalidTag);
         }
-        self.executed_script = seq[2].clone();
+        self.executed_script = ExecutedScript::try_from(&seq[2])
+            .map_err(|_| BerError::InvalidTag)?;
         self.schedule_type = match seq[3] {
             CosemDataType::Enum(v) => v,
             _ => return Err(BerError::InvalidTag),
@@ -152,10 +154,10 @@ mod tests {
     fn sample() -> SingleActionSchedule {
         SingleActionSchedule::new(SingleActionScheduleConfig {
             logical_name: ObisCode::new(0, 0, 15, 0, 0, 255),
-            executed_script: CosemDataType::Structure(vec![
-                CosemDataType::OctetString(vec![0, 0, 10, 0, 100, 255]),
-                CosemDataType::LongUnsigned(1),
-            ]),
+            executed_script: ExecutedScript {
+                script_logical_name: ObisCode::new(0, 0, 10, 0, 100, 255),
+                script_selector: 1,
+            },
             schedule_type: 1,
             execution_time: vec![CosemDataType::Structure(vec![
                 CosemDataType::OctetString(vec![0x00, 0x00, 0x00, 0xFF]),

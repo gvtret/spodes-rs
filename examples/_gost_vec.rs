@@ -1,3 +1,5 @@
+#![allow(clippy::needless_borrow)]
+
 fn main() {
     use cmac::{Cmac, KeyInit, Mac};
     use kuznyechik::Kuznyechik;
@@ -21,8 +23,8 @@ fn main() {
     d.update(b"secret16bytes!!!");
     d.update(b"CCCCCCCC");
     d.update(b"SSSSSSSS");
-    d.update(&[1,2]);
-    d.update(&[3,4]);
+    d.update([1,2].as_ref());
+    d.update([3,4].as_ref());
     let h = d.finalize();
     print!("STREEBOG: "); for b in h.iter() { print!("{:02x}", b); } println!();
 }

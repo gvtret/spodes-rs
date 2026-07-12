@@ -1,7 +1,9 @@
 # spodes-rs
 
 [![CI](https://github.com/gvtret/spodes-rs/actions/workflows/ci.yml/badge.svg)](https://github.com/gvtret/spodes-rs/actions/workflows/ci.yml)
-[![License](https://img.shields.io/badge/license-MIT%2FApache--2.0-blue.svg)](#license)
+[![License](https://img.shields.io/badge/license-GPL--3.0--or--later-blue.svg)](#license)
+[![Docs](https://img.shields.io/badge/docs-GitHub%20Pages-blue)](https://gvtret.github.io/spodes-rs/)
+[![crates.io](https://img.shields.io/crates/v/spodes-rs.svg)](https://crates.io/crates/spodes-rs)
 
 A pure-Rust implementation of the DLMS/COSEM stack for electricity metering,
 following IEC 62056 (the DLMS Green Book) and the Russian companion profiles
@@ -19,6 +21,8 @@ byte-for-byte against the reference test vectors of the standards.
   Demand register, Register activation, Profile generic, Clock, Script table,
   Schedule, Special days table, Association LN, Security setup, Disconnect
   control, Limiter, Push / TCP-UDP / IPv4 / IPv6 setup, and more), all versions.
+- **38 typed attribute structs** — strongly-typed structs for IEC 62056-6-2
+  (Blue Book) type definitions, replacing generic `CosemDataType`.
 - **A-XDR / BER** serialization of the common COSEM data types.
 - **Transport** — an HDLC data-link layer (IEC 62056-46) over any byte medium
   and a wrapper layer (IEC 62056-47) for TCP/UDP.
@@ -37,12 +41,22 @@ byte-for-byte against the reference test vectors of the standards.
     (Streebog, Kuznyechik-CMAC, GOST 34.10 signatures);
   - AES-GCM APDU protection, ECDSA and GOST 34.10 signatures;
   - ECDH and GOST VKO key agreement with the NIST SP 800-56A and GOST KDFs.
-- **Drivers** — a blocking [`ClientSession`](src/session.rs) and a server-side
-  [`RequestDispatcher`](src/server.rs).
+- **Timeouts and retries** — configurable per-request timeouts and automatic
+  retries for transient errors in the client session.
+- **Optional logging** — `tracing` support behind a feature flag.
 
 ## Quick start
 
-Add the crate to your `Cargo.toml` (path or git dependency), then:
+Add the crate to your `Cargo.toml`:
+
+```toml
+[dependencies]
+spodes-rs = { git = "https://github.com/gvtret/spodes-rs" }
+# or with optional features:
+# spodes-rs = { git = "...", features = ["tracing"] }
+```
+
+### Creating a COSEM object
 
 ```rust
 use spodes_rs::classes::data::Data;
@@ -50,7 +64,6 @@ use spodes_rs::interface::InterfaceClass;
 use spodes_rs::obis::ObisCode;
 use spodes_rs::types::CosemDataType;
 
-// Build a COSEM Data object (class_id 1) and read its attributes.
 let object = Data::new(
     ObisCode::new(0, 0, 0x80, 0, 0, 0xFF),
     CosemDataType::LongUnsigned(0x1234),
@@ -59,20 +72,233 @@ assert_eq!(object.class_id(), 1);
 assert_eq!(object.attributes()[1].1, CosemDataType::LongUnsigned(0x1234));
 ```
 
-Encoding an xDLMS GET request:
+### Creating a Register with ScalerUnit
 
 ```rust
+use spodes_rs::classes::register::Register;
 use spodes_rs::obis::ObisCode;
-use spodes_rs::service::get::GetRequest;
-use spodes_rs::service::{invoke_id_and_priority, AttributeDescriptor};
+use spodes_rs::types::attrs::ScalerUnit;
+use spodes_rs::types::CosemDataType;
 
-let request = GetRequest::Normal {
-    invoke_id_and_priority: invoke_id_and_priority(1, true, true),
-    attribute: AttributeDescriptor::new(1, ObisCode::new(0, 0, 0x80, 0, 0, 0xFF), 2),
-    access_selection: None,
+let register = Register::new(
+    ObisCode::new(0, 0, 1, 0, 0, 255),
+    CosemDataType::DoubleLongUnsigned(1_234_567),
+    ScalerUnit::new(-2, 30), // 0.01 kWh
+);
+// value = 1234567 × 10^(-2) = 12345.67 kWh
+```
+
+### BER serialization
+
+```rust
+use spodes_rs::types::CosemDataType;
+
+let value = CosemDataType::Structure(vec![
+    CosemDataType::LongUnsigned(3),
+    CosemDataType::OctetString(vec![0, 0, 1, 0, 0, 255]),
+    CosemDataType::Unsigned(2),
+]);
+
+let mut buf = Vec::new();
+value.serialize_ber(&mut buf).unwrap();
+// buf contains the A-XDR encoded bytes
+
+let (decoded, remainder) = CosemDataType::deserialize_ber(&buf).unwrap();
+assert!(remainder.is_empty());
+assert_eq!(decoded, value);
+```
+
+### Typed attributes (IEC 62056-6-2)
+
+The crate provides strongly-typed structs for all COSEM type definitions:
+
+```rust
+use spodes_rs::types::attrs::*;
+use spodes_rs::obis::ObisCode;
+
+// Action item for script tables and register monitors
+let action = ActionItem {
+    script_logical_name: ObisCode::new(0, 0, 10, 100, 0, 255),
+    script_selector: 1,
 };
-// C0 01 C1 0001 0000800000FF 02 00
-let bytes = request.encode().unwrap();
+let cd: CosemDataType = action.into();  // Convert to CosemDataType
+let back = ActionItem::try_from(&cd).unwrap();  // Convert back
+
+// Schedule table entry
+let entry = ScheduleTableEntry {
+    index: 1,
+    enable: true,
+    script_logical_name: ObisCode::new(0, 0, 10, 100, 0, 255),
+    script_selector: 1,
+    switch_time: vec![0x10, 0x00, 0x00],  // 16:00:00
+    validity_window: 0xFFFF,
+    exec_weekdays: vec![0x7F],  // all days
+    exec_specdays: vec![0x00],
+    begin_date: vec![0x07, 0xE5, 0x01, 0x01, 0xFF],
+    end_date: vec![0x07, 0xE5, 0x12, 0x31, 0xFF],
+};
+
+// Access rights for Association LN
+let access = AccessRight {
+    attribute_access: vec![
+        AttributeAccessItem { attribute_id: 1, access_mode: 1, access_selectors: None },
+        AttributeAccessItem { attribute_id: 2, access_mode: 3, access_selectors: None },
+    ],
+    method_access: vec![
+        MethodAccessItem { method_id: 1, access_mode: 1 },
+    ],
+};
+```
+
+### Client session with timeouts and retries
+
+```rust
+use spodes_rs::session::ClientSession;
+use spodes_rs::transport::wrapper::Wrapper;
+use spodes_rs::transport::MemoryTransport;
+use std::time::Duration;
+
+let transport = MemoryTransport::new();
+let wrapper = Wrapper::new(transport, 1, 1024);
+
+// Configure with timeouts and retries
+let mut session = ClientSession::builder(wrapper)
+    .request_timeout(Duration::from_secs(5))
+    .max_retries(3)
+    .retry_delay(Duration::from_millis(200))
+    .build();
+
+// GET request
+let response = session.get(3, obis(0, 0, 1, 0, 0, 255), 2).unwrap();
+
+// SET request
+use spodes_rs::types::CosemDataType;
+session.set(3, obis(0, 0, 1, 0, 0, 255), 2, CosemDataType::DoubleLongUnsigned(1000)).unwrap();
+
+// ACTION request
+session.action(9, obis(0, 0, 10, 100, 0, 255), 1, Some(CosemDataType::LongUnsigned(1))).unwrap();
+```
+
+### Server dispatcher
+
+```rust
+use spodes_rs::classes::data::Data;
+use spodes_rs::classes::register::Register;
+use spodes_rs::server::RequestDispatcher;
+use spodes_rs::obis::ObisCode;
+use spodes_rs::types::attrs::ScalerUnit;
+use spodes_rs::types::CosemDataType;
+
+let mut dispatcher = RequestDispatcher::new();
+
+// Register objects
+dispatcher.add(Box::new(Data::new(
+    ObisCode::new(0, 0, 96, 1, 0, 255),
+    CosemDataType::Unsigned(0),
+)));
+dispatcher.add(Box::new(Register::new(
+    ObisCode::new(0, 0, 1, 0, 0, 255),
+    CosemDataType::DoubleLongUnsigned(123_456),
+    ScalerUnit::new(-2, 30),
+)));
+
+// Dispatch incoming request APDU
+let request_apdu = vec![0xC0, 0x01, 0xC1, 0x00, 0x01, 0x00, 0x00, 0x60, 0x01, 0x00, 0xFF, 0x02, 0x00];
+let response_apdu = dispatcher.dispatch(&request_apdu).unwrap();
+```
+
+### Clock object
+
+```rust
+use spodes_rs::classes::clock::{Clock, ClockConfig};
+use spodes_rs::obis::ObisCode;
+use spodes_rs::types::attrs::DateTime;
+
+let clock = Clock::new(ClockConfig {
+    logical_name: ObisCode::new(0, 0, 1, 0, 0, 255),
+    time: DateTime::from_ymdhms(2025, 7, 12, 14, 30, 0),
+    time_zone: 180,  // UTC+3
+    status: 0,
+    daylight_savings_begin: DateTime::from_ymdhms(2025, 3, 30, 3, 0, 0),
+    daylight_savings_end: DateTime::from_ymdhms(2025, 10, 26, 4, 0, 0),
+    daylight_savings_deviation: 60,
+    daylight_savings_enabled: true,
+    clock_base: 1,  // internal crystal
+});
+
+assert_eq!(clock.time().0[5], 14);  // hour
+```
+
+### Activity calendar with typed structs
+
+```rust
+use spodes_rs::types::attrs::{SeasonProfile, WeekProfile, DayProfile, DayProfileAction};
+use spodes_rs::obis::ObisCode;
+
+let season = SeasonProfile {
+    season_profile_name: b"Summer".to_vec(),
+    season_start: vec![0x07, 0xE5, 0x04, 0x01, 0xFF, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00],
+    week_name: b"WeekA".to_vec(),
+};
+
+let week = WeekProfile {
+    week_profile_name: b"WeekA".to_vec(),
+    monday: 1, tuesday: 1, wednesday: 1, thursday: 1,
+    friday: 1, saturday: 2, sunday: 2,
+};
+
+let day = DayProfile {
+    day_id: 1,
+    day_schedule: vec![
+        DayProfileAction {
+            start_time: vec![0x08, 0x00, 0x00],
+            script_logical_name: ObisCode::new(0, 0, 10, 100, 0, 255),
+            script_selector: 1,
+        },
+    ],
+};
+```
+
+### Push setup
+
+```rust
+use spodes_rs::classes::push_setup::{PushSetup, PushSetupConfig};
+use spodes_rs::obis::ObisCode;
+use spodes_rs::types::attrs::{CommunicationWindow, DateTime, SendDestinationAndMethod};
+use spodes_rs::types::CosemDataType;
+
+let config = PushSetupConfig {
+    logical_name: ObisCode::new(0, 0, 25, 1, 0, 255),
+    version: 0,
+    push_object_list: vec![
+        CosemDataType::Structure(vec![
+            CosemDataType::LongUnsigned(3),
+            CosemDataType::OctetString(vec![0, 0, 1, 0, 0, 255]),
+            CosemDataType::Unsigned(2),
+        ]),
+    ],
+    send_destination_and_method: SendDestinationAndMethod {
+        transport_service: 0,  // TCP
+        destination: b"192.168.1.100:4059".to_vec(),
+        message: 2,  // A-XDR
+    },
+    communication_window: vec![CommunicationWindow {
+        begin: DateTime::from_ymdhms(2025, 1, 1, 8, 0, 0),
+        end: DateTime::from_ymdhms(2025, 12, 31, 18, 0, 0),
+    }],
+    randomisation_start_interval: 30,
+    number_of_retries: 3,
+    repetition_delay: CosemDataType::LongUnsigned(60),
+    port_reference: vec![],
+    push_client_sap: 0,
+    push_protection_parameters: vec![],
+    push_operation_method: 0,
+    confirmation_parameters: CosemDataType::Null,
+    last_confirmation_date_time: CosemDataType::Null,
+};
+
+let mut push = PushSetup::new(config);
+push.invoke_method(1, Some(CosemDataType::Integer(0))).unwrap();
 ```
 
 ## Examples
@@ -83,10 +309,26 @@ Runnable examples live in [`examples/`](examples). Run one with:
 cargo run --example client_session
 cargo run --example server_dispatch
 cargo run --example hls_handshake
+cargo run --example push_listener
+cargo run --example push_sender
+cargo run --example tcp_client
+cargo run --example udp_client
 ```
 
-The per-class examples (`data_usage`, `register_usage`, `clock_usage`, …) show
-how to build and serialize individual COSEM objects.
+The per-class examples show how to build and serialize individual COSEM objects:
+
+```sh
+cargo run --example data_usage
+cargo run --example register_usage
+cargo run --example clock_usage
+cargo run --example extended_register_usage
+cargo run --example demand_register_usage
+cargo run --example profile_generic_usage
+cargo run --example register_activation_usage
+cargo run --example schedule_usage
+cargo run --example script_table_usage
+cargo run --example special_days_table_usage
+```
 
 ## СПОДУС — ИВКЭ concentrator
 
@@ -96,24 +338,22 @@ DLMS client to the meters, aggregates their data, and serves it upstream to the
 head-end (ИВК) as a DLMS server, with transparent pass-through to an individual
 meter by its `direct_id`.
 
-The **complete Appendix-A object model** is provided: the nameplate (§10.14) and
-its profile, configured meter list (§10.2), direct-channel table (§10.3),
-channel list (§10.4), discovered meters (§10.5), access policies (§10.6),
-data-exchange tasks (§10.7), meter status table (§10.8), the exchange-status
-(§10.9), correction (§10.10), numeric (§10.11) and event (§10.13) journals, the
-incoming-events table (§8.5.10), the notification objects (§8.5), the time-delta
-and discrete-inputs objects, the standard Clock / SAP-assignment / Security-setup
-/ Association-LN objects, and the two new СПОДУС classes **Table manager (8200)**
-and **Profile data filter (8201)**. On top of it: the [`Concentrator`](src/spodus/node.rs)
-upstream server (serving the full catalogue), downstream `poll_meter` aggregation
-and the `MeterProxy` pass-through. See `cargo run --example spodus_concentrator`
-and the `tests/spodus_integration.rs` regression test.
+```sh
+cargo run --example spodus_concentrator
+```
 
-**Scope note:** this is the COSEM object model and its behaviour, exercised over
-an in-memory transport. A deployable ИВКЭ additionally needs the physical
-transport binding (HDLC/TCP, ports 4059/4065, §8), the operational collection
-loop (§6: meter configuration, scheduled polling, task execution, time sync) and
-real association/security configuration — these are outside the current scope.
+## Feature flags
+
+| Feature | Default | Description |
+|---------|---------|-------------|
+| `gost` | yes | GOST cryptographic primitives (Kuznyechik, Streebog, GOST 34.10) |
+| `nist` | yes | NIST cryptographic primitives (AES-GCM, ECDSA, ECDH) |
+| `tracing` | no | Optional `tracing` logging support |
+
+```toml
+[dependencies]
+spodes-rs = { git = "...", default-features = false, features = ["nist"] }
+```
 
 ## Standards
 
@@ -127,10 +367,15 @@ real association/security configuration — these are outside the current scope.
 ## Testing
 
 ```sh
-cargo test          # unit + integration + doc tests
-cargo clippy --all-targets
-cargo doc --no-deps
+cargo test                    # unit + integration + doc tests
+cargo test --features tracing # with tracing enabled
+cargo clippy --all-targets --all-features
+cargo doc --no-deps --all-features
 ```
+
+## MSRV
+
+The minimum supported Rust version is **1.85**. This is tested in CI.
 
 ## Versioning
 
