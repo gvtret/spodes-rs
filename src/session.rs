@@ -41,7 +41,7 @@ use crate::service::action::{ActionRequest, ActionResponse};
 use crate::service::ciphering::{self, glo, SecurityContext};
 use crate::service::get::{GetRequest, GetResponse};
 use crate::service::set::{SetRequest, SetResponse};
-use crate::service::{invoke_id_and_priority, tag, AttributeDescriptor, MethodDescriptor};
+use crate::service::{invoke_id_and_priority, tag, AttributeDescriptor, MethodDescriptor, RawApdu};
 use crate::transport::DataLinkLayer;
 use crate::types::CosemDataType;
 
@@ -506,6 +506,83 @@ impl<L: DataLinkLayer> ClientSession<L> {
             user_information: None,
         };
         self.release(&rlrq)
+    }
+
+    // ========================================================================
+    // Raw APDU support
+    // ========================================================================
+
+    /// Sends a raw APDU and receives a raw response without parsing.
+    ///
+    /// This method bypasses the typed service layer and works directly with
+    /// raw bytes, which is useful for:
+    /// - Manufacturer-specific APDUs
+    /// - Extension APDUs not defined in IEC 62056-5-3
+    /// - Testing and debugging
+    /// - Custom protocol extensions
+    ///
+    /// If ciphering is configured, the raw APDU is protected/unprotected
+    /// transparently.
+    pub fn send_raw(&mut self, apdu: &RawApdu) -> Result<RawApdu, SessionError> {
+        #[cfg(feature = "tracing")]
+        debug!(tag = format_args!("0x{:02X}", apdu.tag()), body_len = apdu.body().len(), "sending raw APDU");
+        let encoded = apdu.encode();
+        let outgoing = match &self.cipher {
+            None => encoded,
+            Some(c) => {
+                // Determine the glo tag from the raw tag
+                let glo_tag = match apdu.tag() {
+                    tag::GET_REQUEST => glo::GET_REQUEST,
+                    tag::SET_REQUEST => glo::SET_REQUEST,
+                    tag::ACTION_REQUEST => glo::ACTION_REQUEST,
+                    tag::GET_RESPONSE => glo::GET_RESPONSE,
+                    tag::SET_RESPONSE => glo::SET_RESPONSE,
+                    tag::ACTION_RESPONSE => glo::ACTION_RESPONSE,
+                    _ => apdu.tag(), // pass through unknown tags
+                };
+                ciphering::protect(&c.tx, glo_tag, &encoded)?
+            }
+        };
+        self.link.send_apdu(&outgoing)?;
+        if let Some(c) = &mut self.cipher {
+            c.tx.invocation_counter = c.tx.invocation_counter.wrapping_add(1);
+        }
+
+        let reply = self.link.receive_apdu()?;
+        let response = match &self.cipher {
+            None => RawApdu::from_bytes(&reply)?,
+            Some(c) => {
+                let (_, plaintext) = ciphering::unprotect(&mut c.rx.clone(), &reply)?;
+                RawApdu::from_bytes(&plaintext)?
+            }
+        };
+        #[cfg(feature = "tracing")]
+        debug!(tag = format_args!("0x{:02X}", response.tag()), body_len = response.body().len(), "received raw APDU");
+        Ok(response)
+    }
+
+    /// Sends raw bytes and receives raw bytes without any parsing or protection.
+    ///
+    /// This is the lowest-level send/receive method, bypassing even the
+    /// raw APDU framing. Use for completely custom protocols.
+    pub fn send_raw_bytes(&mut self, data: &[u8]) -> Result<Vec<u8>, SessionError> {
+        #[cfg(feature = "tracing")]
+        debug!(len = data.len(), "sending raw bytes");
+        self.link.send_apdu(data)?;
+        let reply = self.link.receive_apdu()?;
+        #[cfg(feature = "tracing")]
+        debug!(len = reply.len(), "received raw bytes");
+        Ok(reply)
+    }
+
+    /// Creates a raw APDU with the given tag and body.
+    pub fn make_raw_apdu(tag: u8, body: Vec<u8>) -> RawApdu {
+        RawApdu::new(tag, body)
+    }
+
+    /// Parses a raw APDU from bytes.
+    pub fn parse_raw_apdu(bytes: &[u8]) -> Result<RawApdu, SessionError> {
+        Ok(RawApdu::from_bytes(bytes)?)
     }
 
     /// Reads one attribute (GET-REQUEST-NORMAL).
@@ -1155,5 +1232,84 @@ mod tests {
         let decoded = AssociationRequest::decode(&encoded).unwrap();
         assert_eq!(decoded.mechanism_name, Some(acse::mechanism::LLS));
         assert_eq!(decoded.calling_authentication_value, Some(b"test".to_vec()));
+    }
+
+    // ========================================================================
+    // Raw APDU tests
+    // ========================================================================
+
+    #[test]
+    fn raw_apdu_encode_decode_round_trip() {
+        let raw = RawApdu::new(0xC0, vec![0x01, 0x02, 0x03]);
+        let encoded = raw.encode();
+        let decoded = RawApdu::from_bytes(&encoded).unwrap();
+        assert_eq!(decoded.tag(), 0xC0);
+        assert_eq!(decoded.body(), &[0x01, 0x02, 0x03]);
+    }
+
+    #[test]
+    fn raw_apdu_from_bytes_round_trip() {
+        let bytes = vec![0xC1, 0x04, 0x01, 0x02, 0x03, 0x04];
+        let raw = RawApdu::from_bytes(&bytes).unwrap();
+        assert_eq!(raw.tag(), 0xC1);
+        assert_eq!(raw.body(), &[0x01, 0x02, 0x03, 0x04]);
+        assert_eq!(raw.encode(), bytes);
+    }
+
+    #[test]
+    fn raw_apdu_empty_body() {
+        let raw = RawApdu::new(0xC2, vec![]);
+        let encoded = raw.encode();
+        assert_eq!(encoded, vec![0xC2, 0x00]);
+        let decoded = RawApdu::from_bytes(&encoded).unwrap();
+        assert_eq!(decoded.body().len(), 0);
+    }
+
+    #[test]
+    fn raw_apdu_large_body() {
+        let body = vec![0xAA; 256];
+        let raw = RawApdu::new(0xC3, body.clone());
+        let encoded = raw.encode();
+        let decoded = RawApdu::from_bytes(&encoded).unwrap();
+        assert_eq!(decoded.body(), &body);
+    }
+
+    #[test]
+    fn raw_apdu_into_parts() {
+        let raw = RawApdu::new(0xC4, vec![0x01, 0x02]);
+        let (tag, body) = raw.into_parts();
+        assert_eq!(tag, 0xC4);
+        assert_eq!(body, vec![0x01, 0x02]);
+    }
+
+    #[test]
+    fn send_raw_round_trip() {
+        let mut link = LoopLink::new();
+        let response = RawApdu::new(0xC4, vec![0x08, 0x00, 0x06]);
+        link.queue_response(response.encode());
+
+        let mut session = ClientSession::new(link);
+        let request = RawApdu::new(0xC0, vec![0xC1, 0x01, 0x00, 0x00, 0x80, 0x00, 0x00, 0xFF, 0x02]);
+        let reply = session.send_raw(&request).unwrap();
+        assert_eq!(reply.tag(), 0xC4);
+        assert_eq!(reply.body(), &[0x08, 0x00, 0x06]);
+    }
+
+    #[test]
+    fn send_raw_bytes_round_trip() {
+        let mut link = LoopLink::new();
+        link.queue_response(vec![0xC4, 0x03, 0x08, 0x00, 0x06]);
+
+        let mut session = ClientSession::new(link);
+        let request = vec![0xC0, 0x09, 0xC1, 0x01, 0x00, 0x00, 0x80, 0x00, 0x00, 0xFF, 0x02];
+        let reply = session.send_raw_bytes(&request).unwrap();
+        assert_eq!(reply, vec![0xC4, 0x03, 0x08, 0x00, 0x06]);
+    }
+
+    #[test]
+    fn make_raw_apdu_helper() {
+        let raw = ClientSession::<LoopLink>::make_raw_apdu(0xC0, vec![0x01]);
+        assert_eq!(raw.tag(), 0xC0);
+        assert_eq!(raw.body(), &[0x01]);
     }
 }

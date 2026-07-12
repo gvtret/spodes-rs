@@ -201,6 +201,66 @@ pub struct DataBlockSa {
     pub raw_data: Vec<u8>,
 }
 
+/// A raw APDU with an arbitrary tag and body.
+///
+/// This type allows sending and receiving APDUs without parsing their content,
+/// which is useful for manufacturer-specific or extension APDUs.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct RawApdu {
+    /// The APDU tag byte.
+    pub tag: u8,
+    /// The raw body bytes (after the length octet).
+    pub body: Vec<u8>,
+}
+
+impl RawApdu {
+    /// Creates a new raw APDU with the given tag and body.
+    pub fn new(tag: u8, body: Vec<u8>) -> Self {
+        RawApdu { tag, body }
+    }
+
+    /// Creates a raw APDU from a complete byte slice (tag + length + body).
+    pub fn from_bytes(bytes: &[u8]) -> Result<Self, ServiceError> {
+        if bytes.is_empty() {
+            return Err(ServiceError::Truncated);
+        }
+        let tag = bytes[0];
+        let (len, header) = read_length(&bytes[1..])?;
+        let start = 1 + header;
+        let body = bytes.get(start..start + len).ok_or(ServiceError::Truncated)?.to_vec();
+        Ok(RawApdu { tag, body })
+    }
+
+    /// Encodes the APDU to bytes (tag + length + body).
+    pub fn encode(&self) -> Vec<u8> {
+        let mut buf = Vec::with_capacity(2 + self.body.len());
+        buf.push(self.tag);
+        push_length(self.body.len(), &mut buf);
+        buf.extend_from_slice(&self.body);
+        buf
+    }
+
+    /// Returns the tag byte.
+    pub fn tag(&self) -> u8 {
+        self.tag
+    }
+
+    /// Returns the body bytes.
+    pub fn body(&self) -> &[u8] {
+        &self.body
+    }
+
+    /// Returns the body as a mutable slice.
+    pub fn body_mut(&mut self) -> &mut Vec<u8> {
+        &mut self.body
+    }
+
+    /// Consumes the APDU and returns the tag and body.
+    pub fn into_parts(self) -> (u8, Vec<u8>) {
+        (self.tag, self.body)
+    }
+}
+
 impl DataBlockSa {
     /// Appends the block encoding to `buf`.
     pub fn encode(&self, buf: &mut Vec<u8>) {
@@ -294,5 +354,45 @@ mod tests {
         let (decoded, n) = DataBlockSa::decode(&buf).unwrap();
         assert_eq!(n, buf.len());
         assert_eq!(decoded, block);
+    }
+
+    #[test]
+    fn raw_apdu_encode_decode_round_trip() {
+        let raw = RawApdu::new(0xC0, vec![0x01, 0x02, 0x03]);
+        let encoded = raw.encode();
+        let decoded = RawApdu::from_bytes(&encoded).unwrap();
+        assert_eq!(decoded.tag(), 0xC0);
+        assert_eq!(decoded.body(), &[0x01, 0x02, 0x03]);
+    }
+
+    #[test]
+    fn raw_apdu_from_bytes_with_length() {
+        // tag=0xC1, length=5, body=[0xAA; 5]
+        let bytes = vec![0xC1, 0x05, 0xAA, 0xAA, 0xAA, 0xAA, 0xAA];
+        let raw = RawApdu::from_bytes(&bytes).unwrap();
+        assert_eq!(raw.tag(), 0xC1);
+        assert_eq!(raw.body(), &[0xAA; 5]);
+    }
+
+    #[test]
+    fn raw_apdu_empty_body() {
+        let raw = RawApdu::new(0xC2, vec![]);
+        let encoded = raw.encode();
+        assert_eq!(encoded, vec![0xC2, 0x00]);
+        let decoded = RawApdu::from_bytes(&encoded).unwrap();
+        assert!(decoded.body().is_empty());
+    }
+
+    #[test]
+    fn raw_apdu_truncated_returns_error() {
+        let bytes = vec![0xC0]; // tag only, no length
+        assert!(RawApdu::from_bytes(&bytes).is_err());
+    }
+
+    #[test]
+    fn raw_apdu_mutable_body() {
+        let mut raw = RawApdu::new(0xC3, vec![0x01]);
+        raw.body_mut().push(0x02);
+        assert_eq!(raw.body(), &[0x01, 0x02]);
     }
 }
