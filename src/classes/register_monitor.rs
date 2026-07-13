@@ -115,14 +115,10 @@ impl InterfaceClass for RegisterMonitor {
             CosemDataType::Array(list) => list.clone(),
             _ => return Err(BerError::InvalidTag),
         };
-        self.monitored_value = ValueDefinition::try_from(&seq[3])
-            .map_err(|_| BerError::InvalidTag)?;
+        self.monitored_value = ValueDefinition::try_from(&seq[3]).map_err(|_| BerError::InvalidTag)?;
         self.actions = match &seq[4] {
             CosemDataType::Array(list) => {
-                list.iter()
-                    .map(ActionSet::try_from)
-                    .collect::<Result<Vec<_>, _>>()
-                    .map_err(|_| BerError::InvalidTag)?
+                list.iter().map(ActionSet::try_from).collect::<Result<Vec<_>, _>>().map_err(|_| BerError::InvalidTag)?
             }
             _ => return Err(BerError::InvalidTag),
         };
@@ -167,14 +163,8 @@ mod tests {
                 attribute_index: 2,
             },
             actions: vec![ActionSet {
-                action_up: ActionItem {
-                    script_logical_name: ObisCode::new(0, 0, 10, 0, 1, 255),
-                    script_selector: 1,
-                },
-                action_down: ActionItem {
-                    script_logical_name: ObisCode::new(0, 0, 10, 0, 1, 255),
-                    script_selector: 2,
-                },
+                action_up: ActionItem { script_logical_name: ObisCode::new(0, 0, 10, 0, 1, 255), script_selector: 1 },
+                action_down: ActionItem { script_logical_name: ObisCode::new(0, 0, 10, 0, 1, 255), script_selector: 2 },
             }],
         })
     }

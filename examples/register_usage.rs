@@ -2,8 +2,8 @@ use spodes_rs::classes::register::Register;
 use spodes_rs::interface::InterfaceClass;
 use spodes_rs::obis::ObisCode;
 use spodes_rs::serialization::{deserialize_object, serialize_object};
-use spodes_rs::types::CosemDataType;
 use spodes_rs::types::attrs::ScalerUnit;
+use spodes_rs::types::CosemDataType;
 
 fn main() {
     let obis = ObisCode::new(1, 0, 1, 8, 0, 255);

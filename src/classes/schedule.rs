@@ -22,7 +22,7 @@ pub struct ScheduleConfig {
 pub struct Schedule {
     logical_name: ObisCode,
     entries: Vec<ScheduleTableEntry>,
-    enabled: bool,               // schedule state (enabled/disabled)
+    enabled: bool, // schedule state (enabled/disabled)
 }
 
 impl Schedule {

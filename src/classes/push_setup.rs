@@ -124,9 +124,12 @@ impl InterfaceClass for PushSetup {
             (1, CosemDataType::OctetString(self.logical_name.to_bytes())),
             (2, CosemDataType::Array(self.push_object_list.clone())),
             (3, CosemDataType::from(self.send_destination_and_method.clone())),
-            (4, CosemDataType::Array(
-                self.communication_window.iter().map(|cw| CosemDataType::from(cw.clone())).collect(),
-            )),
+            (
+                4,
+                CosemDataType::Array(
+                    self.communication_window.iter().map(|cw| CosemDataType::from(cw.clone())).collect(),
+                ),
+            ),
             (5, CosemDataType::LongUnsigned(self.randomisation_start_interval)),
             (6, CosemDataType::Unsigned(self.number_of_retries)),
             (7, self.repetition_delay.clone()),
@@ -204,8 +207,8 @@ impl InterfaceClass for PushSetup {
             CosemDataType::Array(list) => list.clone(),
             _ => return Err(BerError::InvalidTag),
         };
-        self.send_destination_and_method = SendDestinationAndMethod::try_from(&seq[3])
-            .map_err(|_| BerError::InvalidValue)?;
+        self.send_destination_and_method =
+            SendDestinationAndMethod::try_from(&seq[3]).map_err(|_| BerError::InvalidValue)?;
         self.communication_window = match &seq[4] {
             CosemDataType::Array(list) => list
                 .iter()

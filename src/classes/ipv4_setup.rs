@@ -114,7 +114,12 @@ impl InterfaceClass for Ipv4Setup {
             (1, CosemDataType::OctetString(self.logical_name.to_bytes())),
             (2, CosemDataType::OctetString(self.dl_reference.clone())),
             (3, CosemDataType::DoubleLongUnsigned(self.ip_address)),
-            (4, CosemDataType::Array(self.multicast_ip_address.iter().copied().map(CosemDataType::DoubleLongUnsigned).collect())),
+            (
+                4,
+                CosemDataType::Array(
+                    self.multicast_ip_address.iter().copied().map(CosemDataType::DoubleLongUnsigned).collect(),
+                ),
+            ),
             (5, CosemDataType::Array(self.ip_options.iter().cloned().map(CosemDataType::from).collect())),
             (6, CosemDataType::DoubleLongUnsigned(self.subnet_mask)),
             (7, CosemDataType::DoubleLongUnsigned(self.gateway_ip_address)),
@@ -227,10 +232,9 @@ fn take_dlu_array(value: &CosemDataType) -> Result<Vec<u32>, BerError> {
 
 fn take_ip_option_array(value: &CosemDataType) -> Result<Vec<IpOption>, BerError> {
     match value {
-        CosemDataType::Array(list) => list
-            .iter()
-            .map(|item| IpOption::try_from(item).map_err(|_| BerError::InvalidValue))
-            .collect(),
+        CosemDataType::Array(list) => {
+            list.iter().map(|item| IpOption::try_from(item).map_err(|_| BerError::InvalidValue)).collect()
+        }
         _ => Err(BerError::InvalidTag),
     }
 }

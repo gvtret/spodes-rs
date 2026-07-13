@@ -20,8 +20,8 @@ use spodes_rs::service::ciphering::{self, SecurityContext};
 use spodes_rs::service::get::{GetDataResult, GetResponse};
 use spodes_rs::session::ClientSession;
 use spodes_rs::transport::DataLinkLayer;
-use spodes_rs::types::CosemDataType;
 use spodes_rs::types::attrs::{AssociatedPartnersId, ContextName, ScalerUnit, XDLMSContextInfo};
+use spodes_rs::types::CosemDataType;
 
 // ---------------------------------------------------------------------------
 // Test infrastructure
@@ -383,7 +383,14 @@ fn test_hls_gost_cmac_authentication() {
         object_list: vec![],
         associated_partners_id: AssociatedPartnersId { client_sap: 0, server_sap: 1 },
         application_context_name: ContextName::OctetString(vec![0x09, 0x07, 0x60, 0x85, 0x74, 0x05, 0x08, 0x01, 0x01]),
-        xdlms_context_info: XDLMSContextInfo { conformance: vec![0x00; 18], max_receive_pdu_size: 1024, max_send_pdu_size: 1024, dlms_version_number: 6, quality_of_service: -1, cyphering_info: vec![] },
+        xdlms_context_info: XDLMSContextInfo {
+            conformance: vec![0x00; 18],
+            max_receive_pdu_size: 1024,
+            max_send_pdu_size: 1024,
+            dlms_version_number: 6,
+            quality_of_service: -1,
+            cyphering_info: vec![],
+        },
         authentication_mechanism: AuthenticationMechanism::HlsGostCmac,
         secret: CosemDataType::OctetString(k_em),
         association_status: 0,
@@ -412,7 +419,14 @@ fn test_hls_gost_streebog_authentication() {
         object_list: vec![],
         associated_partners_id: AssociatedPartnersId { client_sap: 0, server_sap: 1 },
         application_context_name: ContextName::OctetString(vec![0x09, 0x07, 0x60, 0x85, 0x74, 0x05, 0x08, 0x01, 0x01]),
-        xdlms_context_info: XDLMSContextInfo { conformance: vec![0x00; 18], max_receive_pdu_size: 1024, max_send_pdu_size: 1024, dlms_version_number: 6, quality_of_service: -1, cyphering_info: vec![] },
+        xdlms_context_info: XDLMSContextInfo {
+            conformance: vec![0x00; 18],
+            max_receive_pdu_size: 1024,
+            max_send_pdu_size: 1024,
+            dlms_version_number: 6,
+            quality_of_service: -1,
+            cyphering_info: vec![],
+        },
         authentication_mechanism: AuthenticationMechanism::HlsGostStreebog,
         secret: CosemDataType::OctetString(secret),
         association_status: 0,
@@ -441,7 +455,14 @@ fn test_hls_md5_authentication() {
         object_list: vec![],
         associated_partners_id: AssociatedPartnersId { client_sap: 0, server_sap: 1 },
         application_context_name: ContextName::OctetString(vec![0x09, 0x07, 0x60, 0x85, 0x74, 0x05, 0x08, 0x01, 0x01]),
-        xdlms_context_info: XDLMSContextInfo { conformance: vec![0x00; 18], max_receive_pdu_size: 1024, max_send_pdu_size: 1024, dlms_version_number: 6, quality_of_service: -1, cyphering_info: vec![] },
+        xdlms_context_info: XDLMSContextInfo {
+            conformance: vec![0x00; 18],
+            max_receive_pdu_size: 1024,
+            max_send_pdu_size: 1024,
+            dlms_version_number: 6,
+            quality_of_service: -1,
+            cyphering_info: vec![],
+        },
         authentication_mechanism: AuthenticationMechanism::HlsMd5,
         secret: CosemDataType::OctetString(secret),
         association_status: 0,

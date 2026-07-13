@@ -97,8 +97,18 @@ impl InterfaceClass for DataProtection {
             (1, CosemDataType::OctetString(self.logical_name.to_bytes())),
             (2, CosemDataType::OctetString(self.protection_buffer.clone())),
             (3, CosemDataType::Array(self.protection_object_list.iter().cloned().map(CosemDataType::from).collect())),
-            (4, CosemDataType::Array(self.protection_parameters_get.iter().cloned().map(CosemDataType::OctetString).collect())),
-            (5, CosemDataType::Array(self.protection_parameters_set.iter().cloned().map(CosemDataType::OctetString).collect())),
+            (
+                4,
+                CosemDataType::Array(
+                    self.protection_parameters_get.iter().cloned().map(CosemDataType::OctetString).collect(),
+                ),
+            ),
+            (
+                5,
+                CosemDataType::Array(
+                    self.protection_parameters_set.iter().cloned().map(CosemDataType::OctetString).collect(),
+                ),
+            ),
             (6, CosemDataType::Enum(self.required_protection)),
         ]
     }
@@ -183,10 +193,9 @@ impl InterfaceClass for DataProtection {
 
 fn take_po_array(value: &CosemDataType) -> Result<Vec<ProtectionObject>, BerError> {
     match value {
-        CosemDataType::Array(list) => list
-            .iter()
-            .map(|item| ProtectionObject::try_from(item).map_err(|_| BerError::InvalidValue))
-            .collect(),
+        CosemDataType::Array(list) => {
+            list.iter().map(|item| ProtectionObject::try_from(item).map_err(|_| BerError::InvalidValue)).collect()
+        }
         _ => Err(BerError::InvalidTag),
     }
 }

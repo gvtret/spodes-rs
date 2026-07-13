@@ -109,8 +109,7 @@ impl InterfaceClass for SpecialDaysTable {
             if let CosemDataType::Array(entries) = &seq[2] {
                 let mut parsed = Vec::new();
                 for entry in entries {
-                    let special_entry =
-                        SpecialDayEntry::try_from(entry).map_err(|_| BerError::InvalidValue)?;
+                    let special_entry = SpecialDayEntry::try_from(entry).map_err(|_| BerError::InvalidValue)?;
                     if special_entry.specialday_date.len() != 12 {
                         return Err(BerError::InvalidLength);
                     }

@@ -15,7 +15,10 @@ use spodes_rs::classes::special_days_table::{SpecialDaysTable, SpecialDaysTableC
 use spodes_rs::interface::InterfaceClass;
 use spodes_rs::obis::ObisCode;
 use spodes_rs::serialization::{deserialize_object, serialize_object};
-use spodes_rs::types::attrs::{ActionSpecification, AssociatedPartnersId, ContextName, DateTime, ObjectDefinition, RegisterActMask, ScheduleTableEntry, ScalerUnit, Script, SortMethod, SpecialDayEntry, XDLMSContextInfo};
+use spodes_rs::types::attrs::{
+    ActionSpecification, AssociatedPartnersId, ContextName, DateTime, ObjectDefinition, RegisterActMask, ScalerUnit,
+    ScheduleTableEntry, Script, SortMethod, SpecialDayEntry, XDLMSContextInfo,
+};
 use spodes_rs::types::CosemDataType;
 use std::sync::Arc;
 
@@ -46,7 +49,10 @@ fn test_register_serialization_deserialization() {
 
     assert_eq!(deserialized.logical_name(), register.logical_name());
     assert_eq!(deserialized.attributes()[1].1, value);
-    assert_eq!(deserialized.attributes()[2].1, CosemDataType::Structure(vec![CosemDataType::Integer(0), CosemDataType::Enum(0x1B)]));
+    assert_eq!(
+        deserialized.attributes()[2].1,
+        CosemDataType::Structure(vec![CosemDataType::Integer(0), CosemDataType::Enum(0x1B)])
+    );
 }
 
 #[test]
@@ -261,9 +267,8 @@ fn test_clock_adjust_to_preset_time() {
     };
     let mut clock = Clock::new(config);
 
-    let new_time = CosemDataType::DateTime(vec![
-        0x07, 0xE5, 0x05, 0x02, 0x03, 0x12, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
-    ]);
+    let new_time =
+        CosemDataType::DateTime(vec![0x07, 0xE5, 0x05, 0x02, 0x03, 0x12, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00]);
 
     let result = clock.invoke_method(3, Some(new_time.clone())).expect("Adjust to preset time failed");
     assert_eq!(result, CosemDataType::Null);
@@ -299,7 +304,10 @@ fn test_extended_register_serialization_deserialization() {
 
     assert_eq!(deserialized.logical_name(), extended_register.logical_name());
     assert_eq!(deserialized.attributes()[1].1, value);
-    assert_eq!(deserialized.attributes()[2].1, CosemDataType::Structure(vec![CosemDataType::Integer(0), CosemDataType::Enum(0x1B)]));
+    assert_eq!(
+        deserialized.attributes()[2].1,
+        CosemDataType::Structure(vec![CosemDataType::Integer(0), CosemDataType::Enum(0x1B)])
+    );
     assert_eq!(deserialized.attributes()[3].1, status);
     assert_eq!(deserialized.attributes()[4].1, CosemDataType::from(capture_time));
 }
@@ -400,7 +408,10 @@ fn test_demand_register_serialization_deserialization() {
     assert_eq!(deserialized.logical_name(), demand_register.logical_name());
     assert_eq!(deserialized.attributes()[1].1, current_average_value);
     assert_eq!(deserialized.attributes()[2].1, last_average_value);
-    assert_eq!(deserialized.attributes()[3].1, CosemDataType::Structure(vec![CosemDataType::Integer(0), CosemDataType::Enum(0x1B)]));
+    assert_eq!(
+        deserialized.attributes()[3].1,
+        CosemDataType::Structure(vec![CosemDataType::Integer(0), CosemDataType::Enum(0x1B)])
+    );
     assert_eq!(deserialized.attributes()[4].1, status);
     assert_eq!(deserialized.attributes()[5].1, capture_time);
     assert_eq!(deserialized.attributes()[6].1, start_time_current);
@@ -500,7 +511,7 @@ fn test_demand_register_next_period_method() {
 fn test_register_activation_serialization_deserialization() {
     let obis = ObisCode::new(0, 0, 10, 106, 0, 255);
     let register_assignment = vec![ObjectDefinition {
-        class_id: 3,                       // Register
+        class_id: 3, // Register
         logical_name: ObisCode::new(1, 0, 1, 8, 0, 255),
     }];
     let mask_list = vec![RegisterActMask {
@@ -528,12 +539,14 @@ fn test_register_activation_serialization_deserialization() {
     deserialize_object(&mut deserialized, &serialized).expect("Deserialization failed");
 
     assert_eq!(deserialized.logical_name(), register_activation.logical_name());
-    assert_eq!(deserialized.attributes()[1].1, CosemDataType::Array(
-        register_assignment.iter().map(|od| CosemDataType::from(od.clone())).collect(),
-    ));
-    assert_eq!(deserialized.attributes()[2].1, CosemDataType::Array(
-        mask_list.iter().map(|m| CosemDataType::from(m.clone())).collect(),
-    ));
+    assert_eq!(
+        deserialized.attributes()[1].1,
+        CosemDataType::Array(register_assignment.iter().map(|od| CosemDataType::from(od.clone())).collect(),)
+    );
+    assert_eq!(
+        deserialized.attributes()[2].1,
+        CosemDataType::Array(mask_list.iter().map(|m| CosemDataType::from(m.clone())).collect(),)
+    );
     assert_eq!(deserialized.attributes()[3].1, CosemDataType::OctetString(active_mask));
 }
 
@@ -541,7 +554,7 @@ fn test_register_activation_serialization_deserialization() {
 fn test_register_activation_add_mask() {
     let obis = ObisCode::new(0, 0, 10, 106, 0, 255);
     let register_assignment = vec![ObjectDefinition {
-        class_id: 3,                       // Register
+        class_id: 3, // Register
         logical_name: ObisCode::new(1, 0, 1, 8, 0, 255),
     }];
     let mask_list = vec![];
@@ -569,7 +582,7 @@ fn test_register_activation_add_mask() {
 fn test_register_activation_delete_mask() {
     let obis = ObisCode::new(0, 0, 10, 106, 0, 255);
     let register_assignment = vec![ObjectDefinition {
-        class_id: 3,                       // Register
+        class_id: 3, // Register
         logical_name: ObisCode::new(1, 0, 1, 8, 0, 255),
     }];
     let mask_list = vec![RegisterActMask {
@@ -598,15 +611,12 @@ fn test_script_table_serialization_deserialization() {
     let obis = ObisCode::new(0, 0, 10, 100, 0, 255);
     let action = ActionSpecification {
         service_id: 1,
-        class_id: 3,                                    // Register
+        class_id: 3, // Register
         logical_name: ObisCode::new(1, 0, 1, 8, 0, 255),
-        index: 1,                                       // method_index: reset
+        index: 1, // method_index: reset
         parameter: CosemDataType::Null,
     };
-    let scripts = vec![Script {
-        script_identifier: 1,
-        actions: vec![action],
-    }];
+    let scripts = vec![Script { script_identifier: 1, actions: vec![action] }];
 
     let config = ScriptTableConfig { logical_name: obis.clone(), scripts: scripts.clone() };
     let script_table = ScriptTable::new(config);
@@ -626,15 +636,12 @@ fn test_script_table_execute() {
     let obis = ObisCode::new(0, 0, 10, 100, 0, 255);
     let action = ActionSpecification {
         service_id: 1,
-        class_id: 3,                                    // Register
+        class_id: 3, // Register
         logical_name: ObisCode::new(1, 0, 1, 8, 0, 255),
-        index: 1,                                       // method_index: reset
+        index: 1, // method_index: reset
         parameter: CosemDataType::Null,
     };
-    let scripts = vec![Script {
-        script_identifier: 1,
-        actions: vec![action],
-    }];
+    let scripts = vec![Script { script_identifier: 1, actions: vec![action] }];
 
     let config = ScriptTableConfig { logical_name: obis, scripts };
     let mut script_table = ScriptTable::new(config);
@@ -659,9 +666,7 @@ fn test_schedule_serialization_deserialization() {
         enable: true,
         script_logical_name: ObisCode::new(0, 0, 10, 100, 0, 255),
         script_selector: 1,
-        switch_time: vec![
-            0x07, 0xE5, 0x05, 0x01, 0x02, 0x10, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
-        ],
+        switch_time: vec![0x07, 0xE5, 0x05, 0x01, 0x02, 0x10, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00],
         validity_window: 0,
         exec_weekdays: vec![0xFF],
         exec_specdays: vec![],
@@ -690,9 +695,7 @@ fn test_schedule_enable_disable() {
         enable: true,
         script_logical_name: ObisCode::new(0, 0, 10, 100, 0, 255),
         script_selector: 1,
-        switch_time: vec![
-            0x07, 0xE5, 0x05, 0x01, 0x02, 0x10, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
-        ],
+        switch_time: vec![0x07, 0xE5, 0x05, 0x01, 0x02, 0x10, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00],
         validity_window: 0,
         exec_weekdays: vec![0xFF],
         exec_specdays: vec![],
@@ -716,8 +719,16 @@ fn test_schedule_enable_disable() {
 fn test_special_days_table_serialization_deserialization() {
     let obis = ObisCode::new(0, 0, 11, 102, 0, 255);
     let entries = vec![
-        SpecialDayEntry { index: 1, specialday_date: vec![0x07, 0xE5, 0x01, 0x01, 0x02, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00], day_id: 1 },
-        SpecialDayEntry { index: 2, specialday_date: vec![0x07, 0xE5, 0x12, 0x25, 0x04, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00], day_id: 2 },
+        SpecialDayEntry {
+            index: 1,
+            specialday_date: vec![0x07, 0xE5, 0x01, 0x01, 0x02, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00],
+            day_id: 1,
+        },
+        SpecialDayEntry {
+            index: 2,
+            specialday_date: vec![0x07, 0xE5, 0x12, 0x25, 0x04, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00],
+            day_id: 2,
+        },
     ];
 
     let config = SpecialDaysTableConfig { logical_name: obis.clone(), entries: entries.clone() };
@@ -812,10 +823,11 @@ fn test_association_ln_serialization_deserialization_version0() {
         CosemDataType::Integer(2),
     ])];
     let associated_partners_id = AssociatedPartnersId { client_sap: 1, server_sap: 1 };
-    let application_context_name =
-        ContextName::OctetString(vec![0x09, 0x06, 0x60, 0x85, 0x74, 0x05, 0x08, 0x01, 0x01]);
+    let application_context_name = ContextName::OctetString(vec![0x09, 0x06, 0x60, 0x85, 0x74, 0x05, 0x08, 0x01, 0x01]);
     let xdlms_context_info = XDLMSContextInfo {
-        conformance: vec![0xFF, 0xFF, 0xFF, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00],
+        conformance: vec![
+            0xFF, 0xFF, 0xFF, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+        ],
         max_receive_pdu_size: 16,
         max_send_pdu_size: 16,
         dlms_version_number: 2,
@@ -888,10 +900,11 @@ fn test_association_ln_serialization_deserialization_version1() {
         CosemDataType::Integer(2),
     ])];
     let associated_partners_id = AssociatedPartnersId { client_sap: 1, server_sap: 1 };
-    let application_context_name =
-        ContextName::OctetString(vec![0x09, 0x06, 0x60, 0x85, 0x74, 0x05, 0x08, 0x01, 0x01]);
+    let application_context_name = ContextName::OctetString(vec![0x09, 0x06, 0x60, 0x85, 0x74, 0x05, 0x08, 0x01, 0x01]);
     let xdlms_context_info = XDLMSContextInfo {
-        conformance: vec![0xFF, 0xFF, 0xFF, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00],
+        conformance: vec![
+            0xFF, 0xFF, 0xFF, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+        ],
         max_receive_pdu_size: 16,
         max_send_pdu_size: 16,
         dlms_version_number: 2,
@@ -968,11 +981,12 @@ fn test_association_ln_lls_authentication() {
         version: AssociationLnVersion::Version0,
         object_list: vec![],
         associated_partners_id: AssociatedPartnersId { client_sap: 1, server_sap: 1 },
-        application_context_name: ContextName::OctetString(vec![
-            0x09, 0x06, 0x60, 0x85, 0x74, 0x05, 0x08, 0x01, 0x01,
-        ]),
+        application_context_name: ContextName::OctetString(vec![0x09, 0x06, 0x60, 0x85, 0x74, 0x05, 0x08, 0x01, 0x01]),
         xdlms_context_info: XDLMSContextInfo {
-            conformance: vec![0xFF, 0xFF, 0xFF, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00],
+            conformance: vec![
+                0xFF, 0xFF, 0xFF, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+                0x00,
+            ],
             max_receive_pdu_size: 16,
             max_send_pdu_size: 16,
             dlms_version_number: 2,
@@ -1011,11 +1025,12 @@ fn test_association_ln_hls4_sha1_authentication() {
         version: AssociationLnVersion::Version1,
         object_list: vec![],
         associated_partners_id: AssociatedPartnersId { client_sap: 1, server_sap: 1 },
-        application_context_name: ContextName::OctetString(vec![
-            0x09, 0x06, 0x60, 0x85, 0x74, 0x05, 0x08, 0x01, 0x01,
-        ]),
+        application_context_name: ContextName::OctetString(vec![0x09, 0x06, 0x60, 0x85, 0x74, 0x05, 0x08, 0x01, 0x01]),
         xdlms_context_info: XDLMSContextInfo {
-            conformance: vec![0xFF, 0xFF, 0xFF, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00],
+            conformance: vec![
+                0xFF, 0xFF, 0xFF, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+                0x00,
+            ],
             max_receive_pdu_size: 16,
             max_send_pdu_size: 16,
             dlms_version_number: 2,
@@ -1065,11 +1080,12 @@ fn test_association_ln_change_hls_secret() {
         version: AssociationLnVersion::Version0,
         object_list: vec![],
         associated_partners_id: AssociatedPartnersId { client_sap: 1, server_sap: 1 },
-        application_context_name: ContextName::OctetString(vec![
-            0x09, 0x06, 0x60, 0x85, 0x74, 0x05, 0x08, 0x01, 0x01,
-        ]),
+        application_context_name: ContextName::OctetString(vec![0x09, 0x06, 0x60, 0x85, 0x74, 0x05, 0x08, 0x01, 0x01]),
         xdlms_context_info: XDLMSContextInfo {
-            conformance: vec![0xFF, 0xFF, 0xFF, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00],
+            conformance: vec![
+                0xFF, 0xFF, 0xFF, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+                0x00,
+            ],
             max_receive_pdu_size: 16,
             max_send_pdu_size: 16,
             dlms_version_number: 2,
@@ -1101,9 +1117,7 @@ fn test_association_ln_add_object() {
         version: AssociationLnVersion::Version1,
         object_list: vec![],
         associated_partners_id: AssociatedPartnersId { client_sap: 1, server_sap: 1 },
-        application_context_name: ContextName::OctetString(vec![
-            0x09, 0x07, 0x60, 0x85, 0x74, 0x05, 0x08, 0x01, 0x01,
-        ]),
+        application_context_name: ContextName::OctetString(vec![0x09, 0x07, 0x60, 0x85, 0x74, 0x05, 0x08, 0x01, 0x01]),
         xdlms_context_info: XDLMSContextInfo {
             conformance: vec![0xFF; 18],
             max_receive_pdu_size: 16,
@@ -1151,9 +1165,7 @@ fn test_association_ln_remove_object() {
         version: AssociationLnVersion::Version1,
         object_list: vec![element.clone()],
         associated_partners_id: AssociatedPartnersId { client_sap: 1, server_sap: 1 },
-        application_context_name: ContextName::OctetString(vec![
-            0x09, 0x07, 0x60, 0x85, 0x74, 0x05, 0x08, 0x01, 0x01,
-        ]),
+        application_context_name: ContextName::OctetString(vec![0x09, 0x07, 0x60, 0x85, 0x74, 0x05, 0x08, 0x01, 0x01]),
         xdlms_context_info: XDLMSContextInfo {
             conformance: vec![0xFF; 18],
             max_receive_pdu_size: 16,

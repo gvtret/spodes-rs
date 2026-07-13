@@ -109,13 +109,31 @@ impl InterfaceClass for Ipv6Setup {
             (1, CosemDataType::OctetString(self.logical_name.to_bytes())),
             (2, CosemDataType::OctetString(self.dl_reference.clone())),
             (3, CosemDataType::Enum(self.address_config_mode)),
-            (4, CosemDataType::Array(self.unicast_ipv6_addresses.iter().cloned().map(CosemDataType::OctetString).collect())),
-            (5, CosemDataType::Array(self.multicast_ipv6_addresses.iter().cloned().map(CosemDataType::OctetString).collect())),
-            (6, CosemDataType::Array(self.gateway_ipv6_addresses.iter().cloned().map(CosemDataType::OctetString).collect())),
+            (
+                4,
+                CosemDataType::Array(
+                    self.unicast_ipv6_addresses.iter().cloned().map(CosemDataType::OctetString).collect(),
+                ),
+            ),
+            (
+                5,
+                CosemDataType::Array(
+                    self.multicast_ipv6_addresses.iter().cloned().map(CosemDataType::OctetString).collect(),
+                ),
+            ),
+            (
+                6,
+                CosemDataType::Array(
+                    self.gateway_ipv6_addresses.iter().cloned().map(CosemDataType::OctetString).collect(),
+                ),
+            ),
             (7, CosemDataType::OctetString(self.primary_dns_address.clone())),
             (8, CosemDataType::OctetString(self.secondary_dns_address.clone())),
             (9, CosemDataType::Unsigned(self.traffic_class)),
-            (10, CosemDataType::Array(self.neighbor_discovery_setup.iter().cloned().map(CosemDataType::from).collect())),
+            (
+                10,
+                CosemDataType::Array(self.neighbor_discovery_setup.iter().cloned().map(CosemDataType::from).collect()),
+            ),
         ]
     }
 
@@ -217,10 +235,9 @@ fn take_octet_string_array(value: &CosemDataType) -> Result<Vec<Vec<u8>>, BerErr
 
 fn take_nds_array(value: &CosemDataType) -> Result<Vec<NeighborDiscoverySetup>, BerError> {
     match value {
-        CosemDataType::Array(list) => list
-            .iter()
-            .map(|item| NeighborDiscoverySetup::try_from(item).map_err(|_| BerError::InvalidValue))
-            .collect(),
+        CosemDataType::Array(list) => {
+            list.iter().map(|item| NeighborDiscoverySetup::try_from(item).map_err(|_| BerError::InvalidValue)).collect()
+        }
         _ => Err(BerError::InvalidTag),
     }
 }

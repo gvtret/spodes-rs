@@ -148,8 +148,7 @@ impl InterfaceClass for GsmDiagnostic {
             CosemDataType::Array(list) => list.clone(),
             _ => return Err(BerError::InvalidTag),
         };
-        self.capture_time = DateTime::try_from(&seq[8])
-            .map_err(|_| BerError::InvalidValue)?;
+        self.capture_time = DateTime::try_from(&seq[8]).map_err(|_| BerError::InvalidValue)?;
         Ok(())
     }
 

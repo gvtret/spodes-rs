@@ -13,7 +13,7 @@ fn main() {
     let config = RegisterActivationConfig {
         logical_name: obis.clone(),
         register_assignment: vec![ObjectDefinition {
-            class_id: 3,                       // Register
+            class_id: 3, // Register
             logical_name: ObisCode::new(1, 0, 1, 8, 0, 255),
         }],
         mask_list: vec![RegisterActMask {

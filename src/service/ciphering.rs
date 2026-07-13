@@ -23,10 +23,10 @@
 use aead::AeadInOut;
 use aes_gcm::aead::consts::U12;
 use aes_gcm::aes::{Aes128, Aes256};
-use aes_gcm::{AesGcm, Nonce, Tag};
 use aes_gcm::KeyInit as AesKeyInit;
+use aes_gcm::{AesGcm, Nonce, Tag};
+use cipher::block::{BlockCipherDecrypt, BlockCipherEncrypt};
 use cmac::Cmac;
-use cipher::block::{BlockCipherEncrypt, BlockCipherDecrypt};
 use kuznyechik::Kuznyechik;
 
 /// AES-128-GCM with a 96-bit (12-octet) authentication tag.
@@ -385,9 +385,7 @@ pub fn gost_unprotect(ctx: &mut SecurityContext, apdu: &[u8]) -> Result<(u8, Vec
             }
             plain.to_vec()
         }
-        (false, true) => {
-            gost_ctr_decrypt(&ctx.encryption_key, &nonce, protected)?
-        }
+        (false, true) => gost_ctr_decrypt(&ctx.encryption_key, &nonce, protected)?,
         (false, false) => protected.to_vec(),
     };
     Ok((ciphered_tag, plaintext))
@@ -711,9 +709,7 @@ pub fn gost_gmac_unprotect(ctx: &mut SecurityContext, apdu: &[u8]) -> Result<(u8
             }
             plain.to_vec()
         }
-        (false, true) => {
-            gost_gmac_decrypt(&ctx.encryption_key, &iv, protected)?
-        }
+        (false, true) => gost_gmac_decrypt(&ctx.encryption_key, &iv, protected)?,
         (false, false) => protected.to_vec(),
     };
     Ok((ciphered_tag, plaintext))
@@ -993,7 +989,10 @@ mod tests {
     fn gost_counter_increment() {
         let mut counter = [0xFFu8; 16];
         increment_counter(&mut counter);
-        assert_eq!(counter, [0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00]);
+        assert_eq!(
+            counter,
+            [0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00]
+        );
     }
 
     #[test]

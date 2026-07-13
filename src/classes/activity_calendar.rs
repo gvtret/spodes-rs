@@ -179,12 +179,13 @@ fn take_octet_string(value: &CosemDataType) -> Result<Vec<u8>, BerError> {
     }
 }
 
-fn take_typed_array<T: for<'a> TryFrom<&'a CosemDataType, Error = String>>(value: &CosemDataType) -> Result<Vec<T>, BerError> {
+fn take_typed_array<T: for<'a> TryFrom<&'a CosemDataType, Error = String>>(
+    value: &CosemDataType,
+) -> Result<Vec<T>, BerError> {
     match value {
-        CosemDataType::Array(list) => list
-            .iter()
-            .map(|item| T::try_from(item).map_err(|_| BerError::InvalidTag))
-            .collect(),
+        CosemDataType::Array(list) => {
+            list.iter().map(|item| T::try_from(item).map_err(|_| BerError::InvalidTag)).collect()
+        }
         _ => Err(BerError::InvalidTag),
     }
 }
@@ -259,7 +260,8 @@ mod tests {
             season_profile_name: b"winter".to_vec(),
             season_start: vec![7, 1],
             week_name: b"w2".to_vec(),
-        }.into();
+        }
+        .into();
         assert_eq!(obj.attributes()[2].1, CosemDataType::Array(vec![expected_passive]));
     }
 }

@@ -111,8 +111,7 @@ impl InterfaceClass for SingleActionSchedule {
         } else {
             return Err(BerError::InvalidTag);
         }
-        self.executed_script = ExecutedScript::try_from(&seq[2])
-            .map_err(|_| BerError::InvalidTag)?;
+        self.executed_script = ExecutedScript::try_from(&seq[2]).map_err(|_| BerError::InvalidTag)?;
         self.schedule_type = match seq[3] {
             CosemDataType::Enum(v) => v,
             _ => return Err(BerError::InvalidTag),

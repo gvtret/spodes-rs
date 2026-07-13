@@ -17,9 +17,9 @@ use spodes_rs::server::RequestDispatcher;
 use spodes_rs::service::get::{GetDataResult, GetResponse};
 use spodes_rs::session::ClientSession;
 use spodes_rs::transport::DataLinkLayer;
+use spodes_rs::types::attrs::ScalerUnit;
 use spodes_rs::types::attrs::{AssociatedPartnersId, ContextName, XDLMSContextInfo};
 use spodes_rs::types::CosemDataType;
-use spodes_rs::types::attrs::ScalerUnit;
 
 // ---------------------------------------------------------------------------
 // Test infrastructure
@@ -97,7 +97,17 @@ fn test_suite0_lls_authentication() {
         object_list: vec![],
         associated_partners_id: AssociatedPartnersId { client_sap: 0, server_sap: 1 },
         application_context_name: ContextName::OctetString(vec![0x09, 0x07, 0x60, 0x85, 0x74, 0x05, 0x08, 0x01, 0x01]),
-        xdlms_context_info: XDLMSContextInfo { conformance: vec![0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00], max_receive_pdu_size: 1024, max_send_pdu_size: 1024, dlms_version_number: 6, quality_of_service: -1, cyphering_info: vec![] },
+        xdlms_context_info: XDLMSContextInfo {
+            conformance: vec![
+                0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+                0x00,
+            ],
+            max_receive_pdu_size: 1024,
+            max_send_pdu_size: 1024,
+            dlms_version_number: 6,
+            quality_of_service: -1,
+            cyphering_info: vec![],
+        },
         authentication_mechanism: AuthenticationMechanism::Lls,
         secret: CosemDataType::OctetString(secret.clone()),
         association_status: 0,
@@ -131,7 +141,17 @@ fn test_suite0_hls_sha1() {
         object_list: vec![],
         associated_partners_id: AssociatedPartnersId { client_sap: 0, server_sap: 1 },
         application_context_name: ContextName::OctetString(vec![0x09, 0x07, 0x60, 0x85, 0x74, 0x05, 0x08, 0x01, 0x01]),
-        xdlms_context_info: XDLMSContextInfo { conformance: vec![0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00], max_receive_pdu_size: 1024, max_send_pdu_size: 1024, dlms_version_number: 6, quality_of_service: -1, cyphering_info: vec![] },
+        xdlms_context_info: XDLMSContextInfo {
+            conformance: vec![
+                0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+                0x00,
+            ],
+            max_receive_pdu_size: 1024,
+            max_send_pdu_size: 1024,
+            dlms_version_number: 6,
+            quality_of_service: -1,
+            cyphering_info: vec![],
+        },
         authentication_mechanism: AuthenticationMechanism::HlsSha1,
         secret: CosemDataType::OctetString(secret),
         association_status: 0,
@@ -164,7 +184,17 @@ fn test_suite0_hls_sha256() {
         object_list: vec![],
         associated_partners_id: AssociatedPartnersId { client_sap: 0, server_sap: 1 },
         application_context_name: ContextName::OctetString(vec![0x09, 0x07, 0x60, 0x85, 0x74, 0x05, 0x08, 0x01, 0x01]),
-        xdlms_context_info: XDLMSContextInfo { conformance: vec![0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00], max_receive_pdu_size: 1024, max_send_pdu_size: 1024, dlms_version_number: 6, quality_of_service: -1, cyphering_info: vec![] },
+        xdlms_context_info: XDLMSContextInfo {
+            conformance: vec![
+                0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+                0x00,
+            ],
+            max_receive_pdu_size: 1024,
+            max_send_pdu_size: 1024,
+            dlms_version_number: 6,
+            quality_of_service: -1,
+            cyphering_info: vec![],
+        },
         authentication_mechanism: AuthenticationMechanism::HlsSha256,
         secret: CosemDataType::OctetString(secret),
         association_status: 0,
@@ -197,7 +227,17 @@ fn test_suite0_hls_gmac() {
         object_list: vec![],
         associated_partners_id: AssociatedPartnersId { client_sap: 0, server_sap: 1 },
         application_context_name: ContextName::OctetString(vec![0x09, 0x07, 0x60, 0x85, 0x74, 0x05, 0x08, 0x01, 0x01]),
-        xdlms_context_info: XDLMSContextInfo { conformance: vec![0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00], max_receive_pdu_size: 1024, max_send_pdu_size: 1024, dlms_version_number: 6, quality_of_service: -1, cyphering_info: vec![] },
+        xdlms_context_info: XDLMSContextInfo {
+            conformance: vec![
+                0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+                0x00,
+            ],
+            max_receive_pdu_size: 1024,
+            max_send_pdu_size: 1024,
+            dlms_version_number: 6,
+            quality_of_service: -1,
+            cyphering_info: vec![],
+        },
         authentication_mechanism: AuthenticationMechanism::HlsGmac,
         secret: CosemDataType::OctetString(secret),
         association_status: 0,

@@ -8,8 +8,8 @@ use aead::Aead;
 use aes_gcm::{Aes128Gcm, Aes256Gcm, KeyInit, Nonce};
 use rand::Rng;
 use serde::{Deserialize, Serialize};
-use subtle::ConstantTimeEq;
 use std::any::Any;
+use subtle::ConstantTimeEq;
 
 /// Versions of the Association LN class.
 #[derive(Clone, Serialize, Deserialize, Debug, PartialEq)]
@@ -198,8 +198,7 @@ impl AssociationLn {
         if mechanism == AuthMechanism::Lls {
             return match &self.secret {
                 CosemDataType::OctetString(secret)
-                    if secret.len() == f_stoc.len()
-                        && secret.ct_eq(f_stoc.as_slice()).into() =>
+                    if secret.len() == f_stoc.len() && secret.ct_eq(f_stoc.as_slice()).into() =>
                 {
                     Ok(CosemDataType::Null)
                 }
@@ -214,13 +213,11 @@ impl AssociationLn {
             // Mechanisms 3/4: f(challenge) = HASH(challenge ‖ secret).
             AuthMechanism::HlsMd5 | AuthMechanism::HlsSha1 => {
                 let secret = self.secret_bytes()?;
-                let expected =
-                    hls::hash_legacy(mechanism, stoc, secret).ok_or("HLS hash computation failed")?;
+                let expected = hls::hash_legacy(mechanism, stoc, secret).ok_or("HLS hash computation failed")?;
                 if expected != f_stoc {
                     return Err("HLS authentication failed: f(StoC) mismatch".to_string());
                 }
-                let f_ctos =
-                    hls::hash_legacy(mechanism, ctos, secret).ok_or("HLS hash computation failed")?;
+                let f_ctos = hls::hash_legacy(mechanism, ctos, secret).ok_or("HLS hash computation failed")?;
                 Ok(CosemDataType::OctetString(f_ctos))
             }
             // Mechanisms 6/9: f = HASH(secret ‖ ST_a ‖ ST_b ‖ chal_a ‖ chal_b).
@@ -599,12 +596,9 @@ impl InterfaceClass for AssociationLn {
             CosemDataType::Array(list) => list.clone(),
             _ => return Err(BerError::InvalidTag),
         };
-        self.associated_partners_id = AssociatedPartnersId::try_from(&seq[3])
-            .map_err(|_| BerError::InvalidValue)?;
-        self.application_context_name = ContextName::try_from(&seq[4])
-            .map_err(|_| BerError::InvalidValue)?;
-        self.xdlms_context_info = XDLMSContextInfo::try_from(&seq[5])
-            .map_err(|_| BerError::InvalidValue)?;
+        self.associated_partners_id = AssociatedPartnersId::try_from(&seq[3]).map_err(|_| BerError::InvalidValue)?;
+        self.application_context_name = ContextName::try_from(&seq[4]).map_err(|_| BerError::InvalidValue)?;
+        self.xdlms_context_info = XDLMSContextInfo::try_from(&seq[5]).map_err(|_| BerError::InvalidValue)?;
         self.authentication_mechanism = match &seq[6] {
             CosemDataType::OctetString(mech) => {
                 let id = *mech.last().ok_or(BerError::InvalidLength)?;
@@ -699,10 +693,7 @@ mod tests {
             logical_name: ObisCode::new(0, 0, 40, 0, 0, 255),
             version,
             object_list: vec![],
-            associated_partners_id: AssociatedPartnersId {
-                client_sap: 1,
-                server_sap: 1,
-            },
+            associated_partners_id: AssociatedPartnersId { client_sap: 1, server_sap: 1 },
             application_context_name: ContextName::OctetString(vec![
                 0x09, 0x07, 0x60, 0x85, 0x74, 0x05, 0x08, 0x01, 0x01,
             ]),

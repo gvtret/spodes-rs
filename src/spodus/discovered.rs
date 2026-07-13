@@ -8,10 +8,10 @@
 use std::sync::Arc;
 
 use crate::classes::data::Data;
-use crate::types::attrs::SortMethod;
 use crate::classes::profile_generic::{ProfileGeneric, ProfileGenericConfig};
 use crate::interface::InterfaceClass;
 use crate::obis::ObisCode;
+use crate::types::attrs::SortMethod;
 use crate::types::CosemDataType;
 
 use super::obis;

@@ -110,9 +110,7 @@ impl ExtendedRegister {
     /// * `Err(String)` - On error.
     fn capture(&mut self) -> Result<CosemDataType, String> {
         self.status = CosemDataType::Unsigned(1);
-        self.capture_time = DateTime::new([
-            0x07, 0xE5, 0x05, 0x01, 0x02, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
-        ]);
+        self.capture_time = DateTime::new([0x07, 0xE5, 0x05, 0x01, 0x02, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00]);
         Ok(CosemDataType::Null)
     }
 }

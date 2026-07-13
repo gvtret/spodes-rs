@@ -55,8 +55,7 @@ impl RegisterActivation {
     /// * `Err(String)` - If the parameter is invalid or the mask already exists.
     fn add_mask(&mut self, params: Option<CosemDataType>) -> Result<CosemDataType, String> {
         let param = params.ok_or("Invalid mask parameter".to_string())?;
-        let mask = RegisterActMask::try_from(&param)
-            .map_err(|e| format!("Invalid mask parameter: {}", e))?;
+        let mask = RegisterActMask::try_from(&param).map_err(|e| format!("Invalid mask parameter: {}", e))?;
         if self.mask_list.iter().any(|m| m.mask_name == mask.mask_name) {
             return Err("Mask with this name already exists".to_string());
         }
@@ -105,12 +104,13 @@ impl InterfaceClass for RegisterActivation {
     fn attributes(&self) -> Vec<(u8, CosemDataType)> {
         vec![
             (1, CosemDataType::OctetString(self.logical_name.to_bytes())),
-            (2, CosemDataType::Array(
-                self.register_assignment.iter().map(|od| CosemDataType::from(od.clone())).collect(),
-            )),
-            (3, CosemDataType::Array(
-                self.mask_list.iter().map(|m| CosemDataType::from(m.clone())).collect(),
-            )),
+            (
+                2,
+                CosemDataType::Array(
+                    self.register_assignment.iter().map(|od| CosemDataType::from(od.clone())).collect(),
+                ),
+            ),
+            (3, CosemDataType::Array(self.mask_list.iter().map(|m| CosemDataType::from(m.clone())).collect())),
             (4, CosemDataType::OctetString(self.active_mask.clone())),
         ]
     }

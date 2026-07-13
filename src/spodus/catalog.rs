@@ -7,11 +7,11 @@
 use crate::classes::association_ln::{
     AssociationLn, AssociationLnConfig, AssociationLnVersion, AuthenticationMechanism,
 };
-use crate::types::attrs::{AssociatedPartnersId, ContextName, SapAssignmentEntry, XDLMSContextInfo};
 use crate::classes::clock::{Clock, ClockConfig};
 use crate::classes::sap_assignment::{SapAssignment, SapAssignmentConfig};
 use crate::classes::security_setup::{SecuritySetup, SecuritySetupConfig};
 use crate::obis::ObisCode;
+use crate::types::attrs::{AssociatedPartnersId, ContextName, SapAssignmentEntry, XDLMSContextInfo};
 use crate::types::CosemDataType;
 
 use super::obis;

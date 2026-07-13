@@ -28,13 +28,13 @@ fn main() {
     //    Each entry is { class_id, logical_name, attribute_index }.
     let push_objects = vec![
         CosemDataType::Structure(vec![
-            CosemDataType::LongUnsigned(3),                              // Register class
-            CosemDataType::OctetString(vec![0, 0, 1, 0, 0, 255]),      // OBIS 0.0.1.0.0.255
-            CosemDataType::Unsigned(2),                                  // attr 2 = value
+            CosemDataType::LongUnsigned(3),                       // Register class
+            CosemDataType::OctetString(vec![0, 0, 1, 0, 0, 255]), // OBIS 0.0.1.0.0.255
+            CosemDataType::Unsigned(2),                           // attr 2 = value
         ]),
         CosemDataType::Structure(vec![
-            CosemDataType::LongUnsigned(1),                              // Data class
-            CosemDataType::OctetString(vec![0, 0, 96, 1, 0, 255]),     // OBIS 0.0.96.1.0.255
+            CosemDataType::LongUnsigned(1),                        // Data class
+            CosemDataType::OctetString(vec![0, 0, 96, 1, 0, 255]), // OBIS 0.0.96.1.0.255
             CosemDataType::Unsigned(2),
         ]),
     ];

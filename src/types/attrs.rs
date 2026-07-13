@@ -125,10 +125,7 @@ impl ScalerUnit {
 
 impl From<ScalerUnit> for CosemDataType {
     fn from(su: ScalerUnit) -> Self {
-        CosemDataType::Structure(vec![
-            CosemDataType::Integer(su.scaler),
-            CosemDataType::Enum(su.unit),
-        ])
+        CosemDataType::Structure(vec![CosemDataType::Integer(su.scaler), CosemDataType::Enum(su.unit)])
     }
 }
 
@@ -1082,17 +1079,15 @@ impl TryFrom<&CosemDataType> for AccessRight {
         match value {
             CosemDataType::Structure(fields) if fields.len() >= 2 => {
                 let attribute_access = match &fields[0] {
-                    CosemDataType::Array(items) => items
-                        .iter()
-                        .map(AttributeAccessItem::try_from)
-                        .collect::<Result<Vec<_>, _>>()?,
+                    CosemDataType::Array(items) => {
+                        items.iter().map(AttributeAccessItem::try_from).collect::<Result<Vec<_>, _>>()?
+                    }
                     _ => return Err("attribute_access must be array".to_string()),
                 };
                 let method_access = match &fields[1] {
-                    CosemDataType::Array(items) => items
-                        .iter()
-                        .map(MethodAccessItem::try_from)
-                        .collect::<Result<Vec<_>, _>>()?,
+                    CosemDataType::Array(items) => {
+                        items.iter().map(MethodAccessItem::try_from).collect::<Result<Vec<_>, _>>()?
+                    }
                     _ => return Err("method_access must be array".to_string()),
                 };
                 Ok(AccessRight { attribute_access, method_access })
@@ -1175,10 +1170,7 @@ pub struct MethodAccessItem {
 
 impl From<MethodAccessItem> for CosemDataType {
     fn from(item: MethodAccessItem) -> Self {
-        CosemDataType::Structure(vec![
-            CosemDataType::Integer(item.method_id),
-            CosemDataType::Enum(item.access_mode),
-        ])
+        CosemDataType::Structure(vec![CosemDataType::Integer(item.method_id), CosemDataType::Enum(item.access_mode)])
     }
 }
 
@@ -1575,10 +1567,7 @@ pub struct ActionSet {
 
 impl From<ActionSet> for CosemDataType {
     fn from(a: ActionSet) -> Self {
-        CosemDataType::Structure(vec![
-            CosemDataType::from(a.action_up),
-            CosemDataType::from(a.action_down),
-        ])
+        CosemDataType::Structure(vec![CosemDataType::from(a.action_up), CosemDataType::from(a.action_down)])
     }
 }
 
@@ -1686,10 +1675,9 @@ impl TryFrom<&CosemDataType> for Script {
                     _ => return Err("script_identifier must be long-unsigned".to_string()),
                 };
                 let actions = match &fields[1] {
-                    CosemDataType::Array(items) => items
-                        .iter()
-                        .map(ActionSpecification::try_from)
-                        .collect::<Result<Vec<_>, _>>()?,
+                    CosemDataType::Array(items) => {
+                        items.iter().map(ActionSpecification::try_from).collect::<Result<Vec<_>, _>>()?
+                    }
                     _ => return Err("actions must be array".to_string()),
                 };
                 Ok(Script { script_identifier, actions })
@@ -2044,10 +2032,9 @@ impl TryFrom<&CosemDataType> for DayProfile {
                     _ => return Err("day_id must be unsigned".to_string()),
                 };
                 let day_schedule = match &fields[1] {
-                    CosemDataType::Array(items) => items
-                        .iter()
-                        .map(DayProfileAction::try_from)
-                        .collect::<Result<Vec<_>, _>>()?,
+                    CosemDataType::Array(items) => {
+                        items.iter().map(DayProfileAction::try_from).collect::<Result<Vec<_>, _>>()?
+                    }
                     _ => return Err("day_schedule must be array".to_string()),
                 };
                 Ok(DayProfile { day_id, day_schedule })
@@ -2602,7 +2589,9 @@ mod tests {
     use crate::obis::ObisCode;
 
     // Helper: round-trip a value through CosemDataType and back
-    fn round_trip<T: for<'a> TryFrom<&'a CosemDataType, Error = String> + Into<CosemDataType> + Clone + PartialEq + std::fmt::Debug>(
+    fn round_trip<
+        T: for<'a> TryFrom<&'a CosemDataType, Error = String> + Into<CosemDataType> + Clone + PartialEq + std::fmt::Debug,
+    >(
         val: &T,
     ) {
         let cd: CosemDataType = val.clone().into();
@@ -2667,10 +2656,7 @@ mod tests {
 
     #[test]
     fn scaler_unit_from_structure() {
-        let cd = CosemDataType::Structure(vec![
-            CosemDataType::Integer(0),
-            CosemDataType::Enum(27),
-        ]);
+        let cd = CosemDataType::Structure(vec![CosemDataType::Integer(0), CosemDataType::Enum(27)]);
         let su = ScalerUnit::try_from(&cd).unwrap();
         assert_eq!(su.scaler, 0);
         assert_eq!(su.unit, 27);
@@ -2734,21 +2720,13 @@ mod tests {
 
     #[test]
     fn attribute_access_item_round_trip() {
-        let item = AttributeAccessItem {
-            attribute_id: 2,
-            access_mode: 1,
-            access_selectors: None,
-        };
+        let item = AttributeAccessItem { attribute_id: 2, access_mode: 1, access_selectors: None };
         round_trip(&item);
     }
 
     #[test]
     fn attribute_access_item_with_selectors() {
-        let item = AttributeAccessItem {
-            attribute_id: 3,
-            access_mode: 3,
-            access_selectors: Some(vec![1, 2]),
-        };
+        let item = AttributeAccessItem { attribute_id: 3, access_mode: 3, access_selectors: Some(vec![1, 2]) };
         let cd: CosemDataType = item.clone().into();
         let back = AttributeAccessItem::try_from(&cd).unwrap();
         assert_eq!(back.access_selectors, Some(vec![1, 2]));
@@ -2767,9 +2745,7 @@ mod tests {
                 AttributeAccessItem { attribute_id: 1, access_mode: 1, access_selectors: None },
                 AttributeAccessItem { attribute_id: 2, access_mode: 3, access_selectors: None },
             ],
-            method_access: vec![
-                MethodAccessItem { method_id: 1, access_mode: 1 },
-            ],
+            method_access: vec![MethodAccessItem { method_id: 1, access_mode: 1 }],
         };
         round_trip(&ar);
     }
@@ -2784,10 +2760,7 @@ mod tests {
             class_id: 3,
             version: 0,
             logical_name: obis(0, 0, 1, 0, 0, 255),
-            access_rights: AccessRight {
-                attribute_access: vec![],
-                method_access: vec![],
-            },
+            access_rights: AccessRight { attribute_access: vec![], method_access: vec![] },
         };
         round_trip(&ole);
     }
@@ -2841,7 +2814,10 @@ mod tests {
     #[test]
     fn xdlms_context_info_round_trip() {
         let ctx = XDLMSContextInfo {
-            conformance: vec![0xFF, 0xFF, 0xFF, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00],
+            conformance: vec![
+                0xFF, 0xFF, 0xFF, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+                0x00,
+            ],
             max_receive_pdu_size: 1024,
             max_send_pdu_size: 1024,
             dlms_version_number: 6,
@@ -2857,11 +2833,7 @@ mod tests {
 
     #[test]
     fn value_definition_round_trip() {
-        let vd = ValueDefinition {
-            class_id: 3,
-            logical_name: obis(0, 0, 1, 0, 0, 255),
-            attribute_index: 2,
-        };
+        let vd = ValueDefinition { class_id: 3, logical_name: obis(0, 0, 1, 0, 0, 255), attribute_index: 2 };
         round_trip(&vd);
     }
 
@@ -2871,10 +2843,7 @@ mod tests {
 
     #[test]
     fn action_item_round_trip() {
-        let ai = ActionItem {
-            script_logical_name: obis(0, 0, 10, 100, 0, 255),
-            script_selector: 1,
-        };
+        let ai = ActionItem { script_logical_name: obis(0, 0, 10, 100, 0, 255), script_selector: 1 };
         round_trip(&ai);
     }
 
@@ -2929,15 +2898,13 @@ mod tests {
     fn script_round_trip() {
         let script = Script {
             script_identifier: 1,
-            actions: vec![
-                ActionSpecification {
-                    service_id: 1,
-                    class_id: 3,
-                    logical_name: obis(0, 0, 1, 0, 0, 255),
-                    index: 2,
-                    parameter: CosemDataType::DoubleLongUnsigned(1000),
-                },
-            ],
+            actions: vec![ActionSpecification {
+                service_id: 1,
+                class_id: 3,
+                logical_name: obis(0, 0, 1, 0, 0, 255),
+                index: 2,
+                parameter: CosemDataType::DoubleLongUnsigned(1000),
+            }],
         };
         round_trip(&script);
     }
@@ -2975,11 +2942,8 @@ mod tests {
 
     #[test]
     fn special_day_entry_round_trip() {
-        let sde = SpecialDayEntry {
-            index: 1,
-            specialday_date: vec![0x07, 0xE5, 0x01, 0x01, 0xFF, 0xFF, 0xFF],
-            day_id: 3,
-        };
+        let sde =
+            SpecialDayEntry { index: 1, specialday_date: vec![0x07, 0xE5, 0x01, 0x01, 0xFF, 0xFF, 0xFF], day_id: 3 };
         round_trip(&sde);
     }
 
@@ -3062,11 +3026,8 @@ mod tests {
 
     #[test]
     fn send_destination_and_method_round_trip() {
-        let sdm = SendDestinationAndMethod {
-            transport_service: 0,
-            destination: b"192.168.1.100:4059".to_vec(),
-            message: 2,
-        };
+        let sdm =
+            SendDestinationAndMethod { transport_service: 0, destination: b"192.168.1.100:4059".to_vec(), message: 2 };
         round_trip(&sdm);
     }
 
@@ -3116,10 +3077,7 @@ mod tests {
 
     #[test]
     fn object_definition_round_trip() {
-        let od = ObjectDefinition {
-            class_id: 3,
-            logical_name: obis(0, 0, 1, 0, 0, 255),
-        };
+        let od = ObjectDefinition { class_id: 3, logical_name: obis(0, 0, 1, 0, 0, 255) };
         round_trip(&od);
     }
 
@@ -3129,10 +3087,7 @@ mod tests {
 
     #[test]
     fn register_act_mask_round_trip() {
-        let ram = RegisterActMask {
-            mask_name: b"DayTariff".to_vec(),
-            index_list: vec![1, 3, 5],
-        };
+        let ram = RegisterActMask { mask_name: b"DayTariff".to_vec(), index_list: vec![1, 3, 5] };
         round_trip(&ram);
     }
 
@@ -3142,10 +3097,7 @@ mod tests {
 
     #[test]
     fn image_to_activate_info_round_trip() {
-        let itai = ImageToActivateInfo {
-            image_block_number: 1,
-            image_block_value: vec![0x01, 0x02, 0x03, 0x04],
-        };
+        let itai = ImageToActivateInfo { image_block_number: 1, image_block_value: vec![0x01, 0x02, 0x03, 0x04] };
         round_trip(&itai);
     }
 
@@ -3155,10 +3107,7 @@ mod tests {
 
     #[test]
     fn executed_script_round_trip() {
-        let es = ExecutedScript {
-            script_logical_name: obis(0, 0, 10, 100, 0, 255),
-            script_selector: 1,
-        };
+        let es = ExecutedScript { script_logical_name: obis(0, 0, 10, 100, 0, 255), script_selector: 1 };
         round_trip(&es);
     }
 
@@ -3168,10 +3117,7 @@ mod tests {
 
     #[test]
     fn sap_assignment_entry_round_trip() {
-        let sae = SapAssignmentEntry {
-            sap: 1,
-            logical_device_name: b"Meter01".to_vec(),
-        };
+        let sae = SapAssignmentEntry { sap: 1, logical_device_name: b"Meter01".to_vec() };
         round_trip(&sae);
     }
 
@@ -3181,11 +3127,8 @@ mod tests {
 
     #[test]
     fn gsm_adjacent_cell_round_trip() {
-        let gac = GsmAdjacentCell {
-            cell_id: vec![0x01, 0x02],
-            signal_quality: vec![0x03],
-            signal_strength: vec![0x04],
-        };
+        let gac =
+            GsmAdjacentCell { cell_id: vec![0x01, 0x02], signal_quality: vec![0x03], signal_strength: vec![0x04] };
         round_trip(&gac);
     }
 
@@ -3195,11 +3138,7 @@ mod tests {
 
     #[test]
     fn protection_object_round_trip() {
-        let po = ProtectionObject {
-            class_id: 3,
-            logical_name: obis(0, 0, 1, 0, 0, 255),
-            attribute_index: 2,
-        };
+        let po = ProtectionObject { class_id: 3, logical_name: obis(0, 0, 1, 0, 0, 255), attribute_index: 2 };
         round_trip(&po);
     }
 
@@ -3209,10 +3148,7 @@ mod tests {
 
     #[test]
     fn ip_option_round_trip() {
-        let io = IpOption {
-            option_type: 7,
-            option_value: vec![0xC0, 0xA8, 0x01, 0x01],
-        };
+        let io = IpOption { option_type: 7, option_value: vec![0xC0, 0xA8, 0x01, 0x01] };
         round_trip(&io);
     }
 
@@ -3223,7 +3159,9 @@ mod tests {
     #[test]
     fn neighbor_discovery_setup_round_trip() {
         let nds = NeighborDiscoverySetup {
-            ip_address: vec![0xFE, 0x80, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x01],
+            ip_address: vec![
+                0xFE, 0x80, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x01,
+            ],
             hardware_address: vec![0x00, 0x1A, 0x2B, 0x3C, 0x4D, 0x5E],
         };
         round_trip(&nds);
@@ -3236,12 +3174,8 @@ mod tests {
     #[test]
     fn ber_round_trip_access_right() {
         let ar = AccessRight {
-            attribute_access: vec![
-                AttributeAccessItem { attribute_id: 1, access_mode: 1, access_selectors: None },
-            ],
-            method_access: vec![
-                MethodAccessItem { method_id: 1, access_mode: 1 },
-            ],
+            attribute_access: vec![AttributeAccessItem { attribute_id: 1, access_mode: 1, access_selectors: None }],
+            method_access: vec![MethodAccessItem { method_id: 1, access_mode: 1 }],
         };
         let cd: CosemDataType = ar.clone().into();
         let mut buf = Vec::new();
@@ -3258,10 +3192,7 @@ mod tests {
             class_id: 15,
             version: 1,
             logical_name: obis(0, 0, 40, 0, 0, 255),
-            access_rights: AccessRight {
-                attribute_access: vec![],
-                method_access: vec![],
-            },
+            access_rights: AccessRight { attribute_access: vec![], method_access: vec![] },
         };
         let cd: CosemDataType = ole.clone().into();
         let mut buf = Vec::new();
@@ -3276,15 +3207,13 @@ mod tests {
     fn ber_round_trip_script() {
         let script = Script {
             script_identifier: 42,
-            actions: vec![
-                ActionSpecification {
-                    service_id: 1,
-                    class_id: 3,
-                    logical_name: obis(0, 0, 1, 0, 0, 255),
-                    index: 2,
-                    parameter: CosemDataType::DoubleLongUnsigned(12345),
-                },
-            ],
+            actions: vec![ActionSpecification {
+                service_id: 1,
+                class_id: 3,
+                logical_name: obis(0, 0, 1, 0, 0, 255),
+                index: 2,
+                parameter: CosemDataType::DoubleLongUnsigned(12345),
+            }],
         };
         let cd: CosemDataType = script.clone().into();
         let mut buf = Vec::new();
@@ -3356,10 +3285,7 @@ mod tests {
 
     #[test]
     fn xdlms_context_info_wrong_fields() {
-        let cd = CosemDataType::Structure(vec![
-            CosemDataType::BitString(vec![0]),
-            CosemDataType::LongUnsigned(1024),
-        ]);
+        let cd = CosemDataType::Structure(vec![CosemDataType::BitString(vec![0]), CosemDataType::LongUnsigned(1024)]);
         assert!(XDLMSContextInfo::try_from(&cd).is_err());
     }
 
@@ -3411,12 +3337,24 @@ mod tests {
 
         test_ber!(ActionItem { script_logical_name: obis(0, 0, 10, 100, 0, 255), script_selector: 1 }, ActionItem);
         test_ber!(ObjectDefinition { class_id: 3, logical_name: obis(0, 0, 1, 0, 0, 255) }, ObjectDefinition);
-        test_ber!(ExecutedScript { script_logical_name: obis(0, 0, 10, 100, 0, 255), script_selector: 2 }, ExecutedScript);
-        test_ber!(ValueDefinition { class_id: 5, logical_name: obis(0, 0, 96, 1, 0, 255), attribute_index: 2 }, ValueDefinition);
-        test_ber!(ProtectionObject { class_id: 3, logical_name: obis(0, 0, 1, 0, 0, 255), attribute_index: 1 }, ProtectionObject);
+        test_ber!(
+            ExecutedScript { script_logical_name: obis(0, 0, 10, 100, 0, 255), script_selector: 2 },
+            ExecutedScript
+        );
+        test_ber!(
+            ValueDefinition { class_id: 5, logical_name: obis(0, 0, 96, 1, 0, 255), attribute_index: 2 },
+            ValueDefinition
+        );
+        test_ber!(
+            ProtectionObject { class_id: 3, logical_name: obis(0, 0, 1, 0, 0, 255), attribute_index: 1 },
+            ProtectionObject
+        );
         test_ber!(SapAssignmentEntry { sap: 1, logical_device_name: b"Meter".to_vec() }, SapAssignmentEntry);
         test_ber!(IpOption { option_type: 7, option_value: vec![192, 168, 1, 1] }, IpOption);
-        test_ber!(GsmAdjacentCell { cell_id: vec![1], signal_quality: vec![2], signal_strength: vec![3] }, GsmAdjacentCell);
+        test_ber!(
+            GsmAdjacentCell { cell_id: vec![1], signal_quality: vec![2], signal_strength: vec![3] },
+            GsmAdjacentCell
+        );
         test_ber!(RegisterActMask { mask_name: b"Day".to_vec(), index_list: vec![1, 2] }, RegisterActMask);
         test_ber!(ImageToActivateInfo { image_block_number: 1, image_block_value: vec![0xAA] }, ImageToActivateInfo);
         test_ber!(
@@ -3424,45 +3362,89 @@ mod tests {
             SpecialDayEntry
         );
         test_ber!(
-            SeasonProfile { season_profile_name: b"Summer".to_vec(), season_start: vec![0u8; 12], week_name: b"W1".to_vec() },
+            SeasonProfile {
+                season_profile_name: b"Summer".to_vec(),
+                season_start: vec![0u8; 12],
+                week_name: b"W1".to_vec()
+            },
             SeasonProfile
         );
         test_ber!(
-            WeekProfile { week_profile_name: b"W1".to_vec(), monday: 1, tuesday: 2, wednesday: 3, thursday: 4, friday: 5, saturday: 6, sunday: 7 },
+            WeekProfile {
+                week_profile_name: b"W1".to_vec(),
+                monday: 1,
+                tuesday: 2,
+                wednesday: 3,
+                thursday: 4,
+                friday: 5,
+                saturday: 6,
+                sunday: 7
+            },
             WeekProfile
         );
         test_ber!(
-            DayProfileAction { start_time: vec![8, 0, 0], script_logical_name: obis(0, 0, 10, 100, 0, 255), script_selector: 1 },
+            DayProfileAction {
+                start_time: vec![8, 0, 0],
+                script_logical_name: obis(0, 0, 10, 100, 0, 255),
+                script_selector: 1
+            },
             DayProfileAction
         );
         test_ber!(
-            DayProfile { day_id: 1, day_schedule: vec![DayProfileAction { start_time: vec![8, 0, 0], script_logical_name: obis(0, 0, 10, 100, 0, 255), script_selector: 1 }] },
+            DayProfile {
+                day_id: 1,
+                day_schedule: vec![DayProfileAction {
+                    start_time: vec![8, 0, 0],
+                    script_logical_name: obis(0, 0, 10, 100, 0, 255),
+                    script_selector: 1
+                }]
+            },
             DayProfile
         );
         test_ber!(
-            NeighborDiscoverySetup { ip_address: vec![0xFE, 0x80, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1], hardware_address: vec![0, 1, 2, 3, 4, 5] },
+            NeighborDiscoverySetup {
+                ip_address: vec![0xFE, 0x80, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1],
+                hardware_address: vec![0, 1, 2, 3, 4, 5]
+            },
             NeighborDiscoverySetup
         );
+        test_ber!(AssociatedPartnersId { client_sap: 1, server_sap: 16 }, AssociatedPartnersId);
         test_ber!(
-            AssociatedPartnersId { client_sap: 1, server_sap: 16 },
-            AssociatedPartnersId
-        );
-        test_ber!(
-            XDLMSContextInfo { conformance: vec![0; 18], max_receive_pdu_size: 1024, max_send_pdu_size: 1024, dlms_version_number: 6, quality_of_service: -1, cyphering_info: vec![] },
+            XDLMSContextInfo {
+                conformance: vec![0; 18],
+                max_receive_pdu_size: 1024,
+                max_send_pdu_size: 1024,
+                dlms_version_number: 6,
+                quality_of_service: -1,
+                cyphering_info: vec![]
+            },
             XDLMSContextInfo
         );
         test_ber!(
-            CommunicationWindow { begin: DateTime::from_ymdhms(2025, 1, 1, 8, 0, 0), end: DateTime::from_ymdhms(2025, 12, 31, 18, 0, 0) },
+            CommunicationWindow {
+                begin: DateTime::from_ymdhms(2025, 1, 1, 8, 0, 0),
+                end: DateTime::from_ymdhms(2025, 12, 31, 18, 0, 0)
+            },
             CommunicationWindow
         );
         test_ber!(
-            EmergencyProfile { emergency_profile_id: 1, emergency_activation_time: vec![0u8; 12], emergency_duration: 3600 },
+            EmergencyProfile {
+                emergency_profile_id: 1,
+                emergency_activation_time: vec![0u8; 12],
+                emergency_duration: 3600
+            },
             EmergencyProfile
         );
         test_ber!(
             LimiterAction {
-                action_over_threshold: ActionItem { script_logical_name: obis(0, 0, 10, 100, 0, 255), script_selector: 1 },
-                action_under_threshold: ActionItem { script_logical_name: obis(0, 0, 10, 100, 0, 255), script_selector: 2 },
+                action_over_threshold: ActionItem {
+                    script_logical_name: obis(0, 0, 10, 100, 0, 255),
+                    script_selector: 1
+                },
+                action_under_threshold: ActionItem {
+                    script_logical_name: obis(0, 0, 10, 100, 0, 255),
+                    script_selector: 2
+                },
             },
             LimiterAction
         );
@@ -3478,25 +3460,32 @@ mod tests {
             SendDestinationAndMethod
         );
         test_ber!(
-            ActionSpecification { service_id: 1, class_id: 3, logical_name: obis(0, 0, 1, 0, 0, 255), index: 2, parameter: CosemDataType::Null },
+            ActionSpecification {
+                service_id: 1,
+                class_id: 3,
+                logical_name: obis(0, 0, 1, 0, 0, 255),
+                index: 2,
+                parameter: CosemDataType::Null
+            },
             ActionSpecification
         );
-        test_ber!(
-            Script { script_identifier: 1, actions: vec![] },
-            Script
-        );
+        test_ber!(Script { script_identifier: 1, actions: vec![] }, Script);
         test_ber!(
             ScheduleTableEntry {
-                index: 1, enable: true, script_logical_name: obis(0, 0, 10, 100, 0, 255), script_selector: 1,
-                switch_time: vec![0x10, 0, 0], validity_window: 60, exec_weekdays: vec![0x7F], exec_specdays: vec![0],
-                begin_date: vec![0x07, 0xE5, 1, 1, 0xFF], end_date: vec![0x07, 0xE5, 12, 31, 0xFF],
+                index: 1,
+                enable: true,
+                script_logical_name: obis(0, 0, 10, 100, 0, 255),
+                script_selector: 1,
+                switch_time: vec![0x10, 0, 0],
+                validity_window: 60,
+                exec_weekdays: vec![0x7F],
+                exec_specdays: vec![0],
+                begin_date: vec![0x07, 0xE5, 1, 1, 0xFF],
+                end_date: vec![0x07, 0xE5, 12, 31, 0xFF],
             },
             ScheduleTableEntry
         );
-        test_ber!(
-            DateTime::new([0x07, 0xE5, 0x05, 0x01, 0x02, 0x10, 0x30, 0x00, 0x00, 0x00, 0x00, 0x00]),
-            DateTime
-        );
+        test_ber!(DateTime::new([0x07, 0xE5, 0x05, 0x01, 0x02, 0x10, 0x30, 0x00, 0x00, 0x00, 0x00, 0x00]), DateTime);
         test_ber!(ScalerUnit::new(-2, 30), ScalerUnit);
         test_ber!(CaptureObjectDefinition::new(3, obis(0, 0, 1, 0, 0, 255), 2, 0), CaptureObjectDefinition);
         test_ber!(AttributeAccessItem { attribute_id: 1, access_mode: 1, access_selectors: None }, AttributeAccessItem);
@@ -3510,14 +3499,13 @@ mod tests {
         );
         test_ber!(
             ObjectListElement {
-                class_id: 3, version: 0, logical_name: obis(0, 0, 1, 0, 0, 255),
+                class_id: 3,
+                version: 0,
+                logical_name: obis(0, 0, 1, 0, 0, 255),
                 access_rights: AccessRight { attribute_access: vec![], method_access: vec![] },
             },
             ObjectListElement
         );
-        test_ber!(
-            ContextName::OctetString(vec![0x09, 0x07, 0x60, 0x85, 0x74, 0x05, 0x08, 0x01, 0x01]),
-            ContextName
-        );
+        test_ber!(ContextName::OctetString(vec![0x09, 0x07, 0x60, 0x85, 0x74, 0x05, 0x08, 0x01, 0x01]), ContextName);
     }
 }

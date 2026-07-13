@@ -4,9 +4,9 @@ use std::sync::Arc;
 
 use crate::classes::data::Data;
 use crate::classes::profile_generic::{ProfileGeneric, ProfileGenericConfig};
-use crate::types::attrs::SortMethod;
 use crate::interface::InterfaceClass;
 use crate::obis::ObisCode;
+use crate::types::attrs::SortMethod;
 use crate::types::CosemDataType;
 
 /// Builds a СТО-013 reference `ProfileGeneric` (IC 7, v1): each code in

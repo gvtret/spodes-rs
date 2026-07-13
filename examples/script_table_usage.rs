@@ -13,15 +13,12 @@ fn main() {
     // Каждый скрипт — структура с идентификатором и действием
     let action = ActionSpecification {
         service_id: 1,
-        class_id: 3,                                    // Register
+        class_id: 3, // Register
         logical_name: ObisCode::new(1, 0, 1, 8, 0, 255),
-        index: 1,                                       // method_index: reset
+        index: 1, // method_index: reset
         parameter: CosemDataType::Null,
     };
-    let scripts = vec![Script {
-        script_identifier: 1,
-        actions: vec![action],
-    }];
+    let scripts = vec![Script { script_identifier: 1, actions: vec![action] }];
 
     // Создаём конфигурацию ScriptTable
     let config = ScriptTableConfig { logical_name: obis.clone(), scripts: scripts.clone() };

@@ -115,12 +115,11 @@ impl InterfaceClass for SapAssignment {
             return Err(BerError::InvalidTag);
         }
         self.sap_assignment_list = match &seq[2] {
-            CosemDataType::Array(list) => {
-                list.iter()
-                    .map(SapAssignmentEntry::try_from)
-                    .collect::<Result<Vec<_>, _>>()
-                    .map_err(|_| BerError::InvalidValue)?
-            }
+            CosemDataType::Array(list) => list
+                .iter()
+                .map(SapAssignmentEntry::try_from)
+                .collect::<Result<Vec<_>, _>>()
+                .map_err(|_| BerError::InvalidValue)?,
             _ => return Err(BerError::InvalidTag),
         };
         Ok(())
@@ -159,10 +158,7 @@ mod tests {
     fn sample() -> SapAssignment {
         SapAssignment::new(SapAssignmentConfig {
             logical_name: ObisCode::new(0, 0, 41, 0, 0, 255),
-            sap_assignment_list: vec![SapAssignmentEntry {
-                sap: 1,
-                logical_device_name: b"MANLD".to_vec(),
-            }],
+            sap_assignment_list: vec![SapAssignmentEntry { sap: 1, logical_device_name: b"MANLD".to_vec() }],
         })
     }
 

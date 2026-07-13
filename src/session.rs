@@ -75,11 +75,7 @@ pub struct SessionConfig {
 
 impl Default for SessionConfig {
     fn default() -> Self {
-        SessionConfig {
-            request_timeout: None,
-            max_retries: 0,
-            retry_delay: Duration::from_millis(100),
-        }
+        SessionConfig { request_timeout: None, max_retries: 0, retry_delay: Duration::from_millis(100) }
     }
 }
 
@@ -258,12 +254,7 @@ pub struct ClientSessionBuilder<L: DataLinkLayer> {
 impl<L: DataLinkLayer> ClientSessionBuilder<L> {
     /// Creates a new builder with the given transport link.
     pub fn new(link: L) -> Self {
-        ClientSessionBuilder {
-            link,
-            config: SessionConfig::default(),
-            tx_cipher: None,
-            rx_cipher: None,
-        }
+        ClientSessionBuilder { link, config: SessionConfig::default(), tx_cipher: None, rx_cipher: None }
     }
 
     /// Sets the request timeout. If a response is not received within this
@@ -501,10 +492,7 @@ impl<L: DataLinkLayer> ClientSession<L> {
 
     /// Convenience method: releases with normal reason.
     pub fn release_normal(&mut self) -> Result<ReleaseResponse, SessionError> {
-        let rlrq = ReleaseRequest {
-            reason: Some(acse::release_reason::NORMAL),
-            user_information: None,
-        };
+        let rlrq = ReleaseRequest { reason: Some(acse::release_reason::NORMAL), user_information: None };
         self.release(&rlrq)
     }
 
@@ -672,8 +660,7 @@ impl<L: DataLinkLayer> ClientSession<L> {
                 std::thread::sleep(self.config.retry_delay);
             }
 
-            let result =
-                self.transact_once(plain_request, glo_request_tag, expected_response_tag);
+            let result = self.transact_once(plain_request, glo_request_tag, expected_response_tag);
 
             match result {
                 Ok(reply) => {
@@ -973,16 +960,16 @@ mod tests {
         let fail_until = 2;
         let link = FailingLink::new(fail_until);
 
-        let mut session = ClientSession::builder(link)
-            .max_retries(3)
-            .retry_delay(Duration::from_millis(10))
-            .build();
+        let mut session = ClientSession::builder(link).max_retries(3).retry_delay(Duration::from_millis(10)).build();
 
         let got = session.get(1, ObisCode::new(0, 0, 0x80, 0, 0, 0xFF), 2).unwrap();
-        assert_eq!(got, GetResponse::Normal {
-            invoke_id_and_priority: 0xC1,
-            result: GetDataResult::Data(CosemDataType::LongUnsigned(0x1234)),
-        });
+        assert_eq!(
+            got,
+            GetResponse::Normal {
+                invoke_id_and_priority: 0xC1,
+                result: GetDataResult::Data(CosemDataType::LongUnsigned(0x1234)),
+            }
+        );
     }
 
     #[test]
@@ -993,9 +980,7 @@ mod tests {
 
         impl AlwaysFailLink {
             fn new() -> Self {
-                AlwaysFailLink {
-                    wrapper: Wrapper::new(MemoryTransport::new(), 1, 16),
-                }
+                AlwaysFailLink { wrapper: Wrapper::new(MemoryTransport::new(), 1, 16) }
             }
         }
 
@@ -1010,10 +995,7 @@ mod tests {
         }
 
         let link = AlwaysFailLink::new();
-        let mut session = ClientSession::builder(link)
-            .max_retries(2)
-            .retry_delay(Duration::from_millis(10))
-            .build();
+        let mut session = ClientSession::builder(link).max_retries(2).retry_delay(Duration::from_millis(10)).build();
 
         let result = session.get(1, ObisCode::new(0, 0, 0x80, 0, 0, 0xFF), 2);
         assert!(result.is_err());
@@ -1221,10 +1203,7 @@ mod tests {
 
     #[test]
     fn aarq_builder_encodes_correctly() {
-        let aarq = AarqBuilder::new()
-            .mechanism(acse::mechanism::LLS)
-            .authentication_value(b"test".to_vec())
-            .build();
+        let aarq = AarqBuilder::new().mechanism(acse::mechanism::LLS).authentication_value(b"test".to_vec()).build();
         let encoded = aarq.encode();
         // Should be a valid AARQ APDU
         assert_eq!(encoded[0], acse::AARQ_TAG);

@@ -170,9 +170,7 @@ impl InterfaceClass for ImageTransfer {
             (4, CosemDataType::DoubleLongUnsigned(self.image_first_not_transferred_block_number)),
             (5, CosemDataType::Boolean(self.image_transfer_enabled)),
             (6, CosemDataType::Enum(self.image_transfer_status)),
-            (7, CosemDataType::Array(
-                self.image_to_activate_info.iter().cloned().map(CosemDataType::from).collect(),
-            )),
+            (7, CosemDataType::Array(self.image_to_activate_info.iter().cloned().map(CosemDataType::from).collect())),
         ]
     }
 

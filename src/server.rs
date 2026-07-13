@@ -15,14 +15,14 @@ use crate::classes::association_ln::AssociationLn;
 use crate::interface::InterfaceClass;
 use crate::obis::ObisCode;
 
-#[cfg(feature = "tracing")]
-use tracing::{debug, warn};
 use crate::service::action::{ActionRequest, ActionResponse};
 use crate::service::error::{service_error, state_error, ExceptionResponse};
 use crate::service::get::{GetDataResult, GetRequest, GetResponse};
 use crate::service::set::{SetRequest, SetResponse};
 use crate::service::{data_access_result, tag, AttributeDescriptor, DataBlockSa, MethodDescriptor, ServiceError};
 use crate::types::CosemDataType;
+#[cfg(feature = "tracing")]
+use tracing::{debug, warn};
 
 /// Default block-transfer payload size. A GET result larger than this is sent in
 /// GET-RESPONSE-WITH-DATABLOCK blocks of at most this many octets.

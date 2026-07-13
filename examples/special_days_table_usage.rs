@@ -43,9 +43,9 @@ fn main() {
 
     // Добавляем новую дату (25 декабря 2025)
     let new_date = CosemDataType::Structure(vec![
-        CosemDataType::LongUnsigned(2), // index
+        CosemDataType::LongUnsigned(2),                                             // index
         CosemDataType::OctetString(vec![0x07, 0xE5, 0x12, 0x25, 0xFF, 0xFF, 0xFF]), // 25 декабря 2025
-        CosemDataType::Unsigned(2), // day_id
+        CosemDataType::Unsigned(2),                                                 // day_id
     ]);
     let result = special_days_table.invoke_method(1, Some(new_date.clone())).expect("Insert method failed");
     println!("Insert result: {:?}", result);
