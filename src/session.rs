@@ -922,6 +922,7 @@ mod tests {
         use std::sync::{Arc, Mutex};
 
         struct FailingLink {
+            #[allow(dead_code)]
             wrapper: Wrapper<MemoryTransport>,
             fail_count: Arc<Mutex<u32>>,
             fail_until: u32,
@@ -975,6 +976,7 @@ mod tests {
     #[test]
     fn get_fails_after_max_retries() {
         struct AlwaysFailLink {
+            #[allow(dead_code)]
             wrapper: Wrapper<MemoryTransport>,
         }
 

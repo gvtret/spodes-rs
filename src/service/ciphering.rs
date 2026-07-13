@@ -33,7 +33,8 @@ use kuznyechik::Kuznyechik;
 type Aes128Gcm12 = AesGcm<Aes128, U12, U12>;
 /// AES-256-GCM with a 96-bit (12-octet) authentication tag.
 type Aes256Gcm12 = AesGcm<Aes256, U12, U12>;
-/// Kuznyechik CMAC type.
+/// Kuznyechik CMAC type (used internally).
+#[allow(dead_code)]
 type KuznyechikCmac = Cmac<Kuznyechik>;
 
 /// Bit masks of the security control byte (SC), IEC 62056-5-3 Table 27.
