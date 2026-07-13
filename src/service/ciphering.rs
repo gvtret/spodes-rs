@@ -25,7 +25,7 @@ use aes_gcm::aead::consts::U12;
 use aes_gcm::aes::{Aes128, Aes256};
 use aes_gcm::KeyInit as AesKeyInit;
 use aes_gcm::{AesGcm, Nonce, Tag};
-use cipher::block::{BlockCipherDecrypt, BlockCipherEncrypt};
+use cipher::block::BlockCipherEncrypt;
 use cmac::Cmac;
 use kuznyechik::Kuznyechik;
 
@@ -439,7 +439,7 @@ fn gost_cmac_tag(key: &[u8], data: &[u8]) -> Result<Vec<u8>, CipherError> {
 
     // Process data in 16-byte blocks
     let mut state = [0u8; 16];
-    let mut chunks: Vec<&[u8]> = data.chunks(16).collect();
+    let chunks: Vec<&[u8]> = data.chunks(16).collect();
     let last_block = data.chunks(16).last();
 
     if data.is_empty() || last_block.map_or(false, |b| b.len() == 16) {
@@ -541,7 +541,7 @@ pub fn gost_gmac_tag(key: &[u8], iv: &[u8; 12], aad: &[u8], plaintext: &[u8]) ->
     // Generate hash subkey H = E(K, 0^128)
     let mut h = cipher::Array::from([0u8; 16]);
     cipher.clone().encrypt_block(&mut h);
-    let h_bytes: [u8; 16] = h.into();
+    let _h_bytes: [u8; 16] = h.into();
 
     // Compute GHASH over AAD || ciphertext || len(AAD)||len(ciphertext)
     let mut state = [0u8; 16];
