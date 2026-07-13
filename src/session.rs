@@ -10,7 +10,7 @@
 //!
 //! # Timeouts and retries
 //!
-//! Use [`ClientSession::builder`] to configure per-request timeouts and
+//! Use the `ClientSessionBuilder` to configure per-request timeouts and
 //! automatic retries for transient errors:
 //!
 //! ```no_run
