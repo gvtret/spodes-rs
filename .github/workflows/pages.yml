@@ -31,6 +31,22 @@ jobs:
       - name: Add .nojekyll
         run: touch target/doc/.nojekyll
 
+      - name: Add root redirect
+        run: |
+          cat > target/doc/index.html << 'EOF'
+          <!DOCTYPE html>
+          <html>
+          <head>
+            <meta charset="utf-8">
+            <meta http-equiv="refresh" content="0; url=./spodes_rs/index.html">
+            <title>spodes-rs</title>
+          </head>
+          <body>
+            <p>Redirecting to <a href="./spodes_rs/index.html">spodes-rs documentation</a>...</p>
+          </body>
+          </html>
+          EOF
+
       - name: Upload Pages artifact
         uses: actions/upload-pages-artifact@v3
         with:
