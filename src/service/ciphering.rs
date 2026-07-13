@@ -442,7 +442,7 @@ fn gost_cmac_tag(key: &[u8], data: &[u8]) -> Result<Vec<u8>, CipherError> {
     let chunks: Vec<&[u8]> = data.chunks(16).collect();
     let last_block = data.chunks(16).last();
 
-    if data.is_empty() || last_block.map_or(false, |b| b.len() == 16) {
+    if data.is_empty() || last_block.is_some_and(|b| b.len() == 16) {
         // Data is empty or last block is full
         for chunk in &chunks {
             xor_blocks(&mut state, chunk);
@@ -450,7 +450,7 @@ fn gost_cmac_tag(key: &[u8], data: &[u8]) -> Result<Vec<u8>, CipherError> {
             cipher.clone().encrypt_block(&mut block);
             state = block.into();
         }
-        if !data.is_empty() && last_block.map_or(false, |b| b.len() == 16) {
+        if !data.is_empty() && last_block.is_some_and(|b| b.len() == 16) {
             // XOR K1 into state before final block
             xor_blocks(&mut state, &k1);
             let mut block = cipher::Array::from(state);

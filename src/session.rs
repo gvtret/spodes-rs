@@ -954,7 +954,7 @@ mod tests {
                     invoke_id_and_priority: 0xC1,
                     result: GetDataResult::Data(CosemDataType::LongUnsigned(0x1234)),
                 };
-                response.encode().map_err(|e| io::Error::new(io::ErrorKind::Other, e.to_string()))
+                response.encode().map_err(|e| io::Error::other(e.to_string()))
             }
         }
 
