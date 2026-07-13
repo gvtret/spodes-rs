@@ -13,7 +13,7 @@
 //!
 //! [![GitHub Pages](https://img.shields.io/badge/docs-GitHub%20Pages-blue)](https://gvtret.github.io/spodes-rs/)
 //! [![crates.io](https://img.shields.io/crates/v/spodes-rs.svg)](https://crates.io/crates/spodes-rs)
-#![cfg_attr(docsrs, feature(doc_auto_cfg))]
+#![cfg_attr(docsrs, feature(doc_cfg))]
 #![doc(html_root_url = "https://gvtret.github.io/spodes-rs/")]
 //!
 //! # The stack
