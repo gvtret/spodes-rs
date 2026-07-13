@@ -7,7 +7,9 @@
 use spodes_rs::classes::push_setup::{PushSetup, PushSetupConfig};
 use spodes_rs::interface::InterfaceClass;
 use spodes_rs::obis::ObisCode;
-use spodes_rs::types::attrs::{CommunicationWindow, DateTime, SendDestinationAndMethod};
+use spodes_rs::types::attrs::{
+    CaptureObjectDefinition, CommunicationWindow, ConfirmationParameters, DateTime, SendDestinationAndMethod,
+};
 use spodes_rs::types::CosemDataType;
 
 fn main() {
@@ -25,18 +27,10 @@ fn main() {
     };
 
     // 3. The objects whose values will be pushed.
-    //    Each entry is { class_id, logical_name, attribute_index }.
+    //    Each entry is { class_id, logical_name, attribute_index, data_index }.
     let push_objects = vec![
-        CosemDataType::Structure(vec![
-            CosemDataType::LongUnsigned(3),                       // Register class
-            CosemDataType::OctetString(vec![0, 0, 1, 0, 0, 255]), // OBIS 0.0.1.0.0.255
-            CosemDataType::Unsigned(2),                           // attr 2 = value
-        ]),
-        CosemDataType::Structure(vec![
-            CosemDataType::LongUnsigned(1),                        // Data class
-            CosemDataType::OctetString(vec![0, 0, 96, 1, 0, 255]), // OBIS 0.0.96.1.0.255
-            CosemDataType::Unsigned(2),
-        ]),
+        CaptureObjectDefinition::new(3, ObisCode::new(0, 0, 1, 0, 0, 255), 2, 0), // Register class, attr 2
+        CaptureObjectDefinition::new(1, ObisCode::new(0, 0, 96, 1, 0, 255), 2, 0), // Data class, attr 2
     ];
 
     // 4. Build the Push Setup object.
@@ -53,8 +47,8 @@ fn main() {
         push_client_sap: 0,
         push_protection_parameters: vec![],
         push_operation_method: 0,
-        confirmation_parameters: CosemDataType::Null,
-        last_confirmation_date_time: CosemDataType::Null,
+        confirmation_parameters: ConfirmationParameters { data: vec![] },
+        last_confirmation_date_time: DateTime::new([0u8; 12]),
     };
 
     let mut push = PushSetup::new(config);

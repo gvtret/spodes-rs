@@ -12,7 +12,6 @@ use crate::classes::sap_assignment::{SapAssignment, SapAssignmentConfig};
 use crate::classes::security_setup::{SecuritySetup, SecuritySetupConfig};
 use crate::obis::ObisCode;
 use crate::types::attrs::{AssociatedPartnersId, ContextName, SapAssignmentEntry, XDLMSContextInfo};
-use crate::types::CosemDataType;
 
 use super::obis;
 
@@ -83,11 +82,11 @@ pub fn association(obis: ObisCode, mechanism: AuthenticationMechanism, security_
             cyphering_info: vec![],
         },
         authentication_mechanism: mechanism,
-        secret: CosemDataType::OctetString(vec![]),
+        secret: vec![],
         association_status: 0,
         security_setup_reference: security_setup_ref,
         user_list: vec![],
-        current_user: CosemDataType::Null,
+        current_user: None,
     })
 }
 

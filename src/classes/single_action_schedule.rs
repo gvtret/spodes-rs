@@ -1,6 +1,6 @@
 use crate::interface::InterfaceClass;
 use crate::obis::ObisCode;
-use crate::types::attrs::ExecutedScript;
+use crate::types::attrs::{ExecutedScript, ExecutionTime};
 use crate::types::{BerError, CosemDataType};
 use serde::{Deserialize, Serialize};
 use std::any::Any;
@@ -15,7 +15,7 @@ pub struct SingleActionScheduleConfig {
     /// Attribute 3: schedule type (enum 1..6, defines date/time wildcard handling).
     pub schedule_type: u8,
     /// Attribute 4: array of `execution_time` structures { time, date }.
-    pub execution_time: Vec<CosemDataType>,
+    pub execution_time: Vec<ExecutionTime>,
 }
 
 /// `Single action schedule` interface class (class_id = 22, version = 0) per
@@ -28,7 +28,7 @@ pub struct SingleActionSchedule {
     logical_name: ObisCode,
     executed_script: ExecutedScript,
     schedule_type: u8,
-    execution_time: Vec<CosemDataType>,
+    execution_time: Vec<ExecutionTime>,
 }
 
 impl SingleActionSchedule {
@@ -61,7 +61,7 @@ impl InterfaceClass for SingleActionSchedule {
             (1, CosemDataType::OctetString(self.logical_name.to_bytes())),
             (2, CosemDataType::from(self.executed_script.clone())),
             (3, CosemDataType::Enum(self.schedule_type)),
-            (4, CosemDataType::Array(self.execution_time.clone())),
+            (4, CosemDataType::Array(self.execution_time.iter().cloned().map(CosemDataType::from).collect())),
         ]
     }
 
@@ -117,7 +117,11 @@ impl InterfaceClass for SingleActionSchedule {
             _ => return Err(BerError::InvalidTag),
         };
         self.execution_time = match &seq[4] {
-            CosemDataType::Array(list) => list.clone(),
+            CosemDataType::Array(list) => list
+                .iter()
+                .map(ExecutionTime::try_from)
+                .collect::<Result<Vec<_>, _>>()
+                .map_err(|_| BerError::InvalidValue)?,
             _ => return Err(BerError::InvalidTag),
         };
         Ok(())
@@ -158,10 +162,10 @@ mod tests {
                 script_selector: 1,
             },
             schedule_type: 1,
-            execution_time: vec![CosemDataType::Structure(vec![
-                CosemDataType::OctetString(vec![0x00, 0x00, 0x00, 0xFF]),
-                CosemDataType::OctetString(vec![0xFF, 0xFF, 0xFF, 0xFF, 0xFF]),
-            ])],
+            execution_time: vec![ExecutionTime {
+                time: vec![0x00, 0x00, 0x00, 0xFF],
+                date: vec![0xFF, 0xFF, 0xFF, 0xFF, 0xFF],
+            }],
         })
     }
 

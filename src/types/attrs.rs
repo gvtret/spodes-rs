@@ -2583,6 +2583,386 @@ impl TryFrom<&CosemDataType> for NeighborDiscoverySetup {
     }
 }
 
+// ============================================================================
+// Additional typed structures (Association LN v2, schedules, GPRS, GSM, etc.)
+// ============================================================================
+
+/// User entry for Association LN v2 user_list.
+/// Structure { user_id: unsigned, user_name: visible-string }
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct User {
+    /// User identifier.
+    pub user_id: u8,
+    /// User name (visible string).
+    pub user_name: Vec<u8>,
+}
+
+impl From<User> for CosemDataType {
+    fn from(u: User) -> Self {
+        CosemDataType::Structure(vec![CosemDataType::Unsigned(u.user_id), CosemDataType::OctetString(u.user_name)])
+    }
+}
+
+impl TryFrom<&CosemDataType> for User {
+    type Error = String;
+
+    fn try_from(value: &CosemDataType) -> Result<Self, String> {
+        match value {
+            CosemDataType::Structure(fields) if fields.len() >= 2 => {
+                let user_id = match &fields[0] {
+                    CosemDataType::Unsigned(v) => *v,
+                    _ => return Err("user_id must be unsigned".to_string()),
+                };
+                let user_name = match &fields[1] {
+                    CosemDataType::OctetString(v) => v.clone(),
+                    _ => return Err("user_name must be octet-string".to_string()),
+                };
+                Ok(User { user_id, user_name })
+            }
+            _ => Err("expected structure {user_id, user_name}".to_string()),
+        }
+    }
+}
+
+/// Execution time structure for Single Action Schedule.
+/// Structure { time: octet-string, date: octet-string }
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct ExecutionTime {
+    /// Time value (octet-string).
+    pub time: Vec<u8>,
+    /// Date value (octet-string).
+    pub date: Vec<u8>,
+}
+
+impl From<ExecutionTime> for CosemDataType {
+    fn from(et: ExecutionTime) -> Self {
+        CosemDataType::Structure(vec![CosemDataType::OctetString(et.time), CosemDataType::OctetString(et.date)])
+    }
+}
+
+impl TryFrom<&CosemDataType> for ExecutionTime {
+    type Error = String;
+
+    fn try_from(value: &CosemDataType) -> Result<Self, String> {
+        match value {
+            CosemDataType::Structure(fields) if fields.len() >= 2 => {
+                let time = match &fields[0] {
+                    CosemDataType::OctetString(v) => v.clone(),
+                    _ => return Err("time must be octet-string".to_string()),
+                };
+                let date = match &fields[1] {
+                    CosemDataType::OctetString(v) => v.clone(),
+                    _ => return Err("date must be octet-string".to_string()),
+                };
+                Ok(ExecutionTime { time, date })
+            }
+            _ => Err("expected structure {time, date}".to_string()),
+        }
+    }
+}
+
+/// GSM service parameter for GPRS Modem Setup.
+/// Structure { delay_class, reliability_class, precedence_class, peak_throughput, mean_throughput }
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct GsmServiceParameter {
+    /// Delay class.
+    pub delay_class: u8,
+    /// Reliability class.
+    pub reliability_class: u8,
+    /// Precedence class.
+    pub precedence_class: u8,
+    /// Peak throughput class.
+    pub peak_throughput: u8,
+    /// Mean throughput class.
+    pub mean_throughput: u8,
+}
+
+impl From<GsmServiceParameter> for CosemDataType {
+    fn from(p: GsmServiceParameter) -> Self {
+        CosemDataType::Structure(vec![
+            CosemDataType::Unsigned(p.delay_class),
+            CosemDataType::Unsigned(p.reliability_class),
+            CosemDataType::Unsigned(p.precedence_class),
+            CosemDataType::Unsigned(p.peak_throughput),
+            CosemDataType::Unsigned(p.mean_throughput),
+        ])
+    }
+}
+
+impl TryFrom<&CosemDataType> for GsmServiceParameter {
+    type Error = String;
+
+    fn try_from(value: &CosemDataType) -> Result<Self, String> {
+        match value {
+            CosemDataType::Structure(fields) if fields.len() >= 5 => {
+                let get_u8 = |f: &CosemDataType| -> Result<u8, String> {
+                    match f {
+                        CosemDataType::Unsigned(v) => Ok(*v),
+                        _ => Err("must be unsigned".to_string()),
+                    }
+                };
+                Ok(GsmServiceParameter {
+                    delay_class: get_u8(&fields[0])?,
+                    reliability_class: get_u8(&fields[1])?,
+                    precedence_class: get_u8(&fields[2])?,
+                    peak_throughput: get_u8(&fields[3])?,
+                    mean_throughput: get_u8(&fields[4])?,
+                })
+            }
+            _ => Err("expected structure {delay_class, reliability_class, precedence_class, peak_throughput, mean_throughput}".to_string()),
+        }
+    }
+}
+
+/// Quality of Service structure for GPRS Modem Setup.
+/// Structure { default: gsm_service_parameter, requested: gsm_service_parameter }
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct QualityOfService {
+    /// Default quality of service parameters.
+    pub default: GsmServiceParameter,
+    /// Requested quality of service parameters.
+    pub requested: GsmServiceParameter,
+}
+
+impl From<QualityOfService> for CosemDataType {
+    fn from(qos: QualityOfService) -> Self {
+        CosemDataType::Structure(vec![CosemDataType::from(qos.default), CosemDataType::from(qos.requested)])
+    }
+}
+
+impl TryFrom<&CosemDataType> for QualityOfService {
+    type Error = String;
+
+    fn try_from(value: &CosemDataType) -> Result<Self, String> {
+        match value {
+            CosemDataType::Structure(fields) if fields.len() >= 2 => {
+                let default = GsmServiceParameter::try_from(&fields[0])?;
+                let requested = GsmServiceParameter::try_from(&fields[1])?;
+                Ok(QualityOfService { default, requested })
+            }
+            _ => Err("expected structure {default, requested}".to_string()),
+        }
+    }
+}
+
+/// Cell information for GSM Diagnostic.
+/// Structure with cell_id, location_id, imsi, imei, etc.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct CellInfo {
+    /// Cell ID.
+    pub cell_id: Vec<u8>,
+    /// Location area ID.
+    pub location_id: Vec<u8>,
+    /// IMSI.
+    pub imsi: Vec<u8>,
+    /// IMEI.
+    pub imei: Vec<u8>,
+    /// Routing area code.
+    pub rn: Vec<u8>,
+    /// Cell number.
+    pub cn: Vec<u8>,
+    /// Signal quality.
+    pub signal_quality: Vec<u8>,
+    /// Signal strength.
+    pub signal_strength: Vec<u8>,
+    /// Channel number.
+    pub channel_number: Vec<u8>,
+    /// Cell parameter ID.
+    pub cell_parameter_id: Vec<u8>,
+    /// Base station ID code.
+    pub bsic: Vec<u8>,
+    /// SIM card ICCID.
+    pub iccid: Vec<u8>,
+    /// Location area code.
+    pub lac: Vec<u8>,
+    /// Mobile country code.
+    pub mcc: Vec<u8>,
+    /// Mobile network code.
+    pub mnc: Vec<u8>,
+    /// Temporary mobile subscriber ID.
+    pub tmsi: Vec<u8>,
+    /// Temporary mobile group ID.
+    pub tmgi: Vec<u8>,
+    /// GPRS status.
+    pub gprs_status: Vec<u8>,
+    /// Routing area code.
+    pub routing_area_code: Vec<u8>,
+    /// Geographic address.
+    pub geographic_address: Vec<u8>,
+    /// Access point name.
+    pub access_point_name: Vec<u8>,
+    /// Data transport state.
+    pub data_transport_state: Vec<u8>,
+    /// NMA message.
+    pub nma_message: Vec<u8>,
+}
+
+impl From<CellInfo> for CosemDataType {
+    fn from(ci: CellInfo) -> Self {
+        CosemDataType::Structure(vec![
+            CosemDataType::OctetString(ci.cell_id),
+            CosemDataType::OctetString(ci.location_id),
+            CosemDataType::OctetString(ci.imsi),
+            CosemDataType::OctetString(ci.imei),
+            CosemDataType::OctetString(ci.rn),
+            CosemDataType::OctetString(ci.cn),
+            CosemDataType::OctetString(ci.signal_quality),
+            CosemDataType::OctetString(ci.signal_strength),
+            CosemDataType::OctetString(ci.channel_number),
+            CosemDataType::OctetString(ci.cell_parameter_id),
+            CosemDataType::OctetString(ci.bsic),
+            CosemDataType::OctetString(ci.iccid),
+            CosemDataType::OctetString(ci.lac),
+            CosemDataType::OctetString(ci.mcc),
+            CosemDataType::OctetString(ci.mnc),
+            CosemDataType::OctetString(ci.tmsi),
+            CosemDataType::OctetString(ci.tmgi),
+            CosemDataType::OctetString(ci.gprs_status),
+            CosemDataType::OctetString(ci.routing_area_code),
+            CosemDataType::OctetString(ci.geographic_address),
+            CosemDataType::OctetString(ci.access_point_name),
+            CosemDataType::OctetString(ci.data_transport_state),
+            CosemDataType::OctetString(ci.nma_message),
+        ])
+    }
+}
+
+impl TryFrom<&CosemDataType> for CellInfo {
+    type Error = String;
+
+    fn try_from(value: &CosemDataType) -> Result<Self, String> {
+        match value {
+            CosemDataType::Structure(fields) if fields.len() >= 23 => {
+                let oct = |f: &CosemDataType| -> Result<Vec<u8>, String> {
+                    match f {
+                        CosemDataType::OctetString(v) => Ok(v.clone()),
+                        _ => Err("must be octet-string".to_string()),
+                    }
+                };
+                Ok(CellInfo {
+                    cell_id: oct(&fields[0])?,
+                    location_id: oct(&fields[1])?,
+                    imsi: oct(&fields[2])?,
+                    imei: oct(&fields[3])?,
+                    rn: oct(&fields[4])?,
+                    cn: oct(&fields[5])?,
+                    signal_quality: oct(&fields[6])?,
+                    signal_strength: oct(&fields[7])?,
+                    channel_number: oct(&fields[8])?,
+                    cell_parameter_id: oct(&fields[9])?,
+                    bsic: oct(&fields[10])?,
+                    iccid: oct(&fields[11])?,
+                    lac: oct(&fields[12])?,
+                    mcc: oct(&fields[13])?,
+                    mnc: oct(&fields[14])?,
+                    tmsi: oct(&fields[15])?,
+                    tmgi: oct(&fields[16])?,
+                    gprs_status: oct(&fields[17])?,
+                    routing_area_code: oct(&fields[18])?,
+                    geographic_address: oct(&fields[19])?,
+                    access_point_name: oct(&fields[20])?,
+                    data_transport_state: oct(&fields[21])?,
+                    nma_message: oct(&fields[22])?,
+                })
+            }
+            _ => Err("expected 23-element structure for CellInfo".to_string()),
+        }
+    }
+}
+
+/// Push protection parameter (Push Setup v1+).
+/// Structure { data: octet-string }
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct PushProtectionParameter {
+    /// Protection data (octet-string).
+    pub data: Vec<u8>,
+}
+
+impl From<PushProtectionParameter> for CosemDataType {
+    fn from(pp: PushProtectionParameter) -> Self {
+        CosemDataType::Structure(vec![CosemDataType::OctetString(pp.data)])
+    }
+}
+
+impl TryFrom<&CosemDataType> for PushProtectionParameter {
+    type Error = String;
+
+    fn try_from(value: &CosemDataType) -> Result<Self, String> {
+        match value {
+            CosemDataType::Structure(fields) if !fields.is_empty() => {
+                let data = match &fields[0] {
+                    CosemDataType::OctetString(v) => v.clone(),
+                    _ => return Err("data must be octet-string".to_string()),
+                };
+                Ok(PushProtectionParameter { data })
+            }
+            _ => Err("expected structure {data}".to_string()),
+        }
+    }
+}
+
+/// Confirmation parameters for Push Setup v2.
+/// Structure { data: octet-string }
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct ConfirmationParameters {
+    /// Confirmation data (octet-string).
+    pub data: Vec<u8>,
+}
+
+impl From<ConfirmationParameters> for CosemDataType {
+    fn from(cp: ConfirmationParameters) -> Self {
+        CosemDataType::Structure(vec![CosemDataType::OctetString(cp.data)])
+    }
+}
+
+impl TryFrom<&CosemDataType> for ConfirmationParameters {
+    type Error = String;
+
+    fn try_from(value: &CosemDataType) -> Result<Self, String> {
+        match value {
+            CosemDataType::Structure(fields) if !fields.is_empty() => {
+                let data = match &fields[0] {
+                    CosemDataType::OctetString(v) => v.clone(),
+                    _ => return Err("data must be octet-string".to_string()),
+                };
+                Ok(ConfirmationParameters { data })
+            }
+            _ => Err("expected structure {data}".to_string()),
+        }
+    }
+}
+
+/// Certificate entry for Security Setup.
+/// Structure { data: octet-string }
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct Certificate {
+    /// Certificate data (octet-string).
+    pub data: Vec<u8>,
+}
+
+impl From<Certificate> for CosemDataType {
+    fn from(c: Certificate) -> Self {
+        CosemDataType::Structure(vec![CosemDataType::OctetString(c.data)])
+    }
+}
+
+impl TryFrom<&CosemDataType> for Certificate {
+    type Error = String;
+
+    fn try_from(value: &CosemDataType) -> Result<Self, String> {
+        match value {
+            CosemDataType::Structure(fields) if !fields.is_empty() => {
+                let data = match &fields[0] {
+                    CosemDataType::OctetString(v) => v.clone(),
+                    _ => return Err("data must be octet-string".to_string()),
+                };
+                Ok(Certificate { data })
+            }
+            _ => Err("expected structure {data}".to_string()),
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

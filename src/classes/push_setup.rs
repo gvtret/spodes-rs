@@ -1,6 +1,9 @@
 use crate::interface::InterfaceClass;
 use crate::obis::ObisCode;
-use crate::types::attrs::{CommunicationWindow, SendDestinationAndMethod};
+use crate::types::attrs::{
+    CaptureObjectDefinition, CommunicationWindow, ConfirmationParameters, DateTime, PushProtectionParameter,
+    SendDestinationAndMethod,
+};
 use crate::types::{BerError, CosemDataType};
 use serde::{Deserialize, Serialize};
 use std::any::Any;
@@ -13,7 +16,7 @@ pub struct PushSetupConfig {
     /// Class version: 0, 1 or 2. Selects which attributes and methods are exposed.
     pub version: u8,
     /// Attribute 2: array of `cosem_object_instance_id` entries to be pushed.
-    pub push_object_list: Vec<CosemDataType>,
+    pub push_object_list: Vec<CaptureObjectDefinition>,
     /// Attribute 3: `send_destination_and_method` structure.
     pub send_destination_and_method: SendDestinationAndMethod,
     /// Attribute 4: array of communication windows.
@@ -29,13 +32,13 @@ pub struct PushSetupConfig {
     /// Attribute 9: push client SAP.
     pub push_client_sap: i8,
     /// Attribute 10: array of push protection parameters.
-    pub push_protection_parameters: Vec<CosemDataType>,
+    pub push_protection_parameters: Vec<PushProtectionParameter>,
     /// Attribute 11: push operation method (enum).
     pub push_operation_method: u8,
     /// Attribute 12: `confirmation_parameters` structure.
-    pub confirmation_parameters: CosemDataType,
+    pub confirmation_parameters: ConfirmationParameters,
     /// Attribute 13: date-time of the last successful confirmation.
-    pub last_confirmation_date_time: CosemDataType,
+    pub last_confirmation_date_time: DateTime,
 }
 
 /// `Push setup` interface class (class_id = 40) per IEC 62056-6-2 §4.4.8. Holds
@@ -54,7 +57,7 @@ pub struct PushSetupConfig {
 pub struct PushSetup {
     version: u8,
     logical_name: ObisCode,
-    push_object_list: Vec<CosemDataType>,
+    push_object_list: Vec<CaptureObjectDefinition>,
     send_destination_and_method: SendDestinationAndMethod,
     communication_window: Vec<CommunicationWindow>,
     randomisation_start_interval: u16,
@@ -62,10 +65,10 @@ pub struct PushSetup {
     repetition_delay: CosemDataType,
     port_reference: Vec<u8>,
     push_client_sap: i8,
-    push_protection_parameters: Vec<CosemDataType>,
+    push_protection_parameters: Vec<PushProtectionParameter>,
     push_operation_method: u8,
-    confirmation_parameters: CosemDataType,
-    last_confirmation_date_time: CosemDataType,
+    confirmation_parameters: ConfirmationParameters,
+    last_confirmation_date_time: DateTime,
 }
 
 impl PushSetup {
@@ -100,7 +103,7 @@ impl PushSetup {
     /// Method 2: `reset` — resets the push confirmation state by clearing
     /// `last_confirmation_date_time`.
     fn reset(&mut self) -> Result<CosemDataType, String> {
-        self.last_confirmation_date_time = CosemDataType::Null;
+        self.last_confirmation_date_time = DateTime::new([0u8; 12]);
         Ok(CosemDataType::Null)
     }
 }
@@ -122,7 +125,7 @@ impl InterfaceClass for PushSetup {
         // Attributes 1..7 are common to all versions.
         let mut attrs = vec![
             (1, CosemDataType::OctetString(self.logical_name.to_bytes())),
-            (2, CosemDataType::Array(self.push_object_list.clone())),
+            (2, CosemDataType::Array(self.push_object_list.iter().map(|o| CosemDataType::from(o.clone())).collect())),
             (3, CosemDataType::from(self.send_destination_and_method.clone())),
             (
                 4,
@@ -138,13 +141,18 @@ impl InterfaceClass for PushSetup {
         if self.version >= 1 {
             attrs.push((8, CosemDataType::OctetString(self.port_reference.clone())));
             attrs.push((9, CosemDataType::Integer(self.push_client_sap)));
-            attrs.push((10, CosemDataType::Array(self.push_protection_parameters.clone())));
+            attrs.push((
+                10,
+                CosemDataType::Array(
+                    self.push_protection_parameters.iter().map(|p| CosemDataType::from(p.clone())).collect(),
+                ),
+            ));
         }
         // Attributes 11..13 were added in version 2.
         if self.version >= 2 {
             attrs.push((11, CosemDataType::Enum(self.push_operation_method)));
-            attrs.push((12, self.confirmation_parameters.clone()));
-            attrs.push((13, self.last_confirmation_date_time.clone()));
+            attrs.push((12, CosemDataType::from(self.confirmation_parameters.clone())));
+            attrs.push((13, CosemDataType::from(self.last_confirmation_date_time.clone())));
         }
         attrs
     }
@@ -204,7 +212,11 @@ impl InterfaceClass for PushSetup {
             return Err(BerError::InvalidTag);
         }
         self.push_object_list = match &seq[2] {
-            CosemDataType::Array(list) => list.clone(),
+            CosemDataType::Array(list) => list
+                .iter()
+                .map(CaptureObjectDefinition::try_from)
+                .collect::<Result<Vec<_>, _>>()
+                .map_err(|_| BerError::InvalidValue)?,
             _ => return Err(BerError::InvalidTag),
         };
         self.send_destination_and_method =
@@ -236,7 +248,11 @@ impl InterfaceClass for PushSetup {
                 _ => return Err(BerError::InvalidTag),
             };
             self.push_protection_parameters = match &seq[10] {
-                CosemDataType::Array(list) => list.clone(),
+                CosemDataType::Array(list) => list
+                    .iter()
+                    .map(PushProtectionParameter::try_from)
+                    .collect::<Result<Vec<_>, _>>()
+                    .map_err(|_| BerError::InvalidValue)?,
                 _ => return Err(BerError::InvalidTag),
             };
         }
@@ -245,8 +261,9 @@ impl InterfaceClass for PushSetup {
                 CosemDataType::Enum(v) => v,
                 _ => return Err(BerError::InvalidTag),
             };
-            self.confirmation_parameters = seq[12].clone();
-            self.last_confirmation_date_time = seq[13].clone();
+            self.confirmation_parameters =
+                ConfirmationParameters::try_from(&seq[12]).map_err(|_| BerError::InvalidValue)?;
+            self.last_confirmation_date_time = DateTime::try_from(&seq[13]).map_err(|_| BerError::InvalidValue)?;
         }
         Ok(())
     }
@@ -286,12 +303,7 @@ mod tests {
         PushSetup::new(PushSetupConfig {
             version,
             logical_name: ObisCode::new(0, 0, 25, 9, 0, 255),
-            push_object_list: vec![CosemDataType::Structure(vec![
-                CosemDataType::LongUnsigned(8),
-                CosemDataType::OctetString(vec![0, 0, 1, 0, 0, 255]),
-                CosemDataType::Integer(2),
-                CosemDataType::LongUnsigned(0),
-            ])],
+            push_object_list: vec![CaptureObjectDefinition::new(8, ObisCode::new(0, 0, 1, 0, 0, 255), 2, 0)],
             send_destination_and_method: SendDestinationAndMethod {
                 transport_service: 0,
                 destination: b"192.168.0.1:4059".to_vec(),
@@ -309,8 +321,8 @@ mod tests {
             push_client_sap: 1,
             push_protection_parameters: vec![],
             push_operation_method: 0,
-            confirmation_parameters: CosemDataType::Null,
-            last_confirmation_date_time: CosemDataType::Null,
+            confirmation_parameters: ConfirmationParameters { data: vec![] },
+            last_confirmation_date_time: DateTime::new([0u8; 12]),
         })
     }
 
@@ -342,9 +354,9 @@ mod tests {
     #[test]
     fn reset_clears_confirmation() {
         let mut obj = sample_versioned(2);
-        obj.last_confirmation_date_time = CosemDataType::OctetString(vec![0x07; 12]);
+        obj.last_confirmation_date_time = DateTime::new([0x07; 12]);
         obj.invoke_method(2, None).unwrap();
-        assert_eq!(obj.attributes()[12].1, CosemDataType::Null);
+        assert_eq!(obj.attributes()[12].1, CosemDataType::DateTime(vec![0; 12]));
         // `reset` is not available in versions 0 and 1.
         let mut v1 = sample_versioned(1);
         assert!(v1.invoke_method(2, None).is_err());

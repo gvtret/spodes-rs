@@ -2,7 +2,7 @@ use spodes_rs::classes::demand_register::{DemandRegister, DemandRegisterConfig};
 use spodes_rs::interface::InterfaceClass;
 use spodes_rs::obis::ObisCode;
 use spodes_rs::serialization::{deserialize_object, serialize_object};
-use spodes_rs::types::attrs::ScalerUnit;
+use spodes_rs::types::attrs::{DateTime, ScalerUnit};
 use spodes_rs::types::CosemDataType;
 
 fn main() {
@@ -14,12 +14,8 @@ fn main() {
         last_average_value: CosemDataType::DoubleLong(2500),
         scaler_unit: ScalerUnit::new(0, 0x1B),
         status: CosemDataType::Unsigned(1),
-        capture_time: CosemDataType::DateTime(vec![
-            0x07, 0xE5, 0x05, 0x01, 0x02, 0x10, 0x30, 0x00, 0x00, 0x00, 0x00, 0x00,
-        ]),
-        start_time_current: CosemDataType::DateTime(vec![
-            0x07, 0xE5, 0x05, 0x01, 0x02, 0x10, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
-        ]),
+        capture_time: DateTime::new([0x07, 0xE5, 0x05, 0x01, 0x02, 0x10, 0x30, 0x00, 0x00, 0x00, 0x00, 0x00]),
+        start_time_current: DateTime::new([0x07, 0xE5, 0x05, 0x01, 0x02, 0x10, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00]),
         period: 3600,
         number_of_periods: 24,
     };
@@ -65,8 +61,8 @@ fn main() {
         last_average_value: CosemDataType::Null,
         scaler_unit: ScalerUnit::new(0, 0),
         status: CosemDataType::Null,
-        capture_time: CosemDataType::Null,
-        start_time_current: CosemDataType::Null,
+        capture_time: DateTime::new([0u8; 12]),
+        start_time_current: DateTime::new([0u8; 12]),
         period: 0,
         number_of_periods: 0,
     };

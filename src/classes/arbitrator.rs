@@ -1,5 +1,6 @@
 use crate::interface::InterfaceClass;
 use crate::obis::ObisCode;
+use crate::types::attrs::ActionItem;
 use crate::types::{BerError, CosemDataType};
 use serde::{Deserialize, Serialize};
 use std::any::Any;
@@ -10,7 +11,7 @@ pub struct ArbitratorConfig {
     /// Attribute 1: the object's logical name (OBIS code).
     pub logical_name: ObisCode,
     /// Attribute 2: array of `action` structures that can be requested.
-    pub actions: Vec<CosemDataType>,
+    pub actions: Vec<ActionItem>,
     /// Attribute 3: permissions table (array of bit-strings, one per actor).
     pub permissions_table: Vec<CosemDataType>,
     /// Attribute 4: weightings table (array).
@@ -31,7 +32,7 @@ pub struct ArbitratorConfig {
 #[derive(Clone, Serialize, Deserialize, Debug)]
 pub struct Arbitrator {
     logical_name: ObisCode,
-    actions: Vec<CosemDataType>,
+    actions: Vec<ActionItem>,
     permissions_table: Vec<CosemDataType>,
     weightings_table: Vec<CosemDataType>,
     most_recent_requests_table: Vec<CosemDataType>,
@@ -83,7 +84,7 @@ impl InterfaceClass for Arbitrator {
     fn attributes(&self) -> Vec<(u8, CosemDataType)> {
         vec![
             (1, CosemDataType::OctetString(self.logical_name.to_bytes())),
-            (2, CosemDataType::Array(self.actions.clone())),
+            (2, CosemDataType::Array(self.actions.iter().map(|a| CosemDataType::from(a.clone())).collect())),
             (3, CosemDataType::Array(self.permissions_table.clone())),
             (4, CosemDataType::Array(self.weightings_table.clone())),
             (5, CosemDataType::Array(self.most_recent_requests_table.clone())),
@@ -136,7 +137,10 @@ impl InterfaceClass for Arbitrator {
         } else {
             return Err(BerError::InvalidTag);
         }
-        self.actions = take_array(&seq[2])?;
+        self.actions = take_array(&seq[2])?
+            .into_iter()
+            .map(|v| ActionItem::try_from(&v).map_err(|_| BerError::InvalidValue))
+            .collect::<Result<Vec<_>, _>>()?;
         self.permissions_table = take_array(&seq[3])?;
         self.weightings_table = take_array(&seq[4])?;
         self.most_recent_requests_table = take_array(&seq[5])?;
@@ -188,10 +192,7 @@ mod tests {
     fn sample() -> Arbitrator {
         Arbitrator::new(ArbitratorConfig {
             logical_name: ObisCode::new(0, 0, 96, 3, 20, 255),
-            actions: vec![CosemDataType::Structure(vec![
-                CosemDataType::OctetString(vec![0, 0, 10, 0, 1, 255]),
-                CosemDataType::LongUnsigned(1),
-            ])],
+            actions: vec![ActionItem { script_logical_name: ObisCode::new(0, 0, 10, 0, 1, 255), script_selector: 1 }],
             permissions_table: vec![CosemDataType::BitString(vec![0x80])],
             weightings_table: vec![CosemDataType::Array(vec![CosemDataType::LongUnsigned(1)])],
             most_recent_requests_table: vec![],

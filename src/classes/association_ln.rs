@@ -2,7 +2,7 @@ use crate::interface::InterfaceClass;
 use crate::obis::ObisCode;
 use crate::security::access_rights::ObjectListEntry;
 use crate::security::{gost3410, hls, signature, AuthMechanism, SecuritySuite};
-use crate::types::attrs::{AssociatedPartnersId, ContextName, XDLMSContextInfo};
+use crate::types::attrs::{AssociatedPartnersId, ContextName, ObjectListElement, User, XDLMSContextInfo};
 use crate::types::{BerError, CosemDataType};
 use aead::Aead;
 use aes_gcm::{Aes128Gcm, Aes256Gcm, KeyInit, Nonce};
@@ -62,7 +62,7 @@ pub struct AssociationLnConfig {
     /// The implemented class version (0, 1 or 2); selects the attribute set.
     pub version: AssociationLnVersion,
     /// Attribute 2: list of the COSEM objects visible within the association.
-    pub object_list: Vec<CosemDataType>,
+    pub object_list: Vec<ObjectListElement>,
     /// Attribute 3: `associated_partners_id` structure { client SAP, server SAP }.
     pub associated_partners_id: AssociatedPartnersId,
     /// Attribute 4: application context name (naming and ciphering in use).
@@ -72,15 +72,15 @@ pub struct AssociationLnConfig {
     /// Attribute 6: the authentication mechanism negotiated for the association.
     pub authentication_mechanism: AuthenticationMechanism,
     /// Attribute 7: the LLS/HLS secret (password or shared key).
-    pub secret: CosemDataType,
+    pub secret: Vec<u8>,
     /// Attribute 8: association status (non-associated / association-pending / associated).
     pub association_status: u8,
     /// Attribute 9 (versions ≥ 1): OBIS reference to the `Security Setup` object (class 64).
     pub security_setup_reference: ObisCode,
     /// Attribute 10 (version 2): array of `user { id, name }` entries.
-    pub user_list: Vec<CosemDataType>,
+    pub user_list: Vec<User>,
     /// Attribute 11 (version 2): the currently associated user (structure).
-    pub current_user: CosemDataType,
+    pub current_user: Option<User>,
 }
 
 /// `Association LN` interface class (class_id = 15) per IEC 62056-6-2 §4.4.3.
@@ -90,16 +90,16 @@ pub struct AssociationLnConfig {
 pub struct AssociationLn {
     logical_name: ObisCode,
     version: AssociationLnVersion,
-    object_list: Vec<CosemDataType>,
+    object_list: Vec<ObjectListElement>,
     associated_partners_id: AssociatedPartnersId,
     application_context_name: ContextName,
     xdlms_context_info: XDLMSContextInfo,
     authentication_mechanism: AuthenticationMechanism,
-    secret: CosemDataType,
+    secret: Vec<u8>,
     association_status: u8,
     security_setup_reference: ObisCode,
-    user_list: Vec<CosemDataType>,
-    current_user: CosemDataType,
+    user_list: Vec<User>,
+    current_user: Option<User>,
     /// Parsed object_list with structured access rights.
     #[serde(skip)]
     parsed_object_list: Vec<ObjectListEntry>,
@@ -167,7 +167,7 @@ impl AssociationLn {
     fn change_hls_secret(&mut self, data: CosemDataType) -> Result<CosemDataType, String> {
         match data {
             CosemDataType::OctetString(secret) => {
-                self.secret = CosemDataType::OctetString(secret);
+                self.secret = secret;
                 Ok(CosemDataType::Null)
             }
             _ => Err("Expected OctetString for HLS secret".to_string()),
@@ -196,13 +196,10 @@ impl AssociationLn {
         // LLS does not use the four-pass reply_to_HLS: the secret is compared
         // directly (compatible with the LLS password carried in the AARQ).
         if mechanism == AuthMechanism::Lls {
-            return match &self.secret {
-                CosemDataType::OctetString(secret)
-                    if secret.len() == f_stoc.len() && secret.ct_eq(f_stoc.as_slice()).into() =>
-                {
-                    Ok(CosemDataType::Null)
-                }
-                _ => Err("LLS authentication failed".to_string()),
+            return if self.secret.len() == f_stoc.len() && self.secret.ct_eq(f_stoc.as_slice()).into() {
+                Ok(CosemDataType::Null)
+            } else {
+                Err("LLS authentication failed".to_string())
             };
         }
 
@@ -330,31 +327,30 @@ impl AssociationLn {
         }
     }
 
-    /// Returns the secret as octet-string bytes, or an error.
+    /// Returns the secret as bytes.
     fn secret_bytes(&self) -> Result<&[u8], String> {
-        match &self.secret {
-            CosemDataType::OctetString(s) => Ok(s),
-            _ => Err("HLS secret must be an octet-string".to_string()),
-        }
+        Ok(&self.secret)
     }
 
     /// Method 3: `add_object` — adds an `object_list_element` to `object_list`.
     /// If an object with the same (class_id, logical_name) already exists, it is updated.
     fn add_object(&mut self, data: CosemDataType) -> Result<CosemDataType, String> {
-        let key = object_key(&data).ok_or("Expected object_list_element structure")?;
-        if let Some(existing) = self.object_list.iter_mut().find(|e| object_key(e) == Some(key.clone())) {
-            *existing = data;
+        let elem = ObjectListElement::try_from(&data).map_err(|e| e.to_string())?;
+        let key = (elem.class_id, elem.logical_name.to_bytes());
+        if let Some(existing) = self.object_list.iter_mut().find(|e| (e.class_id, e.logical_name.to_bytes()) == key) {
+            *existing = elem;
         } else {
-            self.object_list.push(data);
+            self.object_list.push(elem);
         }
         Ok(CosemDataType::Null)
     }
 
     /// Method 4: `remove_object` — removes an `object_list_element` from `object_list`.
     fn remove_object(&mut self, data: CosemDataType) -> Result<CosemDataType, String> {
-        let key = object_key(&data).ok_or("Expected object_list_element structure")?;
+        let elem = ObjectListElement::try_from(&data).map_err(|e| e.to_string())?;
+        let key = (elem.class_id, elem.logical_name.to_bytes());
         let before = self.object_list.len();
-        self.object_list.retain(|e| object_key(e) != Some(key.clone()));
+        self.object_list.retain(|e| (e.class_id, e.logical_name.to_bytes()) != key);
         if self.object_list.len() == before {
             return Err("Object not found in object_list".to_string());
         }
@@ -365,11 +361,12 @@ impl AssociationLn {
     /// `user_list`. If an entry with the same user id already exists, it is
     /// updated (IEC 62056-6-2 §5.3.7.3.5).
     fn add_user(&mut self, data: CosemDataType) -> Result<CosemDataType, String> {
-        let id = user_id(&data).ok_or("Expected user structure { id, name }")?;
-        if let Some(existing) = self.user_list.iter_mut().find(|e| user_id(e) == Some(id)) {
-            *existing = data;
+        let user = User::try_from(&data).map_err(|e| e.to_string())?;
+        let id = user.user_id;
+        if let Some(existing) = self.user_list.iter_mut().find(|e| e.user_id == id) {
+            *existing = user;
         } else {
-            self.user_list.push(data);
+            self.user_list.push(user);
         }
         Ok(CosemDataType::Null)
     }
@@ -377,9 +374,10 @@ impl AssociationLn {
     /// Method 6 (version 2): `remove_user` — removes the `user` entry with the
     /// given id from `user_list` (IEC 62056-6-2 §5.3.7.3.6).
     fn remove_user(&mut self, data: CosemDataType) -> Result<CosemDataType, String> {
-        let id = user_id(&data).ok_or("Expected user structure { id, name }")?;
+        let user = User::try_from(&data).map_err(|e| e.to_string())?;
+        let id = user.user_id;
         let before = self.user_list.len();
-        self.user_list.retain(|e| user_id(e) != Some(id));
+        self.user_list.retain(|e| e.user_id != id);
         if self.user_list.len() == before {
             return Err("User not found in user_list".to_string());
         }
@@ -419,16 +417,6 @@ impl AssociationLn {
         self.parsed_object_list.retain(|e| !(e.class_id == entry.class_id && e.logical_name == entry.logical_name));
         self.parsed_object_list.push(entry);
     }
-}
-
-/// Extracts the user id from a `user ::= structure { id: unsigned, name: octet-string }`.
-fn user_id(entry: &CosemDataType) -> Option<u8> {
-    if let CosemDataType::Structure(fields) = entry {
-        if let Some(CosemDataType::Unsigned(id)) = fields.first() {
-            return Some(*id);
-        }
-    }
-    None
 }
 
 /// Assembles the `SC ‖ IC ‖ MAC` response used by the GMAC (5) and GOST CMAC (8)
@@ -480,19 +468,6 @@ fn gmac_tag(ek: &[u8], iv: &[u8; 12], aad: &[u8]) -> Result<Vec<u8>, String> {
     Ok(out[..12].to_vec())
 }
 
-/// Extracts (class_id, logical_name) from an `object_list_element`:
-/// structure { class_id: long-unsigned, version: unsigned, logical_name: octet-string, ... }.
-fn object_key(element: &CosemDataType) -> Option<(u16, Vec<u8>)> {
-    if let CosemDataType::Structure(fields) = element {
-        if fields.len() >= 3 {
-            if let (CosemDataType::LongUnsigned(class_id), CosemDataType::OctetString(ln)) = (&fields[0], &fields[2]) {
-                return Some((*class_id, ln.clone()));
-            }
-        }
-    }
-    None
-}
-
 impl InterfaceClass for AssociationLn {
     fn class_id(&self) -> u16 {
         15
@@ -513,12 +488,12 @@ impl InterfaceClass for AssociationLn {
     fn attributes(&self) -> Vec<(u8, CosemDataType)> {
         let mut attrs = vec![
             (1, CosemDataType::OctetString(self.logical_name.to_bytes())),
-            (2, CosemDataType::Array(self.object_list.clone())),
+            (2, CosemDataType::Array(self.object_list.iter().cloned().map(CosemDataType::from).collect())),
             (3, CosemDataType::from(self.associated_partners_id.clone())),
             (4, CosemDataType::from(self.application_context_name.clone())),
             (5, CosemDataType::from(self.xdlms_context_info.clone())),
             (6, self.authentication_mechanism_name()),
-            (7, self.secret.clone()),
+            (7, CosemDataType::OctetString(self.secret.clone())),
             (8, CosemDataType::Enum(self.association_status)),
         ];
         // Attribute 9 (security_setup_reference) is present starting from version 1.
@@ -527,8 +502,11 @@ impl InterfaceClass for AssociationLn {
         }
         // Attributes 10 (user_list) and 11 (current_user) were added in version 2.
         if matches!(self.version, AssociationLnVersion::Version2) {
-            attrs.push((10, CosemDataType::Array(self.user_list.clone())));
-            attrs.push((11, self.current_user.clone()));
+            attrs.push((10, CosemDataType::Array(self.user_list.iter().cloned().map(CosemDataType::from).collect())));
+            match &self.current_user {
+                Some(user) => attrs.push((11, CosemDataType::from(user.clone()))),
+                None => attrs.push((11, CosemDataType::Null)),
+            }
         }
         attrs
     }
@@ -593,7 +571,10 @@ impl InterfaceClass for AssociationLn {
             return Err(BerError::InvalidTag);
         }
         self.object_list = match &seq[2] {
-            CosemDataType::Array(list) => list.clone(),
+            CosemDataType::Array(list) => list
+                .iter()
+                .map(|e| ObjectListElement::try_from(e).map_err(|_| BerError::InvalidValue))
+                .collect::<Result<Vec<_>, _>>()?,
             _ => return Err(BerError::InvalidTag),
         };
         self.associated_partners_id = AssociatedPartnersId::try_from(&seq[3]).map_err(|_| BerError::InvalidValue)?;
@@ -606,7 +587,10 @@ impl InterfaceClass for AssociationLn {
             }
             _ => return Err(BerError::InvalidTag),
         };
-        self.secret = seq[7].clone();
+        self.secret = match &seq[7] {
+            CosemDataType::OctetString(s) => s.clone(),
+            _ => return Err(BerError::InvalidTag),
+        };
         self.association_status = match &seq[8] {
             CosemDataType::Enum(v) => *v,
             CosemDataType::Unsigned(v) => *v,
@@ -624,10 +608,16 @@ impl InterfaceClass for AssociationLn {
         // Attributes 10 and 11 are present only in version 2.
         self.version = if seq.len() == 12 {
             self.user_list = match &seq[10] {
-                CosemDataType::Array(list) => list.clone(),
+                CosemDataType::Array(list) => list
+                    .iter()
+                    .map(|e| User::try_from(e).map_err(|_| BerError::InvalidValue))
+                    .collect::<Result<Vec<_>, _>>()?,
                 _ => return Err(BerError::InvalidTag),
             };
-            self.current_user = seq[11].clone();
+            self.current_user = match &seq[11] {
+                CosemDataType::Null => None,
+                other => Some(User::try_from(other).map_err(|_| BerError::InvalidValue)?),
+            };
             AssociationLnVersion::Version2
         } else if seq.len() == 10 {
             AssociationLnVersion::Version1
@@ -706,11 +696,11 @@ mod tests {
                 cyphering_info: vec![],
             },
             authentication_mechanism: AuthenticationMechanism::HlsSha1,
-            secret: CosemDataType::OctetString(b"12345678".to_vec()),
+            secret: b"12345678".to_vec(),
             association_status: 0,
             security_setup_reference: ObisCode::new(0, 0, 43, 0, 0, 255),
             user_list: vec![],
-            current_user: CosemDataType::Null,
+            current_user: None,
         })
     }
 
@@ -781,13 +771,14 @@ mod tests {
 
     #[test]
     fn add_and_remove_object() {
+        use crate::types::attrs::ObjectListElement;
         let mut obj = sample(AssociationLnVersion::Version1);
-        let element = CosemDataType::Structure(vec![
-            CosemDataType::LongUnsigned(1),
-            CosemDataType::Unsigned(0),
-            CosemDataType::OctetString(vec![0, 0, 96, 1, 0, 255]),
-            CosemDataType::Array(vec![]),
-        ]);
+        let element = CosemDataType::from(ObjectListElement {
+            class_id: 1,
+            version: 0,
+            logical_name: ObisCode::new(0, 0, 96, 1, 0, 255),
+            access_rights: crate::types::attrs::AccessRight { attribute_access: vec![], method_access: vec![] },
+        });
         obj.invoke_method(3, Some(element.clone())).unwrap();
         assert_eq!(obj.object_list.len(), 1);
         obj.invoke_method(4, Some(element)).unwrap();
@@ -802,7 +793,7 @@ mod tests {
         let stoc = vec![0xAA, 0xBB, 0xCC, 0xDD];
         let ctos = vec![0x11, 0x22, 0x33, 0x44];
         let mut obj = sample(AssociationLnVersion::Version1);
-        obj.secret = CosemDataType::OctetString(secret.clone());
+        obj.secret = secret.clone();
         obj.set_stoc(stoc.clone());
         obj.set_ctos(ctos.clone());
 
@@ -879,7 +870,7 @@ mod tests {
             let ctos = vec![0x11, 0x22, 0x33, 0x44];
             let mut obj = sample(AssociationLnVersion::Version1);
             obj.authentication_mechanism = mech;
-            obj.secret = CosemDataType::OctetString(secret.clone());
+            obj.secret = secret.clone();
             obj.set_stoc(stoc.clone());
             obj.set_ctos(ctos.clone());
             obj.set_hls_context(HlsContext {
@@ -954,7 +945,7 @@ mod tests {
         let ctos = vec![0x22, 0x33, 0x44, 0x55, 0x66, 0x77, 0x88, 0x99];
         let mut obj = sample(AssociationLnVersion::Version1);
         obj.authentication_mechanism = AuthMechanism::HlsManufacturer;
-        obj.secret = CosemDataType::OctetString(secret.clone());
+        obj.secret = secret.clone();
         obj.set_stoc(stoc.clone());
         obj.set_ctos(ctos.clone());
         let f_stoc = hls::manufacturer_aes(&secret, &stoc);

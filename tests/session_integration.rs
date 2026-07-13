@@ -109,11 +109,11 @@ fn test_suite0_lls_authentication() {
             cyphering_info: vec![],
         },
         authentication_mechanism: AuthenticationMechanism::Lls,
-        secret: CosemDataType::OctetString(secret.clone()),
+        secret: secret.clone(),
         association_status: 0,
         security_setup_reference: ObisCode::new(0, 0, 43, 0, 0, 255),
         user_list: vec![],
-        current_user: CosemDataType::Null,
+        current_user: None,
     });
     server.add(Box::new(assoc));
 
@@ -153,11 +153,11 @@ fn test_suite0_hls_sha1() {
             cyphering_info: vec![],
         },
         authentication_mechanism: AuthenticationMechanism::HlsSha1,
-        secret: CosemDataType::OctetString(secret),
+        secret,
         association_status: 0,
         security_setup_reference: ObisCode::new(0, 0, 43, 0, 0, 255),
         user_list: vec![],
-        current_user: CosemDataType::Null,
+        current_user: None,
     });
     server.add(Box::new(assoc));
 
@@ -196,11 +196,11 @@ fn test_suite0_hls_sha256() {
             cyphering_info: vec![],
         },
         authentication_mechanism: AuthenticationMechanism::HlsSha256,
-        secret: CosemDataType::OctetString(secret),
+        secret,
         association_status: 0,
         security_setup_reference: ObisCode::new(0, 0, 43, 0, 0, 255),
         user_list: vec![],
-        current_user: CosemDataType::Null,
+        current_user: None,
     });
     server.add(Box::new(assoc));
 
@@ -239,11 +239,11 @@ fn test_suite0_hls_gmac() {
             cyphering_info: vec![],
         },
         authentication_mechanism: AuthenticationMechanism::HlsGmac,
-        secret: CosemDataType::OctetString(secret),
+        secret,
         association_status: 0,
         security_setup_reference: ObisCode::new(0, 0, 43, 0, 0, 255),
         user_list: vec![],
-        current_user: CosemDataType::Null,
+        current_user: None,
     });
     server.add(Box::new(assoc));
 

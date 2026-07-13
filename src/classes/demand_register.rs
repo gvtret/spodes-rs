@@ -1,6 +1,6 @@
 use crate::interface::InterfaceClass;
 use crate::obis::ObisCode;
-use crate::types::attrs::{Choice, ScalerUnit};
+use crate::types::attrs::{Choice, DateTime, ScalerUnit};
 use crate::types::{BerError, CosemDataType};
 use serde::{Deserialize, Serialize};
 use std::any::Any;
@@ -19,9 +19,9 @@ pub struct DemandRegisterConfig {
     /// Attribute 5: status of the register at capture time.
     pub status: Choice,
     /// Attribute 6: the time `last_average_value` was captured (date-time).
-    pub capture_time: Choice,
+    pub capture_time: DateTime,
     /// Attribute 7: start time of the current demand period (date-time).
-    pub start_time_current: Choice,
+    pub start_time_current: DateTime,
     /// Attribute 8: the demand-integration period, in seconds (double-long-unsigned).
     pub period: u32,
     /// Attribute 9: number of periods used for the sliding-demand computation.
@@ -49,8 +49,8 @@ pub struct DemandRegister {
     last_average_value: Choice,
     scaler_unit: ScalerUnit,
     status: Choice,
-    capture_time: Choice,
-    start_time_current: Choice,
+    capture_time: DateTime,
+    start_time_current: DateTime,
     period: u32,
     number_of_periods: u16,
 }
@@ -108,8 +108,8 @@ impl DemandRegister {
             _ => return Err("Unsupported value type for reset".to_string()),
         }
         self.status = CosemDataType::Null;
-        self.capture_time = CosemDataType::Null;
-        self.start_time_current = CosemDataType::Null;
+        self.capture_time = DateTime::new([0u8; 12]);
+        self.start_time_current = DateTime::new([0u8; 12]);
         Ok(CosemDataType::Null)
     }
 
@@ -136,7 +136,7 @@ impl DemandRegister {
         // Update the status (1 means a successful measurement).
         self.status = CosemDataType::Unsigned(1);
         // Update the capture and current-period start time (example: 2025-05-01 00:00:00).
-        let new_time = CosemDataType::DateTime(vec![
+        let new_time = DateTime::new([
             0x07, 0xE5, 0x05, 0x01, // year 2025, month 5, day 1
             0x02, // day of week: Tuesday
             0x00, 0x00, 0x00, // hour 0, minute 0, second 0
@@ -169,8 +169,8 @@ impl InterfaceClass for DemandRegister {
             (3, self.last_average_value.clone()),
             (4, self.scaler_unit.clone().into()),
             (5, self.status.clone()),
-            (6, self.capture_time.clone()),
-            (7, self.start_time_current.clone()),
+            (6, self.capture_time.clone().into()),
+            (7, self.start_time_current.clone().into()),
             (8, CosemDataType::DoubleLongUnsigned(self.period)),
             (9, CosemDataType::LongUnsigned(self.number_of_periods)),
         ]
@@ -219,8 +219,8 @@ impl InterfaceClass for DemandRegister {
                 self.last_average_value = seq[3].clone();
                 self.scaler_unit = ScalerUnit::try_from(&seq[4]).map_err(|_| BerError::InvalidValue)?;
                 self.status = seq[5].clone();
-                self.capture_time = seq[6].clone();
-                self.start_time_current = seq[7].clone();
+                self.capture_time = DateTime::try_from(&seq[6]).map_err(|_| BerError::InvalidValue)?;
+                self.start_time_current = DateTime::try_from(&seq[7]).map_err(|_| BerError::InvalidValue)?;
                 self.period = match &seq[8] {
                     CosemDataType::DoubleLongUnsigned(v) => *v,
                     _ => return Err(BerError::InvalidTag),

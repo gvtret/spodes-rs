@@ -1,6 +1,6 @@
 use crate::interface::InterfaceClass;
 use crate::obis::ObisCode;
-use crate::types::attrs::DateTime;
+use crate::types::attrs::{CellInfo, DateTime, GsmAdjacentCell};
 use crate::types::{BerError, CosemDataType};
 use serde::{Deserialize, Serialize};
 use std::any::Any;
@@ -22,9 +22,9 @@ pub struct GsmDiagnosticConfig {
     /// Attribute 5: packet-switched status (enum).
     pub ps_status: u8,
     /// Attribute 6: serving `cell_info` structure.
-    pub cell_info: CosemDataType,
+    pub cell_info: CellInfo,
     /// Attribute 7: array of adjacent cell structures.
-    pub adjacent_cells: Vec<CosemDataType>,
+    pub adjacent_cells: Vec<GsmAdjacentCell>,
     /// Attribute 8: capture time of the diagnostic values (date-time).
     pub capture_time: DateTime,
 }
@@ -42,8 +42,8 @@ pub struct GsmDiagnostic {
     status: u8,
     cs_attachment: u8,
     ps_status: u8,
-    cell_info: CosemDataType,
-    adjacent_cells: Vec<CosemDataType>,
+    cell_info: CellInfo,
+    adjacent_cells: Vec<GsmAdjacentCell>,
     capture_time: DateTime,
 }
 
@@ -84,8 +84,8 @@ impl InterfaceClass for GsmDiagnostic {
             (3, CosemDataType::Enum(self.status)),
             (4, CosemDataType::Enum(self.cs_attachment)),
             (5, CosemDataType::Enum(self.ps_status)),
-            (6, self.cell_info.clone()),
-            (7, CosemDataType::Array(self.adjacent_cells.clone())),
+            (6, CosemDataType::from(self.cell_info.clone())),
+            (7, CosemDataType::Array(self.adjacent_cells.iter().cloned().map(CosemDataType::from).collect())),
             (8, self.capture_time.clone().into()),
         ]
     }
@@ -143,9 +143,13 @@ impl InterfaceClass for GsmDiagnostic {
         self.status = take_enum(&seq[3])?;
         self.cs_attachment = take_enum(&seq[4])?;
         self.ps_status = take_enum(&seq[5])?;
-        self.cell_info = seq[6].clone();
+        self.cell_info = CellInfo::try_from(&seq[6]).map_err(|_| BerError::InvalidValue)?;
         self.adjacent_cells = match &seq[7] {
-            CosemDataType::Array(list) => list.clone(),
+            CosemDataType::Array(list) => list
+                .iter()
+                .map(GsmAdjacentCell::try_from)
+                .collect::<Result<Vec<_>, _>>()
+                .map_err(|_| BerError::InvalidValue)?,
             _ => return Err(BerError::InvalidTag),
         };
         self.capture_time = DateTime::try_from(&seq[8]).map_err(|_| BerError::InvalidValue)?;
@@ -194,12 +198,31 @@ mod tests {
             status: 4,
             cs_attachment: 2,
             ps_status: 5,
-            cell_info: CosemDataType::Structure(vec![
-                CosemDataType::LongUnsigned(0x1234),
-                CosemDataType::LongUnsigned(0x5678),
-                CosemDataType::Unsigned(31),
-                CosemDataType::Unsigned(7),
-            ]),
+            cell_info: CellInfo {
+                cell_id: vec![],
+                location_id: vec![],
+                imsi: vec![],
+                imei: vec![],
+                rn: vec![],
+                cn: vec![],
+                signal_quality: vec![],
+                signal_strength: vec![],
+                channel_number: vec![],
+                cell_parameter_id: vec![],
+                bsic: vec![],
+                iccid: vec![],
+                lac: vec![],
+                mcc: vec![],
+                mnc: vec![],
+                tmsi: vec![],
+                tmgi: vec![],
+                gprs_status: vec![],
+                routing_area_code: vec![],
+                geographic_address: vec![],
+                access_point_name: vec![],
+                data_transport_state: vec![],
+                nma_message: vec![],
+            },
             adjacent_cells: vec![],
             capture_time: DateTime::new([0; 12]),
         })

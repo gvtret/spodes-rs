@@ -1,5 +1,6 @@
 use crate::interface::InterfaceClass;
 use crate::obis::ObisCode;
+use crate::types::attrs::QualityOfService;
 use crate::types::{BerError, CosemDataType};
 use serde::{Deserialize, Serialize};
 use std::any::Any;
@@ -14,7 +15,7 @@ pub struct GprsModemSetupConfig {
     /// Attribute 3: PIN code.
     pub pin_code: u16,
     /// Attribute 4: `quality_of_service` structure (default and requested).
-    pub quality_of_service: CosemDataType,
+    pub quality_of_service: QualityOfService,
 }
 
 /// `GPRS modem setup` interface class (class_id = 45, version = 0) per
@@ -26,7 +27,7 @@ pub struct GprsModemSetup {
     logical_name: ObisCode,
     apn: Vec<u8>,
     pin_code: u16,
-    quality_of_service: CosemDataType,
+    quality_of_service: QualityOfService,
 }
 
 impl GprsModemSetup {
@@ -59,7 +60,7 @@ impl InterfaceClass for GprsModemSetup {
             (1, CosemDataType::OctetString(self.logical_name.to_bytes())),
             (2, CosemDataType::OctetString(self.apn.clone())),
             (3, CosemDataType::LongUnsigned(self.pin_code)),
-            (4, self.quality_of_service.clone()),
+            (4, CosemDataType::from(self.quality_of_service.clone())),
         ]
     }
 
@@ -117,7 +118,7 @@ impl InterfaceClass for GprsModemSetup {
             CosemDataType::LongUnsigned(v) => v,
             _ => return Err(BerError::InvalidTag),
         };
-        self.quality_of_service = seq[4].clone();
+        self.quality_of_service = QualityOfService::try_from(&seq[4]).map_err(|_| BerError::InvalidValue)?;
         Ok(())
     }
 
@@ -147,28 +148,21 @@ fn write_length(length: usize, buf: &mut Vec<u8>) -> Result<(), BerError> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::types::attrs::{GsmServiceParameter, QualityOfService};
 
     fn sample() -> GprsModemSetup {
+        let zero_param = GsmServiceParameter {
+            delay_class: 0,
+            reliability_class: 0,
+            precedence_class: 0,
+            peak_throughput: 0,
+            mean_throughput: 0,
+        };
         GprsModemSetup::new(GprsModemSetupConfig {
             logical_name: ObisCode::new(0, 0, 25, 4, 0, 255),
             apn: b"internet".to_vec(),
             pin_code: 0,
-            quality_of_service: CosemDataType::Structure(vec![
-                CosemDataType::Structure(vec![
-                    CosemDataType::Unsigned(0),
-                    CosemDataType::Unsigned(0),
-                    CosemDataType::Unsigned(0),
-                    CosemDataType::Unsigned(0),
-                    CosemDataType::Unsigned(0),
-                ]),
-                CosemDataType::Structure(vec![
-                    CosemDataType::Unsigned(0),
-                    CosemDataType::Unsigned(0),
-                    CosemDataType::Unsigned(0),
-                    CosemDataType::Unsigned(0),
-                    CosemDataType::Unsigned(0),
-                ]),
-            ]),
+            quality_of_service: QualityOfService { default: zero_param.clone(), requested: zero_param },
         })
     }
 

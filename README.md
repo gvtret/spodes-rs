@@ -303,21 +303,26 @@ push.invoke_method(1, Some(CosemDataType::Integer(0))).unwrap();
 
 ## Examples
 
-Runnable examples live in [`examples/`](examples). Run one with:
+### Runnable examples
 
 ```sh
+# Client/server session
 cargo run --example client_session
 cargo run --example server_dispatch
+
+# Security and authentication
 cargo run --example hls_handshake
+
+# Push notifications
 cargo run --example push_listener
 cargo run --example push_sender
+
+# Transport
 cargo run --example tcp_client
 cargo run --example udp_client
-```
+cargo run --example udp_server
 
-The per-class examples show how to build and serialize individual COSEM objects:
-
-```sh
+# COSEM object usage
 cargo run --example data_usage
 cargo run --example register_usage
 cargo run --example clock_usage
@@ -328,6 +333,112 @@ cargo run --example register_activation_usage
 cargo run --example schedule_usage
 cargo run --example script_table_usage
 cargo run --example special_days_table_usage
+
+# СПОДУС concentrator
+cargo run --example spodus_concentrator
+```
+
+### Client session with AARQ/AARE and ciphering
+
+```rust
+use spodes_rs::session::{ClientSession, AarqBuilder};
+use spodes_rs::service::acse;
+use spodes_rs::transport::wrapper::Wrapper;
+use spodes_rs::transport::MemoryTransport;
+use std::time::Duration;
+
+let transport = MemoryTransport::new();
+let wrapper = Wrapper::new(transport, 1, 1024);
+
+// Build session with timeouts and retries
+let mut session = ClientSession::builder(wrapper)
+    .request_timeout(Duration::from_secs(5))
+    .max_retries(3)
+    .retry_delay(Duration::from_millis(200))
+    .build();
+
+// Associate with LLS (password authentication)
+let response = session.associate_lls(
+    b"password".to_vec(),  // LLS password
+    vec![0x01, 0x00],     // InitiateRequest APDU
+).unwrap();
+
+// Check association state
+assert!(session.is_associated());
+assert_eq!(session.mechanism(), Some(acse::mechanism::LLS));
+```
+
+### GOST ciphering (Kuznyechik)
+
+```rust
+use spodes_rs::service::ciphering::{
+    gost_protect, gost_unprotect, SecurityContext, 
+    security_control, GOST_SUITE_ID
+};
+
+// Create a GOST security context
+let ctx = SecurityContext {
+    security_control: security_control::AUTHENTICATED_ENCRYPTION | GOST_SUITE_ID,
+    encryption_key: vec![0u8; 32],  // 256-bit Kuznyechik key
+    authentication_key: vec![0u8; 32],
+    system_title: vec![0x4D, 0x4D, 0x4D, 0x00, 0x00, 0x00, 0x00, 0x01],
+    invocation_counter: 1,
+};
+
+// Encrypt an APDU
+let plaintext = b"C001C100";
+let ciphered = gost_protect(&ctx, 0xC8, plaintext).unwrap();
+
+// Decrypt an APDU
+let (tag, recovered) = gost_unprotect(&mut ctx.clone(), &ciphered).unwrap();
+assert_eq!(tag, 0xC8);
+assert_eq!(recovered, plaintext);
+```
+
+### Raw APDU support
+
+```rust
+use spodes_rs::session::ClientSession;
+use spodes_rs::service::RawApdu;
+
+// Create and send a raw APDU (for manufacturer-specific extensions)
+let raw = RawApdu::new(0xC0, vec![0x01, 0x02, 0x03]);
+let response = session.send_raw(&raw).unwrap();
+println!("Response tag: 0x{:02X}", response.tag());
+
+// Send raw bytes without any parsing
+let reply = session.send_raw_bytes(&[0xC0, 0x05, 0xAA, 0xBB, 0xCC]).unwrap();
+```
+
+### Request dispatcher with access rights
+
+```rust
+use spodes_rs::classes::data::Data;
+use spodes_rs::classes::register::Register;
+use spodes_rs::classes::association_ln::AssociationLn;
+use spodes_rs::server::RequestDispatcher;
+use spodes_rs::obis::ObisCode;
+use spodes_rs::types::attrs::ScalerUnit;
+use spodes_rs::types::CosemDataType;
+
+let mut dispatcher = RequestDispatcher::new();
+
+// Register objects
+dispatcher.add(Box::new(Data::new(
+    ObisCode::new(0, 0, 96, 1, 0, 255),
+    CosemDataType::Unsigned(0),
+)));
+dispatcher.add(Box::new(Register::new(
+    ObisCode::new(0, 0, 1, 0, 0, 255),
+    CosemDataType::DoubleLongUnsigned(123_456),
+    ScalerUnit::new(-2, 30),
+)));
+
+// Set association for access rights checking
+// dispatcher.set_association(association_ln);
+
+// Dispatch incoming request APDU
+let response_apdu = dispatcher.dispatch(&request_apdu).unwrap();
 ```
 
 ## СПОДУС — ИВКЭ concentrator

@@ -1,5 +1,6 @@
 use crate::interface::InterfaceClass;
 use crate::obis::ObisCode;
+use crate::types::attrs::Certificate;
 use crate::types::{BerError, CosemDataType};
 use serde::{Deserialize, Serialize};
 use std::any::Any;
@@ -34,7 +35,7 @@ pub struct SecuritySetupConfig {
     /// Attribute 5: server system title (octet-string).
     pub server_system_title: Vec<u8>,
     /// Attribute 6: certificates (array). Empty for security suite 0.
-    pub certificates: Vec<CosemDataType>,
+    pub certificates: Vec<Certificate>,
 }
 
 /// `Security setup` interface class (class_id = 64) per IEC 62056-6-2 §4.4.7.
@@ -58,7 +59,7 @@ pub struct SecuritySetup {
     security_suite: u8,
     client_system_title: Vec<u8>,
     server_system_title: Vec<u8>,
-    certificates: Vec<CosemDataType>,
+    certificates: Vec<Certificate>,
     /// Installed symmetric keys, indexed by `key_id`. Transient security
     /// material, not exposed as a COSEM attribute.
     #[serde(skip)]
@@ -161,7 +162,10 @@ impl InterfaceClass for SecuritySetup {
         ];
         // The `certificates` attribute was added in version 1.
         if self.version >= 1 {
-            attrs.push((6, CosemDataType::Array(self.certificates.clone())));
+            attrs.push((
+                6,
+                CosemDataType::Array(self.certificates.iter().map(|c| CosemDataType::from(c.clone())).collect()),
+            ));
         }
         attrs
     }
@@ -247,7 +251,11 @@ impl InterfaceClass for SecuritySetup {
         };
         if self.version >= 1 {
             self.certificates = match &seq[6] {
-                CosemDataType::Array(list) => list.clone(),
+                CosemDataType::Array(list) => list
+                    .iter()
+                    .map(Certificate::try_from)
+                    .collect::<Result<Vec<_>, _>>()
+                    .map_err(|_| BerError::InvalidValue)?,
                 _ => return Err(BerError::InvalidTag),
             };
         }

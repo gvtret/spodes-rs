@@ -430,11 +430,11 @@ fn test_gost_hls_cmac_with_association() {
             cyphering_info: vec![],
         },
         authentication_mechanism: AuthenticationMechanism::HlsGostCmac,
-        secret: CosemDataType::OctetString(k_em),
+        secret: k_em,
         association_status: 0,
         security_setup_reference: ObisCode::new(0, 0, 43, 0, 0, 255),
         user_list: vec![],
-        current_user: CosemDataType::Null,
+        current_user: None,
     });
     server.add(Box::new(assoc));
 
@@ -478,11 +478,11 @@ fn test_gost_hls_signature_with_association() {
             cyphering_info: vec![],
         },
         authentication_mechanism: AuthenticationMechanism::HlsGostSignature,
-        secret: CosemDataType::OctetString(server_sk),
+        secret: server_sk,
         association_status: 0,
         security_setup_reference: ObisCode::new(0, 0, 43, 0, 0, 255),
         user_list: vec![],
-        current_user: CosemDataType::Null,
+        current_user: None,
     });
     server.add(Box::new(assoc));
 

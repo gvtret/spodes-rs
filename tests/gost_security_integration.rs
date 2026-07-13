@@ -392,11 +392,11 @@ fn test_hls_gost_cmac_authentication() {
             cyphering_info: vec![],
         },
         authentication_mechanism: AuthenticationMechanism::HlsGostCmac,
-        secret: CosemDataType::OctetString(k_em),
+        secret: k_em,
         association_status: 0,
         security_setup_reference: ObisCode::new(0, 0, 43, 0, 0, 255),
         user_list: vec![],
-        current_user: CosemDataType::Null,
+        current_user: None,
     });
     server.add(Box::new(assoc));
 
@@ -428,11 +428,11 @@ fn test_hls_gost_streebog_authentication() {
             cyphering_info: vec![],
         },
         authentication_mechanism: AuthenticationMechanism::HlsGostStreebog,
-        secret: CosemDataType::OctetString(secret),
+        secret,
         association_status: 0,
         security_setup_reference: ObisCode::new(0, 0, 43, 0, 0, 255),
         user_list: vec![],
-        current_user: CosemDataType::Null,
+        current_user: None,
     });
     server.add(Box::new(assoc));
 
@@ -464,11 +464,11 @@ fn test_hls_md5_authentication() {
             cyphering_info: vec![],
         },
         authentication_mechanism: AuthenticationMechanism::HlsMd5,
-        secret: CosemDataType::OctetString(secret),
+        secret,
         association_status: 0,
         security_setup_reference: ObisCode::new(0, 0, 43, 0, 0, 255),
         user_list: vec![],
-        current_user: CosemDataType::Null,
+        current_user: None,
     });
     server.add(Box::new(assoc));
 

@@ -16,8 +16,8 @@ use spodes_rs::interface::InterfaceClass;
 use spodes_rs::obis::ObisCode;
 use spodes_rs::serialization::{deserialize_object, serialize_object};
 use spodes_rs::types::attrs::{
-    ActionSpecification, AssociatedPartnersId, ContextName, DateTime, ObjectDefinition, RegisterActMask, ScalerUnit,
-    ScheduleTableEntry, Script, SortMethod, SpecialDayEntry, XDLMSContextInfo,
+    AccessRight, ActionSpecification, AssociatedPartnersId, ContextName, DateTime, ObjectDefinition, ObjectListElement,
+    RegisterActMask, ScalerUnit, ScheduleTableEntry, Script, SortMethod, SpecialDayEntry, XDLMSContextInfo,
 };
 use spodes_rs::types::CosemDataType;
 use std::sync::Arc;
@@ -360,14 +360,14 @@ fn test_demand_register_serialization_deserialization() {
     let last_average_value = CosemDataType::DoubleLong(2500);
     let scaler_unit = ScalerUnit::new(0, 0x1B);
     let status = CosemDataType::Unsigned(1);
-    let capture_time = CosemDataType::DateTime(vec![
+    let capture_time = DateTime::new([
         0x07, 0xE5, 0x05, 0x01, // Год: 2025, Месяц: 5, День: 1
         0x02, // День недели: вторник
         0x10, 0x30, 0x00, // Час: 16, Минуты: 30, Секунды: 0
         0x00, // Сотые доли секунды: 0
         0x00, 0x00, 0x00, // Отклонение от UTC: 0
     ]);
-    let start_time_current = CosemDataType::DateTime(vec![
+    let start_time_current = DateTime::new([
         0x07, 0xE5, 0x05, 0x01, // Год: 2025, Месяц: 5, День: 1
         0x02, // День недели: вторник
         0x10, 0x00, 0x00, // Час: 16, Минуты: 0, Секунды: 0
@@ -397,8 +397,8 @@ fn test_demand_register_serialization_deserialization() {
         last_average_value: CosemDataType::Null,
         scaler_unit: ScalerUnit::new(0, 0),
         status: CosemDataType::Null,
-        capture_time: CosemDataType::Null,
-        start_time_current: CosemDataType::Null,
+        capture_time: DateTime::new([0u8; 12]),
+        start_time_current: DateTime::new([0u8; 12]),
         period: 0,
         number_of_periods: 0,
     };
@@ -413,8 +413,8 @@ fn test_demand_register_serialization_deserialization() {
         CosemDataType::Structure(vec![CosemDataType::Integer(0), CosemDataType::Enum(0x1B)])
     );
     assert_eq!(deserialized.attributes()[4].1, status);
-    assert_eq!(deserialized.attributes()[5].1, capture_time);
-    assert_eq!(deserialized.attributes()[6].1, start_time_current);
+    assert_eq!(deserialized.attributes()[5].1, CosemDataType::from(capture_time));
+    assert_eq!(deserialized.attributes()[6].1, CosemDataType::from(start_time_current));
     assert_eq!(deserialized.attributes()[7].1, CosemDataType::DoubleLongUnsigned(period));
     assert_eq!(deserialized.attributes()[8].1, CosemDataType::LongUnsigned(number_of_periods));
 }
@@ -426,14 +426,14 @@ fn test_demand_register_reset_method() {
     let last_average_value = CosemDataType::DoubleLong(2500);
     let scaler_unit = ScalerUnit::new(0, 0x1B);
     let status = CosemDataType::Unsigned(1);
-    let capture_time = CosemDataType::DateTime(vec![
+    let capture_time = DateTime::new([
         0x07, 0xE5, 0x05, 0x01, // Год: 2025, Месяц: 5, День: 1
         0x02, // День недели: вторник
         0x10, 0x30, 0x00, // Час: 16, Минуты: 30, Секунды: 0
         0x00, // Сотые доли секунды: 0
         0x00, 0x00, 0x00, // Отклонение от UTC: 0
     ]);
-    let start_time_current = CosemDataType::DateTime(vec![
+    let start_time_current = DateTime::new([
         0x07, 0xE5, 0x05, 0x01, // Год: 2025, Месяц: 5, День: 1
         0x02, // День недели: вторник
         0x10, 0x00, 0x00, // Час: 16, Минуты: 0, Секунды: 0
@@ -461,8 +461,8 @@ fn test_demand_register_reset_method() {
     assert_eq!(demand_register.attributes()[1].1, CosemDataType::DoubleLong(0));
     assert_eq!(demand_register.attributes()[2].1, CosemDataType::DoubleLong(0));
     assert_eq!(demand_register.attributes()[4].1, CosemDataType::Null);
-    assert_eq!(demand_register.attributes()[5].1, CosemDataType::Null);
-    assert_eq!(demand_register.attributes()[6].1, CosemDataType::Null);
+    assert_eq!(demand_register.attributes()[5].1, CosemDataType::DateTime(vec![0u8; 12]));
+    assert_eq!(demand_register.attributes()[6].1, CosemDataType::DateTime(vec![0u8; 12]));
 }
 
 #[test]
@@ -472,8 +472,8 @@ fn test_demand_register_next_period_method() {
     let last_average_value = CosemDataType::DoubleLong(2500);
     let scaler_unit = ScalerUnit::new(0, 0x1B);
     let status = CosemDataType::Null;
-    let capture_time = CosemDataType::Null;
-    let start_time_current = CosemDataType::Null;
+    let capture_time = DateTime::new([0u8; 12]);
+    let start_time_current = DateTime::new([0u8; 12]);
     let period = 3600u32;
     let number_of_periods = 24u16;
 
@@ -817,11 +817,7 @@ fn test_special_days_table_delete_method() {
 #[test]
 fn test_association_ln_serialization_deserialization_version0() {
     let obis = ObisCode::new(0, 0, 40, 0, 0, 255);
-    let object_list = vec![CosemDataType::Structure(vec![
-        CosemDataType::LongUnsigned(1),
-        CosemDataType::OctetString(vec![0, 0, 96, 1, 0, 255]),
-        CosemDataType::Integer(2),
-    ])];
+    let object_list: Vec<ObjectListElement> = vec![];
     let associated_partners_id = AssociatedPartnersId { client_sap: 1, server_sap: 1 };
     let application_context_name = ContextName::OctetString(vec![0x09, 0x06, 0x60, 0x85, 0x74, 0x05, 0x08, 0x01, 0x01]);
     let xdlms_context_info = XDLMSContextInfo {
@@ -834,7 +830,7 @@ fn test_association_ln_serialization_deserialization_version0() {
         quality_of_service: 0,
         cyphering_info: vec![],
     };
-    let secret = CosemDataType::OctetString(vec![0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08]);
+    let secret = vec![0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08];
     let association_status: u8 = 1;
 
     let config = AssociationLnConfig {
@@ -849,7 +845,7 @@ fn test_association_ln_serialization_deserialization_version0() {
         association_status,
         security_setup_reference: ObisCode::new(0, 0, 43, 0, 0, 255),
         user_list: vec![],
-        current_user: CosemDataType::Null,
+        current_user: None,
     };
     let association_ln = AssociationLn::new(config);
 
@@ -869,17 +865,17 @@ fn test_association_ln_serialization_deserialization_version0() {
             cyphering_info: vec![],
         },
         authentication_mechanism: AuthenticationMechanism::Lls,
-        secret: CosemDataType::Null,
+        secret: vec![],
         association_status: 0,
         security_setup_reference: ObisCode::new(0, 0, 0, 0, 0, 0),
         user_list: vec![],
-        current_user: CosemDataType::Null,
+        current_user: None,
     };
     let mut deserialized = AssociationLn::new(config);
     deserialize_object(&mut deserialized, &serialized).expect("Deserialization failed");
 
     assert_eq!(deserialized.logical_name(), association_ln.logical_name());
-    assert_eq!(deserialized.attributes()[1].1, CosemDataType::Array(object_list));
+    assert_eq!(deserialized.attributes()[1].1, CosemDataType::Array(vec![]));
     assert_eq!(deserialized.attributes()[2].1, CosemDataType::from(associated_partners_id));
     assert_eq!(deserialized.attributes()[3].1, CosemDataType::from(application_context_name));
     assert_eq!(deserialized.attributes()[4].1, CosemDataType::from(xdlms_context_info));
@@ -887,18 +883,14 @@ fn test_association_ln_serialization_deserialization_version0() {
         deserialized.attributes()[5].1,
         CosemDataType::OctetString(vec![0x09, 0x07, 0x60, 0x85, 0x74, 0x05, 0x08, 0x02, 0x01])
     );
-    assert_eq!(deserialized.attributes()[6].1, secret);
+    assert_eq!(deserialized.attributes()[6].1, CosemDataType::OctetString(secret));
     assert_eq!(deserialized.attributes()[7].1, CosemDataType::Enum(association_status));
 }
 
 #[test]
 fn test_association_ln_serialization_deserialization_version1() {
     let obis = ObisCode::new(0, 0, 40, 0, 0, 255);
-    let object_list = vec![CosemDataType::Structure(vec![
-        CosemDataType::LongUnsigned(1),
-        CosemDataType::OctetString(vec![0, 0, 96, 1, 0, 255]),
-        CosemDataType::Integer(2),
-    ])];
+    let object_list: Vec<ObjectListElement> = vec![];
     let associated_partners_id = AssociatedPartnersId { client_sap: 1, server_sap: 1 };
     let application_context_name = ContextName::OctetString(vec![0x09, 0x06, 0x60, 0x85, 0x74, 0x05, 0x08, 0x01, 0x01]);
     let xdlms_context_info = XDLMSContextInfo {
@@ -911,9 +903,7 @@ fn test_association_ln_serialization_deserialization_version1() {
         quality_of_service: 0,
         cyphering_info: vec![],
     };
-    let secret = CosemDataType::OctetString(vec![
-        0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08, 0x09, 0x0A, 0x0B, 0x0C, 0x0D, 0x0E, 0x0F, 0x10,
-    ]);
+    let secret = vec![0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08, 0x09, 0x0A, 0x0B, 0x0C, 0x0D, 0x0E, 0x0F, 0x10];
     let association_status: u8 = 1;
     let security_setup_reference = ObisCode::new(0, 0, 43, 0, 0, 255);
 
@@ -929,7 +919,7 @@ fn test_association_ln_serialization_deserialization_version1() {
         association_status,
         security_setup_reference,
         user_list: vec![],
-        current_user: CosemDataType::Null,
+        current_user: None,
     };
     let association_ln = AssociationLn::new(config);
 
@@ -949,17 +939,17 @@ fn test_association_ln_serialization_deserialization_version1() {
             cyphering_info: vec![],
         },
         authentication_mechanism: AuthenticationMechanism::HlsSha1,
-        secret: CosemDataType::Null,
+        secret: vec![],
         association_status: 0,
         security_setup_reference: ObisCode::new(0, 0, 0, 0, 0, 0),
         user_list: vec![],
-        current_user: CosemDataType::Null,
+        current_user: None,
     };
     let mut deserialized = AssociationLn::new(config);
     deserialize_object(&mut deserialized, &serialized).expect("Deserialization failed");
 
     assert_eq!(deserialized.logical_name(), association_ln.logical_name());
-    assert_eq!(deserialized.attributes()[1].1, CosemDataType::Array(object_list));
+    assert_eq!(deserialized.attributes()[1].1, CosemDataType::Array(vec![]));
     assert_eq!(deserialized.attributes()[2].1, CosemDataType::from(associated_partners_id));
     assert_eq!(deserialized.attributes()[3].1, CosemDataType::from(application_context_name));
     assert_eq!(deserialized.attributes()[4].1, CosemDataType::from(xdlms_context_info));
@@ -967,7 +957,7 @@ fn test_association_ln_serialization_deserialization_version1() {
         deserialized.attributes()[5].1,
         CosemDataType::OctetString(vec![0x09, 0x07, 0x60, 0x85, 0x74, 0x05, 0x08, 0x02, 0x04])
     );
-    assert_eq!(deserialized.attributes()[6].1, secret);
+    assert_eq!(deserialized.attributes()[6].1, CosemDataType::OctetString(secret));
     assert_eq!(deserialized.attributes()[7].1, CosemDataType::Enum(association_status));
     assert_eq!(deserialized.attributes()[8].1, CosemDataType::OctetString(vec![0, 0, 43, 0, 0, 255]));
 }
@@ -994,11 +984,11 @@ fn test_association_ln_lls_authentication() {
             cyphering_info: vec![],
         },
         authentication_mechanism: AuthenticationMechanism::Lls,
-        secret: CosemDataType::OctetString(secret.clone()),
+        secret: secret.clone(),
         association_status: 1,
         security_setup_reference: ObisCode::new(0, 0, 43, 0, 0, 255),
         user_list: vec![],
-        current_user: CosemDataType::Null,
+        current_user: None,
     };
     let mut association_ln = AssociationLn::new(config);
 
@@ -1038,11 +1028,11 @@ fn test_association_ln_hls4_sha1_authentication() {
             cyphering_info: vec![],
         },
         authentication_mechanism: AuthenticationMechanism::HlsSha1,
-        secret: CosemDataType::OctetString(secret.clone()),
+        secret: secret.clone(),
         association_status: 1,
         security_setup_reference: ObisCode::new(0, 0, 43, 0, 0, 255),
         user_list: vec![],
-        current_user: CosemDataType::Null,
+        current_user: None,
     };
     let mut association_ln = AssociationLn::new(config);
     association_ln.set_ctos(ctos.clone());
@@ -1093,11 +1083,11 @@ fn test_association_ln_change_hls_secret() {
             cyphering_info: vec![],
         },
         authentication_mechanism: AuthenticationMechanism::Lls,
-        secret: CosemDataType::OctetString(secret.clone()),
+        secret: secret.clone(),
         association_status: 1,
         security_setup_reference: ObisCode::new(0, 0, 43, 0, 0, 255),
         user_list: vec![],
-        current_user: CosemDataType::Null,
+        current_user: None,
     };
     let mut association_ln = AssociationLn::new(config);
 
@@ -1127,11 +1117,11 @@ fn test_association_ln_add_object() {
             cyphering_info: vec![],
         },
         authentication_mechanism: AuthenticationMechanism::HlsSha1,
-        secret: CosemDataType::OctetString(vec![0x01; 16]),
+        secret: vec![0x01; 16],
         association_status: 1,
         security_setup_reference: ObisCode::new(0, 0, 43, 0, 0, 255),
         user_list: vec![],
-        current_user: CosemDataType::Null,
+        current_user: None,
     };
     let mut association_ln = AssociationLn::new(config);
 
@@ -1139,7 +1129,10 @@ fn test_association_ln_add_object() {
         CosemDataType::LongUnsigned(1),                        // class_id
         CosemDataType::Unsigned(0),                            // version
         CosemDataType::OctetString(vec![0, 0, 96, 1, 0, 255]), // logical_name
-        CosemDataType::Array(vec![]),                          // access_rights
+        CosemDataType::Structure(vec![
+            CosemDataType::Array(vec![]), // attribute_access
+            CosemDataType::Array(vec![]), // method_access
+        ]), // access_rights
     ]);
     let result = association_ln.invoke_method(3, Some(element.clone())).expect("add_object failed");
     assert_eq!(result, CosemDataType::Null);
@@ -1158,12 +1151,21 @@ fn test_association_ln_remove_object() {
         CosemDataType::LongUnsigned(1),
         CosemDataType::Unsigned(0),
         CosemDataType::OctetString(vec![0, 0, 96, 1, 0, 255]),
-        CosemDataType::Array(vec![]),
+        CosemDataType::Structure(vec![
+            CosemDataType::Array(vec![]), // attribute_access
+            CosemDataType::Array(vec![]), // method_access
+        ]),
     ]);
+    let ole = ObjectListElement {
+        class_id: 1,
+        version: 0,
+        logical_name: ObisCode::new(0, 0, 96, 1, 0, 255),
+        access_rights: AccessRight { attribute_access: vec![], method_access: vec![] },
+    };
     let config = AssociationLnConfig {
         logical_name: obis,
         version: AssociationLnVersion::Version1,
-        object_list: vec![element.clone()],
+        object_list: vec![ole],
         associated_partners_id: AssociatedPartnersId { client_sap: 1, server_sap: 1 },
         application_context_name: ContextName::OctetString(vec![0x09, 0x07, 0x60, 0x85, 0x74, 0x05, 0x08, 0x01, 0x01]),
         xdlms_context_info: XDLMSContextInfo {
@@ -1175,11 +1177,11 @@ fn test_association_ln_remove_object() {
             cyphering_info: vec![],
         },
         authentication_mechanism: AuthenticationMechanism::HlsSha1,
-        secret: CosemDataType::OctetString(vec![0x01; 16]),
+        secret: vec![0x01; 16],
         association_status: 1,
         security_setup_reference: ObisCode::new(0, 0, 43, 0, 0, 255),
         user_list: vec![],
-        current_user: CosemDataType::Null,
+        current_user: None,
     };
     let mut association_ln = AssociationLn::new(config);
 

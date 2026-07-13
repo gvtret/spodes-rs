@@ -1,5 +1,6 @@
 use crate::interface::InterfaceClass;
 use crate::obis::ObisCode;
+use crate::types::attrs::{EmergencyProfile, LimiterAction, ValueDefinition};
 use crate::types::{BerError, CosemDataType};
 use serde::{Deserialize, Serialize};
 use std::any::Any;
@@ -10,7 +11,7 @@ pub struct LimiterConfig {
     /// Attribute 1: the object's logical name (OBIS code).
     pub logical_name: ObisCode,
     /// Attribute 2: `value_definition` structure { class_id, logical_name, attribute_index }.
-    pub monitored_value: CosemDataType,
+    pub monitored_value: ValueDefinition,
     /// Attribute 3: active threshold (same type as the monitored attribute).
     pub threshold_active: CosemDataType,
     /// Attribute 4: threshold used during normal operation.
@@ -22,13 +23,13 @@ pub struct LimiterConfig {
     /// Attribute 7: minimal under-threshold duration in seconds.
     pub min_under_threshold_duration: u32,
     /// Attribute 8: `emergency_profile` structure { id, activation_time, duration }.
-    pub emergency_profile: CosemDataType,
+    pub emergency_profile: EmergencyProfile,
     /// Attribute 9: array of emergency profile group ids.
-    pub emergency_profile_group_id_list: Vec<CosemDataType>,
+    pub emergency_profile_group_id_list: Vec<u16>,
     /// Attribute 10: whether an emergency profile is currently active.
     pub emergency_profile_active: bool,
     /// Attribute 11: `action` structure of over/under-threshold scripts.
-    pub actions: CosemDataType,
+    pub actions: LimiterAction,
 }
 
 /// `Limiter` interface class (class_id = 71, version = 0) per IEC 62056-6-2
@@ -39,16 +40,16 @@ pub struct LimiterConfig {
 #[derive(Clone, Serialize, Deserialize, Debug)]
 pub struct Limiter {
     logical_name: ObisCode,
-    monitored_value: CosemDataType,
+    monitored_value: ValueDefinition,
     threshold_active: CosemDataType,
     threshold_normal: CosemDataType,
     threshold_emergency: CosemDataType,
     min_over_threshold_duration: u32,
     min_under_threshold_duration: u32,
-    emergency_profile: CosemDataType,
-    emergency_profile_group_id_list: Vec<CosemDataType>,
+    emergency_profile: EmergencyProfile,
+    emergency_profile_group_id_list: Vec<u16>,
     emergency_profile_active: bool,
-    actions: CosemDataType,
+    actions: LimiterAction,
 }
 
 impl Limiter {
@@ -86,16 +87,21 @@ impl InterfaceClass for Limiter {
     fn attributes(&self) -> Vec<(u8, CosemDataType)> {
         vec![
             (1, CosemDataType::OctetString(self.logical_name.to_bytes())),
-            (2, self.monitored_value.clone()),
+            (2, CosemDataType::from(self.monitored_value.clone())),
             (3, self.threshold_active.clone()),
             (4, self.threshold_normal.clone()),
             (5, self.threshold_emergency.clone()),
             (6, CosemDataType::DoubleLongUnsigned(self.min_over_threshold_duration)),
             (7, CosemDataType::DoubleLongUnsigned(self.min_under_threshold_duration)),
-            (8, self.emergency_profile.clone()),
-            (9, CosemDataType::Array(self.emergency_profile_group_id_list.clone())),
+            (8, CosemDataType::from(self.emergency_profile.clone())),
+            (
+                9,
+                CosemDataType::Array(
+                    self.emergency_profile_group_id_list.iter().map(|id| CosemDataType::LongUnsigned(*id)).collect(),
+                ),
+            ),
             (10, CosemDataType::Boolean(self.emergency_profile_active)),
-            (11, self.actions.clone()),
+            (11, CosemDataType::from(self.actions.clone())),
         ]
     }
 
@@ -145,7 +151,7 @@ impl InterfaceClass for Limiter {
         } else {
             return Err(BerError::InvalidTag);
         }
-        self.monitored_value = seq[2].clone();
+        self.monitored_value = ValueDefinition::try_from(&seq[2]).map_err(|_| BerError::InvalidValue)?;
         self.threshold_active = seq[3].clone();
         self.threshold_normal = seq[4].clone();
         self.threshold_emergency = seq[5].clone();
@@ -157,16 +163,22 @@ impl InterfaceClass for Limiter {
             CosemDataType::DoubleLongUnsigned(v) => v,
             _ => return Err(BerError::InvalidTag),
         };
-        self.emergency_profile = seq[8].clone();
+        self.emergency_profile = EmergencyProfile::try_from(&seq[8]).map_err(|_| BerError::InvalidValue)?;
         self.emergency_profile_group_id_list = match &seq[9] {
-            CosemDataType::Array(list) => list.clone(),
+            CosemDataType::Array(list) => list
+                .iter()
+                .map(|e| match e {
+                    CosemDataType::LongUnsigned(v) => Ok(*v),
+                    _ => Err(BerError::InvalidTag),
+                })
+                .collect::<Result<Vec<_>, _>>()?,
             _ => return Err(BerError::InvalidTag),
         };
         self.emergency_profile_active = match seq[10] {
             CosemDataType::Boolean(v) => v,
             _ => return Err(BerError::InvalidTag),
         };
-        self.actions = seq[11].clone();
+        self.actions = LimiterAction::try_from(&seq[11]).map_err(|_| BerError::InvalidValue)?;
         Ok(())
     }
 
@@ -198,35 +210,36 @@ mod tests {
     use super::*;
 
     fn sample() -> Limiter {
+        use crate::types::attrs::ActionItem;
         Limiter::new(LimiterConfig {
             logical_name: ObisCode::new(0, 0, 17, 0, 0, 255),
-            monitored_value: CosemDataType::Structure(vec![
-                CosemDataType::LongUnsigned(3),
-                CosemDataType::OctetString(vec![1, 0, 1, 7, 0, 255]),
-                CosemDataType::Integer(2),
-            ]),
+            monitored_value: ValueDefinition {
+                class_id: 3,
+                logical_name: ObisCode::new(1, 0, 1, 7, 0, 255),
+                attribute_index: 2,
+            },
             threshold_active: CosemDataType::LongUnsigned(5000),
             threshold_normal: CosemDataType::LongUnsigned(5000),
             threshold_emergency: CosemDataType::LongUnsigned(8000),
             min_over_threshold_duration: 60,
             min_under_threshold_duration: 120,
-            emergency_profile: CosemDataType::Structure(vec![
-                CosemDataType::LongUnsigned(1),
-                CosemDataType::OctetString(vec![0; 12]),
-                CosemDataType::DoubleLongUnsigned(3600),
-            ]),
-            emergency_profile_group_id_list: vec![CosemDataType::LongUnsigned(1)],
+            emergency_profile: EmergencyProfile {
+                emergency_profile_id: 1,
+                emergency_activation_time: vec![0; 12],
+                emergency_duration: 3600,
+            },
+            emergency_profile_group_id_list: vec![1],
             emergency_profile_active: false,
-            actions: CosemDataType::Structure(vec![
-                CosemDataType::Structure(vec![
-                    CosemDataType::OctetString(vec![0, 0, 10, 0, 1, 255]),
-                    CosemDataType::LongUnsigned(1),
-                ]),
-                CosemDataType::Structure(vec![
-                    CosemDataType::OctetString(vec![0, 0, 10, 0, 1, 255]),
-                    CosemDataType::LongUnsigned(2),
-                ]),
-            ]),
+            actions: LimiterAction {
+                action_over_threshold: ActionItem {
+                    script_logical_name: ObisCode::new(0, 0, 10, 0, 1, 255),
+                    script_selector: 1,
+                },
+                action_under_threshold: ActionItem {
+                    script_logical_name: ObisCode::new(0, 0, 10, 0, 1, 255),
+                    script_selector: 2,
+                },
+            },
         })
     }
 
@@ -246,16 +259,33 @@ mod tests {
         obj.serialize_ber(&mut buf).unwrap();
         let mut decoded = Limiter::new(LimiterConfig {
             logical_name: ObisCode::new(0, 0, 0, 0, 0, 0),
-            monitored_value: CosemDataType::Null,
+            monitored_value: ValueDefinition {
+                class_id: 0,
+                logical_name: ObisCode::new(0, 0, 0, 0, 0, 0),
+                attribute_index: 0,
+            },
             threshold_active: CosemDataType::Null,
             threshold_normal: CosemDataType::Null,
             threshold_emergency: CosemDataType::Null,
             min_over_threshold_duration: 0,
             min_under_threshold_duration: 0,
-            emergency_profile: CosemDataType::Null,
+            emergency_profile: EmergencyProfile {
+                emergency_profile_id: 0,
+                emergency_activation_time: vec![],
+                emergency_duration: 0,
+            },
             emergency_profile_group_id_list: vec![],
             emergency_profile_active: true,
-            actions: CosemDataType::Null,
+            actions: LimiterAction {
+                action_over_threshold: crate::types::attrs::ActionItem {
+                    script_logical_name: ObisCode::new(0, 0, 0, 0, 0, 0),
+                    script_selector: 0,
+                },
+                action_under_threshold: crate::types::attrs::ActionItem {
+                    script_logical_name: ObisCode::new(0, 0, 0, 0, 0, 0),
+                    script_selector: 0,
+                },
+            },
         });
         decoded.deserialize_ber(&buf).unwrap();
         assert_eq!(decoded.attributes(), obj.attributes());
