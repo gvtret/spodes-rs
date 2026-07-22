@@ -206,8 +206,8 @@ pub fn send<L: DataLinkLayer>(
 ///
 /// Returns the reassembled plain (or still-ciphered, if the segmented APDU
 /// was ciphered) APDU bytes.
-pub fn receive<L: DataLinkLayer>(link: &mut L, first: Vec<u8>) -> io::Result<Vec<u8>> {
-    let mut block = GeneralBlockTransfer::decode(&first)?;
+pub fn receive<L: DataLinkLayer>(link: &mut L, first: &[u8]) -> io::Result<Vec<u8>> {
+    let mut block = GeneralBlockTransfer::decode(first)?;
     let mut acc = Vec::new();
     let mut expected_block: u16 = 1;
     let mut peer_window: u8 = 0;
@@ -480,7 +480,7 @@ mod tests {
         })
         .encode();
         let mut link = ScriptedLink::default();
-        let apdu = receive(&mut link, first).unwrap();
+        let apdu = receive(&mut link, &first).unwrap();
         assert_eq!(apdu, vec![0xC0, 0x01]);
         assert!(link.tx.is_empty(), "no window in use: no ack should be sent");
     }
@@ -509,7 +509,7 @@ mod tests {
             .encode(),
         );
 
-        let apdu = receive(&mut link, first).unwrap();
+        let apdu = receive(&mut link, &first).unwrap();
         assert_eq!(apdu, vec![0xC0, 0x01, 0xC1, 0x00]);
         // One ack sent, acknowledging block 1.
         assert_eq!(link.tx.len(), 1);
@@ -569,7 +569,7 @@ mod tests {
             .encode(),
         );
 
-        let apdu = receive(&mut link, first).unwrap();
+        let apdu = receive(&mut link, &first).unwrap();
         assert_eq!(apdu, vec![0xC0, 0x01, 0xC1, 0x00]);
         assert!(link.rx.is_empty());
     }

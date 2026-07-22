@@ -32,8 +32,8 @@ impl SapAssignment {
     /// Method 1: `connect_logical_device` — adds or updates a SAP-to-logical-device
     /// assignment (IEC 62056-6-2 §4.4.5.3). An empty logical device name removes
     /// the assignment for that SAP.
-    fn connect_logical_device(&mut self, data: CosemDataType) -> Result<CosemDataType, String> {
-        let (sap, ldn) = match &data {
+    fn connect_logical_device(&mut self, data: &CosemDataType) -> Result<CosemDataType, String> {
+        let (sap, ldn) = match data {
             CosemDataType::Structure(fields) if fields.len() == 2 => match (&fields[0], &fields[1]) {
                 (CosemDataType::LongUnsigned(sap), CosemDataType::OctetString(ldn)) => (*sap, ldn.clone()),
                 _ => return Err("Expected structure { SAP: long-unsigned, ldn: octet-string }".to_string()),
@@ -42,7 +42,7 @@ impl SapAssignment {
         };
         self.sap_assignment_list.retain(|e| e.sap != sap);
         if !ldn.is_empty() {
-            let entry = SapAssignmentEntry::try_from(&data)?;
+            let entry = SapAssignmentEntry::try_from(data)?;
             self.sap_assignment_list.push(entry);
         }
         Ok(CosemDataType::Null)
@@ -126,7 +126,7 @@ impl InterfaceClass for SapAssignment {
 
     fn invoke_method(&mut self, method_id: u8, params: Option<CosemDataType>) -> Result<CosemDataType, String> {
         match method_id {
-            1 => self.connect_logical_device(params.ok_or("Missing method parameter")?),
+            1 => self.connect_logical_device(&params.ok_or("Missing method parameter")?),
             _ => Err(format!("Method {method_id} not supported for SAP assignment")),
         }
     }

@@ -89,8 +89,8 @@ impl SecuritySetup {
     /// Method 1: `security_activate` — activates and strengthens the security
     /// policy (IEC 62056-6-2 §4.4.7.3.1). Strengthening is one-way: a value
     /// weaker than the current policy is rejected.
-    fn security_activate(&mut self, data: CosemDataType) -> Result<CosemDataType, String> {
-        let CosemDataType::Enum(new_policy) = data else {
+    fn security_activate(&mut self, data: &CosemDataType) -> Result<CosemDataType, String> {
+        let &CosemDataType::Enum(new_policy) = data else {
             return Err("security_activate expects an enum".to_string());
         };
         if new_policy < self.security_policy {
@@ -261,7 +261,7 @@ impl InterfaceClass for SecuritySetup {
     fn invoke_method(&mut self, method_id: u8, params: Option<CosemDataType>) -> Result<CosemDataType, String> {
         let params = params.ok_or("Missing method parameter")?;
         match method_id {
-            1 => self.security_activate(params),
+            1 => self.security_activate(&params),
             2 => self.key_transfer(params),
             3..=8 if self.version >= 1 => {
                 Err(format!("Method {method_id} requires security suite 1 or 2 (PKI/ECDH); not supported for suite 0"))

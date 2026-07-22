@@ -64,8 +64,8 @@ impl Ipv4Setup {
     }
 
     /// Method 1: `add_mc_IP_address` — adds a multicast IP address.
-    fn add_mc_ip_address(&mut self, data: CosemDataType) -> Result<CosemDataType, String> {
-        let addr = match &data {
+    fn add_mc_ip_address(&mut self, data: &CosemDataType) -> Result<CosemDataType, String> {
+        let addr = match data {
             CosemDataType::DoubleLongUnsigned(v) => *v,
             _ => return Err("add_mc_IP_address expects a double-long-unsigned".to_string()),
         };
@@ -76,8 +76,8 @@ impl Ipv4Setup {
     }
 
     /// Method 2: `delete_mc_IP_address` — removes a multicast IP address.
-    fn delete_mc_ip_address(&mut self, data: CosemDataType) -> Result<CosemDataType, String> {
-        let addr = match &data {
+    fn delete_mc_ip_address(&mut self, data: &CosemDataType) -> Result<CosemDataType, String> {
+        let addr = match data {
             CosemDataType::DoubleLongUnsigned(v) => *v,
             _ => return Err("delete_mc_IP_address expects a double-long-unsigned".to_string()),
         };
@@ -200,8 +200,8 @@ impl InterfaceClass for Ipv4Setup {
 
     fn invoke_method(&mut self, method_id: u8, params: Option<CosemDataType>) -> Result<CosemDataType, String> {
         match method_id {
-            1 => self.add_mc_ip_address(params.ok_or("Missing method parameter")?),
-            2 => self.delete_mc_ip_address(params.ok_or("Missing method parameter")?),
+            1 => self.add_mc_ip_address(&params.ok_or("Missing method parameter")?),
+            2 => self.delete_mc_ip_address(&params.ok_or("Missing method parameter")?),
             3 => self.get_nbof_mc_ip_addresses(),
             _ => Err(format!("Method {method_id} not supported for IPv4 setup")),
         }

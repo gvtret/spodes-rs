@@ -238,7 +238,7 @@ mod tests {
         vec![ObisCode::new(0, 0, 94, 7, 128, 10), ObisCode::new(1, 0, 1, 8, 0, 255)]
     }
 
-    fn col_def(code: ObisCode) -> CosemDataType {
+    fn col_def(code: &ObisCode) -> CosemDataType {
         CosemDataType::Structure(vec![
             CosemDataType::LongUnsigned(1),
             CosemDataType::OctetString(code.to_bytes()),
@@ -261,9 +261,9 @@ mod tests {
     fn value_match_filter_and_projection() {
         let mut filter = build();
         // Select the value column for rows whose meter id is A or C.
-        let selected = vec![col_def(ObisCode::new(1, 0, 1, 8, 0, 255))];
+        let selected = vec![col_def(&ObisCode::new(1, 0, 1, 8, 0, 255))];
         let filters = vec![CosemDataType::Structure(vec![
-            col_def(ObisCode::new(0, 0, 94, 7, 128, 10)),
+            col_def(&ObisCode::new(0, 0, 94, 7, 128, 10)),
             CosemDataType::Null,
             CosemDataType::Null,
             CosemDataType::Array(vec![
@@ -287,7 +287,7 @@ mod tests {
         let mut filter = build();
         // Rows whose value column is in [150, 250] → only B (200).
         let filters = vec![CosemDataType::Structure(vec![
-            col_def(ObisCode::new(1, 0, 1, 8, 0, 255)),
+            col_def(&ObisCode::new(1, 0, 1, 8, 0, 255)),
             CosemDataType::LongUnsigned(150),
             CosemDataType::LongUnsigned(250),
             CosemDataType::Null,

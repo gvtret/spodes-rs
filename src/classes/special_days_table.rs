@@ -28,8 +28,8 @@ impl SpecialDaysTable {
         SpecialDaysTable { logical_name: config.logical_name, entries: config.entries }
     }
 
-    fn insert(&mut self, data: CosemDataType) -> Result<CosemDataType, String> {
-        let entry = SpecialDayEntry::try_from(&data)?;
+    fn insert(&mut self, data: &CosemDataType) -> Result<CosemDataType, String> {
+        let entry = SpecialDayEntry::try_from(data)?;
         if entry.specialday_date.len() != 12 {
             return Err("Invalid DateTime length".to_string());
         }
@@ -37,8 +37,8 @@ impl SpecialDaysTable {
         Ok(CosemDataType::Null)
     }
 
-    fn delete(&mut self, data: CosemDataType) -> Result<CosemDataType, String> {
-        let entry = SpecialDayEntry::try_from(&data)?;
+    fn delete(&mut self, data: &CosemDataType) -> Result<CosemDataType, String> {
+        let entry = SpecialDayEntry::try_from(data)?;
         self.entries.retain(|e| e.index != entry.index);
         Ok(CosemDataType::Null)
     }
@@ -126,8 +126,8 @@ impl InterfaceClass for SpecialDaysTable {
 
     fn invoke_method(&mut self, method_id: u8, params: Option<CosemDataType>) -> Result<CosemDataType, String> {
         match method_id {
-            1 => self.insert(params.ok_or("Missing parameter for insert method")?),
-            2 => self.delete(params.ok_or("Missing parameter for delete method")?),
+            1 => self.insert(&params.ok_or("Missing parameter for insert method")?),
+            2 => self.delete(&params.ok_or("Missing parameter for delete method")?),
             _ => Err(format!("Method {method_id} not supported for SpecialDaysTable")),
         }
     }

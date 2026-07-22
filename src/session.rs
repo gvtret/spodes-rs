@@ -818,7 +818,7 @@ impl<L: DataLinkLayer> ClientSession<L> {
 
         let reply = self.link.receive_apdu()?;
         let reply = if reply.first() == Some(&gbt::GENERAL_BLOCK_TRANSFER) {
-            gbt::receive(&mut self.link, reply)?
+            gbt::receive(&mut self.link, &reply)?
         } else {
             reply
         };

@@ -62,7 +62,7 @@ fn serve_one(mut link: ChannelLink, obis: ObisCode, value: CosemDataType, block_
 
     let first = link.receive_apdu().expect("receive request");
     let request = if first.first() == Some(&gbt::GENERAL_BLOCK_TRANSFER) {
-        gbt::receive(&mut link, first).expect("reassemble GBT request")
+        gbt::receive(&mut link, &first).expect("reassemble GBT request")
     } else {
         first
     };

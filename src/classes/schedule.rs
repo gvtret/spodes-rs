@@ -39,8 +39,8 @@ impl Schedule {
 
     /// Method 1: `enable_disable` — toggles the `enable` flag of the entry at
     /// the given 0-based index (IEC 62056-6-2 §4.5.3).
-    fn enable_disable(&mut self, params: Option<CosemDataType>) -> Result<CosemDataType, String> {
-        let idx = index_param(params.as_ref()).ok_or("enable_disable requires an entry index")?;
+    fn enable_disable(&mut self, params: Option<&CosemDataType>) -> Result<CosemDataType, String> {
+        let idx = index_param(params).ok_or("enable_disable requires an entry index")?;
         let entry = self.entries.get_mut(idx).ok_or_else(|| format!("No schedule entry at index {idx}"))?;
         entry.enable = !entry.enable;
         Ok(CosemDataType::Null)
@@ -57,8 +57,8 @@ impl Schedule {
 
     /// Method 3: `delete` — removes the entry at the given 0-based index
     /// (IEC 62056-6-2 §4.5.3).
-    fn delete(&mut self, params: Option<CosemDataType>) -> Result<CosemDataType, String> {
-        let idx = index_param(params.as_ref()).ok_or("delete requires an entry index")?;
+    fn delete(&mut self, params: Option<&CosemDataType>) -> Result<CosemDataType, String> {
+        let idx = index_param(params).ok_or("delete requires an entry index")?;
         if idx >= self.entries.len() {
             return Err(format!("No schedule entry at index {idx}"));
         }
@@ -172,9 +172,9 @@ impl InterfaceClass for Schedule {
 
     fn invoke_method(&mut self, method_id: u8, params: Option<CosemDataType>) -> Result<CosemDataType, String> {
         match method_id {
-            1 => self.enable_disable(params),
+            1 => self.enable_disable(params.as_ref()),
             2 => self.insert(params),
-            3 => self.delete(params),
+            3 => self.delete(params.as_ref()),
             _ => Err(format!("Method {method_id} not supported for Schedule class")),
         }
     }

@@ -61,7 +61,7 @@ impl TableManager {
     }
 
     /// Method 2: `remove_entries` — remove rows by key; empty list clears all.
-    fn remove_entries(&mut self, keys: Vec<CosemDataType>) -> Result<CosemDataType, String> {
+    fn remove_entries(&mut self, keys: &[CosemDataType]) -> Result<CosemDataType, String> {
         let key_index = self.key_index;
         if keys.is_empty() {
             self.rows.clear();
@@ -72,7 +72,7 @@ impl TableManager {
     }
 
     /// Method 4: `retrieve_entries` — rows matching the keys; empty list = all.
-    fn retrieve_entries(&self, keys: Vec<CosemDataType>) -> CosemDataType {
+    fn retrieve_entries(&self, keys: &[CosemDataType]) -> CosemDataType {
         let key_index = self.key_index;
         let selected = if keys.is_empty() {
             self.rows.clone()
@@ -144,7 +144,7 @@ impl InterfaceClass for TableManager {
             }
             2 => {
                 let keys = Self::entries_list(params)?;
-                self.remove_entries(keys)
+                self.remove_entries(&keys)
             }
             3 => {
                 // Already clamped to u8::MAX above, so the cast can't truncate.
@@ -154,7 +154,7 @@ impl InterfaceClass for TableManager {
             }
             4 => {
                 let keys = Self::entries_list(params)?;
-                Ok(self.retrieve_entries(keys))
+                Ok(self.retrieve_entries(&keys))
             }
             other => Err(format!("method {other} not supported for the Table manager class")),
         }

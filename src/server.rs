@@ -701,19 +701,19 @@ impl RequestDispatcher {
             // Begin reassembling a block-transferred value.
             SetRequest::WithFirstDatablock { invoke_id_and_priority, attribute, datablock, .. } => {
                 self.pending_set = Some(PendingSet { attribute, buffer: Vec::new() });
-                Ok(self.accumulate_set_block(invoke_id_and_priority, datablock))
+                Ok(self.accumulate_set_block(invoke_id_and_priority, &datablock))
             }
             SetRequest::WithDatablock { invoke_id_and_priority, datablock } => {
                 if self.pending_set.is_none() {
                     return Ok(not_possible());
                 }
-                Ok(self.accumulate_set_block(invoke_id_and_priority, datablock))
+                Ok(self.accumulate_set_block(invoke_id_and_priority, &datablock))
             }
         }
     }
 
     /// Appends one SET datablock; on the last block, decodes and writes the value.
-    fn accumulate_set_block(&mut self, invoke_id_and_priority: u8, datablock: DataBlockSa) -> Vec<u8> {
+    fn accumulate_set_block(&mut self, invoke_id_and_priority: u8, datablock: &DataBlockSa) -> Vec<u8> {
         let Some(pending) = self.pending_set.as_mut() else {
             return not_possible();
         };

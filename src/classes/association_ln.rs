@@ -426,8 +426,8 @@ impl AssociationLn {
 
     /// Method 3: `add_object` — adds an `object_list_element` to `object_list`.
     /// If an object with the same (class_id, logical_name) already exists, it is updated.
-    fn add_object(&mut self, data: CosemDataType) -> Result<CosemDataType, String> {
-        let elem = ObjectListElement::try_from(&data)?;
+    fn add_object(&mut self, data: &CosemDataType) -> Result<CosemDataType, String> {
+        let elem = ObjectListElement::try_from(data)?;
         let key = (elem.class_id, elem.logical_name.to_bytes());
         if let Some(existing) = self.object_list.iter_mut().find(|e| (e.class_id, e.logical_name.to_bytes()) == key) {
             *existing = elem;
@@ -438,8 +438,8 @@ impl AssociationLn {
     }
 
     /// Method 4: `remove_object` — removes an `object_list_element` from `object_list`.
-    fn remove_object(&mut self, data: CosemDataType) -> Result<CosemDataType, String> {
-        let elem = ObjectListElement::try_from(&data)?;
+    fn remove_object(&mut self, data: &CosemDataType) -> Result<CosemDataType, String> {
+        let elem = ObjectListElement::try_from(data)?;
         let key = (elem.class_id, elem.logical_name.to_bytes());
         let before = self.object_list.len();
         self.object_list.retain(|e| (e.class_id, e.logical_name.to_bytes()) != key);
@@ -452,8 +452,8 @@ impl AssociationLn {
     /// Method 5 (version 2): `add_user` — adds a `user { id, name }` entry to
     /// `user_list`. If an entry with the same user id already exists, it is
     /// updated (IEC 62056-6-2 §5.3.7.3.5).
-    fn add_user(&mut self, data: CosemDataType) -> Result<CosemDataType, String> {
-        let user = User::try_from(&data)?;
+    fn add_user(&mut self, data: &CosemDataType) -> Result<CosemDataType, String> {
+        let user = User::try_from(data)?;
         let id = user.user_id;
         if let Some(existing) = self.user_list.iter_mut().find(|e| e.user_id == id) {
             *existing = user;
@@ -465,8 +465,8 @@ impl AssociationLn {
 
     /// Method 6 (version 2): `remove_user` — removes the `user` entry with the
     /// given id from `user_list` (IEC 62056-6-2 §5.3.7.3.6).
-    fn remove_user(&mut self, data: CosemDataType) -> Result<CosemDataType, String> {
-        let user = User::try_from(&data)?;
+    fn remove_user(&mut self, data: &CosemDataType) -> Result<CosemDataType, String> {
+        let user = User::try_from(data)?;
         let id = user.user_id;
         let before = self.user_list.len();
         self.user_list.retain(|e| e.user_id != id);
@@ -723,11 +723,11 @@ impl InterfaceClass for AssociationLn {
         match method_id {
             1 => self.reply_to_hls_authentication_checked(params),
             2 => self.change_hls_secret(params),
-            3 => self.add_object(params),
-            4 => self.remove_object(params),
+            3 => self.add_object(&params),
+            4 => self.remove_object(&params),
             // add_user / remove_user exist only in version 2.
-            5 if is_v2 => self.add_user(params),
-            6 if is_v2 => self.remove_user(params),
+            5 if is_v2 => self.add_user(&params),
+            6 if is_v2 => self.remove_user(&params),
             _ => Err(format!("Method {} not supported for Association LN version {}", method_id, self.version())),
         }
     }
