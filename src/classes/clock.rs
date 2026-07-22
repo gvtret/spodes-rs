@@ -183,7 +183,7 @@ impl InterfaceClass for Clock {
             attr.serialize_ber(&mut seq_buf)?;
         }
         buf.push(0x02); // structure [2]
-        write_length(1 + self.attributes().len(), buf)?; // length = element count
+        write_length(1 + self.attributes().len(), buf); // length = element count
         buf.extend_from_slice(&seq_buf);
         Ok(())
     }
@@ -259,7 +259,7 @@ impl InterfaceClass for Clock {
 
 /// Writes a length in BER (short or long form).
 #[allow(clippy::cast_possible_truncation)] // length < 128 and num_octets in 1..=8 always fit u8
-fn write_length(length: usize, buf: &mut Vec<u8>) -> Result<(), BerError> {
+fn write_length(length: usize, buf: &mut Vec<u8>) {
     if length < 128 {
         buf.push(length as u8);
     } else {
@@ -269,5 +269,4 @@ fn write_length(length: usize, buf: &mut Vec<u8>) -> Result<(), BerError> {
         buf.push(0x80 | num_octets as u8);
         buf.extend_from_slice(&bytes[first_non_zero..]);
     }
-    Ok(())
 }
