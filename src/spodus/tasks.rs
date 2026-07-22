@@ -108,8 +108,13 @@ impl ExchangeTask {
                 ])
             })
             .collect();
+        // task_id is practically always <=u16::MAX (a concentrator won't
+        // schedule 65536+ tasks); the wire field is long-unsigned regardless
+        // of the wider in-memory type.
+        #[allow(clippy::cast_possible_truncation)]
+        let task_id = self.task_id as u16;
         CosemDataType::Structure(vec![
-            CosemDataType::LongUnsigned(self.task_id as u16),
+            CosemDataType::LongUnsigned(task_id),
             CosemDataType::Array(meter_ids),
             CosemDataType::Array(scripts),
             CosemDataType::Enum(self.execution_type),

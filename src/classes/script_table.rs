@@ -43,10 +43,10 @@ impl ScriptTable {
     /// # Returns
     /// * `Ok(CosemDataType::Null)` - If the script was found and executed.
     /// * `Err(String)` - If the script was not found or the parameter is invalid.
-    fn execute(&mut self, params: Option<CosemDataType>) -> Result<CosemDataType, String> {
+    fn execute(&self, params: Option<&CosemDataType>) -> Result<CosemDataType, String> {
         if let Some(CosemDataType::LongUnsigned(script_id)) = params {
             for script in &self.scripts {
-                if script.script_identifier == script_id {
+                if script.script_identifier == *script_id {
                     // The action execution logic would go here.
                     return Ok(CosemDataType::Null);
                 }
@@ -88,7 +88,7 @@ impl InterfaceClass for ScriptTable {
             attr.serialize_ber(&mut seq_buf)?;
         }
         buf.push(0x02); // structure [2]
-        write_length(1 + self.attributes().len(), buf)?; // length = element count
+        write_length(1 + self.attributes().len(), buf); // length = element count
         buf.extend_from_slice(&seq_buf);
         Ok(())
     }
@@ -134,7 +134,7 @@ impl InterfaceClass for ScriptTable {
 
     fn invoke_method(&mut self, method_id: u8, params: Option<CosemDataType>) -> Result<CosemDataType, String> {
         match method_id {
-            1 => self.execute(params),
+            1 => self.execute(params.as_ref()),
             _ => Err(format!("Method {method_id} not supported for ScriptTable class")),
         }
     }
@@ -145,7 +145,8 @@ impl InterfaceClass for ScriptTable {
 }
 
 /// Writes a length in BER (short or long form).
-fn write_length(length: usize, buf: &mut Vec<u8>) -> Result<(), BerError> {
+#[allow(clippy::cast_possible_truncation)] // length < 128 and num_octets in 1..=8 always fit u8
+fn write_length(length: usize, buf: &mut Vec<u8>) {
     if length < 128 {
         buf.push(length as u8);
     } else {
@@ -155,5 +156,4 @@ fn write_length(length: usize, buf: &mut Vec<u8>) -> Result<(), BerError> {
         buf.push(0x80 | num_octets as u8);
         buf.extend_from_slice(&bytes[first_non_zero..]);
     }
-    Ok(())
 }

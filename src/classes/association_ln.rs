@@ -280,7 +280,7 @@ impl AssociationLn {
         match mechanism {
             // Mechanisms 3/4: f(challenge) = HASH(challenge ‖ secret).
             AuthMechanism::HlsMd5 | AuthMechanism::HlsSha1 => {
-                let secret = self.secret_bytes()?;
+                let secret = self.secret_bytes();
                 let expected = hls::hash_legacy(mechanism, stoc, secret).ok_or("HLS hash computation failed")?;
                 if expected != f_stoc {
                     return Err("HLS authentication failed: f(StoC) mismatch".to_string());
@@ -290,7 +290,7 @@ impl AssociationLn {
             }
             // Mechanisms 6/9: f = HASH(secret ‖ ST_a ‖ ST_b ‖ chal_a ‖ chal_b).
             AuthMechanism::HlsSha256 | AuthMechanism::HlsGostStreebog => {
-                let secret = self.secret_bytes()?;
+                let secret = self.secret_bytes();
                 let ctx = self.hls_context.as_ref().ok_or("HLS context (system titles) not set")?;
                 let expected = hls::hash_with_titles(
                     mechanism,
@@ -386,7 +386,7 @@ impl AssociationLn {
             // Mechanism 2 (manufacturer-specific): f(challenge) = AES-128 over
             // the challenge keyed by the secret (Gurux / TI "high" scheme).
             AuthMechanism::HlsManufacturer => {
-                let secret = self.secret_bytes()?;
+                let secret = self.secret_bytes();
                 let expected = hls::manufacturer_aes(secret, stoc);
                 if expected != f_stoc {
                     return Err("HLS authentication failed: f(StoC) mismatch".to_string());
@@ -420,14 +420,14 @@ impl AssociationLn {
     }
 
     /// Returns the secret as bytes.
-    fn secret_bytes(&self) -> Result<&[u8], String> {
-        Ok(&self.secret)
+    fn secret_bytes(&self) -> &[u8] {
+        &self.secret
     }
 
     /// Method 3: `add_object` — adds an `object_list_element` to `object_list`.
     /// If an object with the same (class_id, logical_name) already exists, it is updated.
-    fn add_object(&mut self, data: CosemDataType) -> Result<CosemDataType, String> {
-        let elem = ObjectListElement::try_from(&data)?;
+    fn add_object(&mut self, data: &CosemDataType) -> Result<CosemDataType, String> {
+        let elem = ObjectListElement::try_from(data)?;
         let key = (elem.class_id, elem.logical_name.to_bytes());
         if let Some(existing) = self.object_list.iter_mut().find(|e| (e.class_id, e.logical_name.to_bytes()) == key) {
             *existing = elem;
@@ -438,8 +438,8 @@ impl AssociationLn {
     }
 
     /// Method 4: `remove_object` — removes an `object_list_element` from `object_list`.
-    fn remove_object(&mut self, data: CosemDataType) -> Result<CosemDataType, String> {
-        let elem = ObjectListElement::try_from(&data)?;
+    fn remove_object(&mut self, data: &CosemDataType) -> Result<CosemDataType, String> {
+        let elem = ObjectListElement::try_from(data)?;
         let key = (elem.class_id, elem.logical_name.to_bytes());
         let before = self.object_list.len();
         self.object_list.retain(|e| (e.class_id, e.logical_name.to_bytes()) != key);
@@ -452,8 +452,8 @@ impl AssociationLn {
     /// Method 5 (version 2): `add_user` — adds a `user { id, name }` entry to
     /// `user_list`. If an entry with the same user id already exists, it is
     /// updated (IEC 62056-6-2 §5.3.7.3.5).
-    fn add_user(&mut self, data: CosemDataType) -> Result<CosemDataType, String> {
-        let user = User::try_from(&data)?;
+    fn add_user(&mut self, data: &CosemDataType) -> Result<CosemDataType, String> {
+        let user = User::try_from(data)?;
         let id = user.user_id;
         if let Some(existing) = self.user_list.iter_mut().find(|e| e.user_id == id) {
             *existing = user;
@@ -465,8 +465,8 @@ impl AssociationLn {
 
     /// Method 6 (version 2): `remove_user` — removes the `user` entry with the
     /// given id from `user_list` (IEC 62056-6-2 §5.3.7.3.6).
-    fn remove_user(&mut self, data: CosemDataType) -> Result<CosemDataType, String> {
-        let user = User::try_from(&data)?;
+    fn remove_user(&mut self, data: &CosemDataType) -> Result<CosemDataType, String> {
+        let user = User::try_from(data)?;
         let id = user.user_id;
         let before = self.user_list.len();
         self.user_list.retain(|e| e.user_id != id);
@@ -626,7 +626,7 @@ impl InterfaceClass for AssociationLn {
             attr.serialize_ber(&mut seq_buf)?;
         }
         buf.push(0x02); // structure [2]
-        write_length(1 + self.attributes().len(), buf)?; // length = element count
+        write_length(1 + self.attributes().len(), buf); // length = element count
         buf.extend_from_slice(&seq_buf);
         Ok(())
     }
@@ -723,11 +723,11 @@ impl InterfaceClass for AssociationLn {
         match method_id {
             1 => self.reply_to_hls_authentication_checked(params),
             2 => self.change_hls_secret(params),
-            3 => self.add_object(params),
-            4 => self.remove_object(params),
+            3 => self.add_object(&params),
+            4 => self.remove_object(&params),
             // add_user / remove_user exist only in version 2.
-            5 if is_v2 => self.add_user(params),
-            6 if is_v2 => self.remove_user(params),
+            5 if is_v2 => self.add_user(&params),
+            6 if is_v2 => self.remove_user(&params),
             _ => Err(format!("Method {} not supported for Association LN version {}", method_id, self.version())),
         }
     }
@@ -750,7 +750,9 @@ impl AssociationLn {
     }
 }
 
-fn write_length(length: usize, buf: &mut Vec<u8>) -> Result<(), BerError> {
+/// Writes a BER/A-XDR length octet (short or long form).
+#[allow(clippy::cast_possible_truncation)] // length < 128 and num_octets in 1..=8 always fit u8
+fn write_length(length: usize, buf: &mut Vec<u8>) {
     if length < 128 {
         buf.push(length as u8);
     } else {
@@ -760,7 +762,6 @@ fn write_length(length: usize, buf: &mut Vec<u8>) -> Result<(), BerError> {
         buf.push(0x80 | num_octets as u8);
         buf.extend_from_slice(&bytes[first_non_zero..]);
     }
-    Ok(())
 }
 
 #[cfg(test)]

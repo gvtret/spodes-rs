@@ -35,7 +35,7 @@ pub const FLAG: u8 = 0x7E;
 pub fn fcs16(data: &[u8]) -> u16 {
     let mut fcs: u16 = 0xFFFF;
     for &byte in data {
-        fcs ^= byte as u16;
+        fcs ^= u16::from(byte);
         for _ in 0..8 {
             if fcs & 1 != 0 {
                 fcs = (fcs >> 1) ^ 0x8408;
@@ -100,14 +100,14 @@ impl HdlcAddress {
 
     /// Creates a single-octet address (typical for a client address).
     pub fn one_byte(value: u8) -> Self {
-        HdlcAddress { value: value as u32, length: 1 }
+        HdlcAddress { value: u32::from(value), length: 1 }
     }
 
-    fn encode(&self, out: &mut Vec<u8>) {
+    fn encode(self, out: &mut Vec<u8>) {
         for i in (0..self.length).rev() {
             let group = ((self.value >> (7 * i)) & 0x7F) as u8;
             let last = i == 0;
-            out.push((group << 1) | last as u8);
+            out.push((group << 1) | u8::from(last));
         }
     }
 
@@ -117,7 +117,7 @@ impl HdlcAddress {
         loop {
             let idx = offset + consumed;
             let byte = *bytes.get(idx).ok_or(HdlcError::Truncated)?;
-            value = (value << 7) | ((byte >> 1) as u32);
+            value = (value << 7) | u32::from(byte >> 1);
             consumed += 1;
             if byte & 1 == 1 {
                 break;
@@ -126,7 +126,10 @@ impl HdlcAddress {
                 return Err(HdlcError::AddressTooLong);
             }
         }
-        Ok((HdlcAddress { value, length: consumed as u8 }, consumed))
+        // consumed is 1..=4: the loop above returns AddressTooLong before it can grow further.
+        #[allow(clippy::cast_possible_truncation)]
+        let length = consumed as u8;
+        Ok((HdlcAddress { value, length }, consumed))
     }
 }
 
@@ -189,9 +192,9 @@ pub enum Control {
 }
 
 impl Control {
-    fn encode(&self) -> u8 {
+    fn encode(self) -> u8 {
         let pf = |b: bool| if b { 0x10 } else { 0x00 };
-        match *self {
+        match self {
             Control::Snrm { poll } => 0x83 | pf(poll),
             Control::Ua { final_bit } => 0x63 | pf(final_bit),
             Control::Disc { poll } => 0x43 | pf(poll),
@@ -276,11 +279,13 @@ impl XidParams {
         params.extend_from_slice(&self.max_info_rx.to_be_bytes());
         params.push(0x07);
         params.push(0x04);
-        params.extend_from_slice(&(self.window_tx as u32).to_be_bytes());
+        params.extend_from_slice(&u32::from(self.window_tx).to_be_bytes());
         params.push(0x08);
         params.push(0x04);
-        params.extend_from_slice(&(self.window_rx as u32).to_be_bytes());
+        params.extend_from_slice(&u32::from(self.window_rx).to_be_bytes());
 
+        // Fixed-shape encoding (4 TLV fields of known width): always 20 bytes.
+        #[allow(clippy::cast_possible_truncation)]
         let mut out = vec![0x81, 0x80, params.len() as u8];
         out.extend_from_slice(&params);
         out
@@ -301,8 +306,17 @@ impl XidParams {
             match (param_id, value.len()) {
                 (0x05, 2) => p.max_info_tx = u16::from_be_bytes([value[0], value[1]]),
                 (0x06, 2) => p.max_info_rx = u16::from_be_bytes([value[0], value[1]]),
-                (0x07, 4) => p.window_tx = u32::from_be_bytes([value[0], value[1], value[2], value[3]]) as u8,
-                (0x08, 4) => p.window_rx = u32::from_be_bytes([value[0], value[1], value[2], value[3]]) as u8,
+                // Window sizes are conventionally 1..=7; a peer proposing an
+                // out-of-range value is clamped to u8::MAX rather than wrapped,
+                // so a bogus large value can't silently alias a small one.
+                (0x07, 4) => {
+                    p.window_tx =
+                        u8::try_from(u32::from_be_bytes([value[0], value[1], value[2], value[3]])).unwrap_or(u8::MAX);
+                }
+                (0x08, 4) => {
+                    p.window_rx =
+                        u8::try_from(u32::from_be_bytes([value[0], value[1], value[2], value[3]])).unwrap_or(u8::MAX);
+                }
                 _ => {}
             }
             idx += param_len;
@@ -364,7 +378,10 @@ impl HdlcFrame {
 
         let mut framed = Vec::with_capacity(length + 2);
         let seg = if self.segmented { 0x08 } else { 0x00 };
+        // Both operands are masked to 3 and 8 bits respectively, so each always fits u8.
+        #[allow(clippy::cast_possible_truncation)]
         let format_hi = 0xA0 | seg | ((length >> 8) & 0x07) as u8;
+        #[allow(clippy::cast_possible_truncation)]
         let format_lo = (length & 0xFF) as u8;
 
         // Everything the FCS is computed over (format .. end of info).
@@ -500,7 +517,7 @@ impl<T: PhysicalTransport> HdlcLayer<T> {
             send_seq: 0,
             recv_seq: 0,
             connected: false,
-            inter_octet_timeout: Duration::from_millis(INTER_OCTET_DEFAULT_MS as u64),
+            inter_octet_timeout: Duration::from_millis(u64::from(INTER_OCTET_DEFAULT_MS)),
             inactivity_timeout: None,
             xid_configured: XidParams::client_default(),
             xid: XidParams::client_default(),
@@ -517,7 +534,7 @@ impl<T: PhysicalTransport> HdlcLayer<T> {
             send_seq: 0,
             recv_seq: 0,
             connected: false,
-            inter_octet_timeout: Duration::from_millis(INTER_OCTET_DEFAULT_MS as u64),
+            inter_octet_timeout: Duration::from_millis(u64::from(INTER_OCTET_DEFAULT_MS)),
             inactivity_timeout: None,
             xid_configured: XidParams::server_default(),
             xid: XidParams::server_default(),
@@ -532,7 +549,7 @@ impl<T: PhysicalTransport> HdlcLayer<T> {
     /// Has an effect only if the underlying [`PhysicalTransport`] honours
     /// [`PhysicalTransport::set_read_timeout`].
     pub fn set_inter_octet_timeout_ms(&mut self, ms: u16) {
-        self.inter_octet_timeout = Duration::from_millis(ms.clamp(INTER_OCTET_MIN_MS, INTER_OCTET_MAX_MS) as u64);
+        self.inter_octet_timeout = Duration::from_millis(u64::from(ms.clamp(INTER_OCTET_MIN_MS, INTER_OCTET_MAX_MS)));
     }
 
     /// Sets the inactivity timeout (IEC 62056-46 "межкадровый"): the maximum
@@ -546,7 +563,7 @@ impl<T: PhysicalTransport> HdlcLayer<T> {
     /// [`PhysicalTransport::set_read_timeout`].
     pub fn set_inactivity_timeout_s(&mut self, seconds: u16) {
         let seconds = seconds.min(INACTIVITY_MAX_S);
-        self.inactivity_timeout = if seconds == 0 { None } else { Some(Duration::from_secs(seconds as u64)) };
+        self.inactivity_timeout = if seconds == 0 { None } else { Some(Duration::from_secs(u64::from(seconds))) };
     }
 
     /// Sets this station's XID ceiling — the ceiling is what SNRM proposes
@@ -842,7 +859,10 @@ impl<T: PhysicalTransport> DataLinkLayer for HdlcLayer<T> {
 
     fn client_sap(&self) -> Option<u8> {
         if !self.is_client && self.peer.length == 1 {
-            Some(self.peer.value as u8)
+            // length == 1 means a single 7-bit address group, always < 128.
+            #[allow(clippy::cast_possible_truncation)]
+            let sap = self.peer.value as u8;
+            Some(sap)
         } else {
             None
         }
@@ -1229,6 +1249,15 @@ mod tests {
         let peer = XidParams { max_info_tx: 0, max_info_rx: 0, window_tx: 0, window_rx: 0 };
         mine.negotiate(peer);
         assert_eq!(mine, XidParams::client_default(), "an all-zero (absent) proposal changes nothing");
+    }
+
+    #[test]
+    fn xid_decode_clamps_out_of_range_window_instead_of_wrapping() {
+        // window_tx param (tag 0x07, len 4) carrying 300 — out of u8 range.
+        let data = [0x81, 0x80, 0x06, 0x07, 0x04, 0x00, 0x00, 0x01, 0x2C];
+        let p = XidParams::decode(&data);
+        // 300 as u8 would wrap to 44; it must clamp to u8::MAX instead.
+        assert_eq!(p.window_tx, u8::MAX);
     }
 
     #[test]

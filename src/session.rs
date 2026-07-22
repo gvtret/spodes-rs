@@ -87,18 +87,21 @@ impl SessionConfig {
     }
 
     /// Sets the request timeout.
+    #[must_use]
     pub fn with_request_timeout(mut self, timeout: Duration) -> Self {
         self.request_timeout = Some(timeout);
         self
     }
 
     /// Sets the maximum number of retries.
+    #[must_use]
     pub fn with_max_retries(mut self, retries: u32) -> Self {
         self.max_retries = retries;
         self
     }
 
     /// Sets the delay between retries.
+    #[must_use]
     pub fn with_retry_delay(mut self, delay: Duration) -> Self {
         self.retry_delay = delay;
         self
@@ -221,30 +224,35 @@ impl AarqBuilder {
     }
 
     /// Sets the application context (LN, SN, LN_CIPHERING, SN_CIPHERING).
+    #[must_use]
     pub fn application_context(mut self, ctx: u8) -> Self {
         self.application_context = ctx;
         self
     }
 
     /// Sets the calling AP title (client system title) for ciphering.
+    #[must_use]
     pub fn calling_ap_title(mut self, title: Vec<u8>) -> Self {
         self.calling_ap_title = Some(title);
         self
     }
 
     /// Sets the authentication mechanism (LLS, HLS_MD5, HLS_SHA1, HLS_GMAC).
+    #[must_use]
     pub fn mechanism(mut self, mech: u8) -> Self {
         self.mechanism_name = Some(mech);
         self
     }
 
     /// Sets the calling authentication value (LLS password or HLS challenge).
+    #[must_use]
     pub fn authentication_value(mut self, value: Vec<u8>) -> Self {
         self.calling_authentication_value = Some(value);
         self
     }
 
     /// Sets the user information (InitiateRequest APDU).
+    #[must_use]
     pub fn user_information(mut self, info: Vec<u8>) -> Self {
         self.user_information = info;
         self
@@ -286,6 +294,7 @@ impl<L: DataLinkLayer> ClientSessionBuilder<L> {
     /// Sets the request timeout. If a response is not received within this
     /// duration, the request is retried (if retries are configured) or
     /// a [`SessionError::Timeout`] error is returned.
+    #[must_use]
     pub fn request_timeout(mut self, timeout: Duration) -> Self {
         self.config.request_timeout = Some(timeout);
         self
@@ -293,18 +302,21 @@ impl<L: DataLinkLayer> ClientSessionBuilder<L> {
 
     /// Sets the maximum number of retry attempts for transient errors
     /// (I/O errors, unexpected APDUs). Set to 0 for no retries.
+    #[must_use]
     pub fn max_retries(mut self, retries: u32) -> Self {
         self.config.max_retries = retries;
         self
     }
 
     /// Sets the delay between retry attempts.
+    #[must_use]
     pub fn retry_delay(mut self, delay: Duration) -> Self {
         self.config.retry_delay = delay;
         self
     }
 
     /// Configures global ciphering for the session.
+    #[must_use]
     pub fn with_ciphering(mut self, tx: SecurityContext, rx: SecurityContext) -> Self {
         self.tx_cipher = Some(tx);
         self.rx_cipher = Some(rx);
@@ -316,6 +328,7 @@ impl<L: DataLinkLayer> ClientSessionBuilder<L> {
     /// exceed `block_size` octets: they are segmented into GBT blocks instead
     /// of sent as a single frame. Unconfirmed by default (no ack between
     /// blocks); see [`ClientSessionBuilder::gbt_window`] for confirmed mode.
+    #[must_use]
     pub fn with_gbt(mut self, block_size: usize) -> Self {
         self.gbt = Some(GbtConfig::new(block_size));
         self
@@ -323,6 +336,7 @@ impl<L: DataLinkLayer> ClientSessionBuilder<L> {
 
     /// Sets the confirmed-mode window size for GBT (0 = unconfirmed).
     /// Has no effect unless [`ClientSessionBuilder::with_gbt`] was called.
+    #[must_use]
     pub fn gbt_window(mut self, window: u8) -> Self {
         if let Some(g) = self.gbt.as_mut() {
             g.window = window;
@@ -332,6 +346,7 @@ impl<L: DataLinkLayer> ClientSessionBuilder<L> {
 
     /// Enables the streaming variant of GBT. Has no effect unless
     /// [`ClientSessionBuilder::with_gbt`] was called.
+    #[must_use]
     pub fn gbt_streaming(mut self, enabled: bool) -> Self {
         if let Some(g) = self.gbt.as_mut() {
             g.streaming = enabled;
@@ -818,7 +833,7 @@ impl<L: DataLinkLayer> ClientSession<L> {
 
         let reply = self.link.receive_apdu()?;
         let reply = if reply.first() == Some(&gbt::GENERAL_BLOCK_TRANSFER) {
-            gbt::receive(&mut self.link, reply)?
+            gbt::receive(&mut self.link, &reply)?
         } else {
             reply
         };

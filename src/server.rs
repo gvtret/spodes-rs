@@ -245,6 +245,8 @@ impl RequestDispatcher {
                 );
                 GetDataResult::AccessResult(data_access_result::OBJECT_UNDEFINED)
             },
+            // Attribute ids are always <128 in practice (i8-valued on the wire).
+            #[allow(clippy::cast_possible_wrap)]
             |obj| match obj.attributes().into_iter().find(|(id, _)| *id as i8 == attr_id) {
                 Some((_, value)) => {
                     #[cfg(feature = "tracing")]
@@ -286,18 +288,23 @@ impl RequestDispatcher {
                 );
                 data_access_result::OBJECT_UNDEFINED
             },
-            |obj| match obj.set_attribute(d.attribute_id as u8, value) {
-                Ok(()) => {
-                    #[cfg(feature = "tracing")]
-                    debug!(
-                        class_id = d.class_id,
-                        instance = %d.instance_id,
-                        attr_id = d.attribute_id,
-                        "SET: success"
-                    );
-                    data_access_result::SUCCESS
+            |obj| {
+                // Attribute ids are always <128 in practice (i8-valued on the wire).
+                #[allow(clippy::cast_sign_loss)]
+                let attribute_id = d.attribute_id as u8;
+                match obj.set_attribute(attribute_id, value) {
+                    Ok(()) => {
+                        #[cfg(feature = "tracing")]
+                        debug!(
+                            class_id = d.class_id,
+                            instance = %d.instance_id,
+                            attr_id = d.attribute_id,
+                            "SET: success"
+                        );
+                        data_access_result::SUCCESS
+                    }
+                    Err(_) => data_access_result::READ_WRITE_DENIED,
                 }
-                Err(_) => data_access_result::READ_WRITE_DENIED,
             },
         )
     }
@@ -327,12 +334,10 @@ impl RequestDispatcher {
             && (d.instance_id == ObisCode::new(0, 0, 40, 0, 0, 255)
                 || self.association.as_ref().is_some_and(|assoc| assoc.logical_name() == &d.instance_id));
         if routed_to_assoc {
-            return match self
-                .association
-                .as_mut()
-                .expect("association routing")
-                .invoke_method(d.method_id as u8, params)
-            {
+            // Method ids are always <128 in practice (i8-valued on the wire).
+            #[allow(clippy::cast_sign_loss)]
+            let method_id = d.method_id as u8;
+            return match self.association.as_mut().expect("association routing").invoke_method(method_id, params) {
                 Ok(crate::types::CosemDataType::Null) => (data_access_result::SUCCESS, None),
                 Ok(value) => (data_access_result::SUCCESS, Some(GetDataResult::Data(value))),
                 Err(_) => (data_access_result::OTHER_REASON, None),
@@ -349,36 +354,41 @@ impl RequestDispatcher {
                 );
                 (data_access_result::OBJECT_UNDEFINED, None)
             },
-            |obj| match obj.invoke_method(d.method_id as u8, params) {
-                Ok(crate::types::CosemDataType::Null) => {
-                    #[cfg(feature = "tracing")]
-                    debug!(
-                        class_id = d.class_id,
-                        instance = %d.instance_id,
-                        method_id = d.method_id,
-                        "ACTION: success"
-                    );
-                    (data_access_result::SUCCESS, None)
-                }
-                Ok(value) => {
-                    #[cfg(feature = "tracing")]
-                    debug!(
-                        class_id = d.class_id,
-                        instance = %d.instance_id,
-                        method_id = d.method_id,
-                        "ACTION: success (with return value)"
-                    );
-                    (data_access_result::SUCCESS, Some(GetDataResult::Data(value)))
-                }
-                Err(_) => {
-                    #[cfg(feature = "tracing")]
-                    warn!(
-                        class_id = d.class_id,
-                        instance = %d.instance_id,
-                        method_id = d.method_id,
-                        "ACTION: method returned error"
-                    );
-                    (data_access_result::OTHER_REASON, None)
+            |obj| {
+                // Method ids are always <128 in practice (i8-valued on the wire).
+                #[allow(clippy::cast_sign_loss)]
+                let method_id = d.method_id as u8;
+                match obj.invoke_method(method_id, params) {
+                    Ok(crate::types::CosemDataType::Null) => {
+                        #[cfg(feature = "tracing")]
+                        debug!(
+                            class_id = d.class_id,
+                            instance = %d.instance_id,
+                            method_id = d.method_id,
+                            "ACTION: success"
+                        );
+                        (data_access_result::SUCCESS, None)
+                    }
+                    Ok(value) => {
+                        #[cfg(feature = "tracing")]
+                        debug!(
+                            class_id = d.class_id,
+                            instance = %d.instance_id,
+                            method_id = d.method_id,
+                            "ACTION: success (with return value)"
+                        );
+                        (data_access_result::SUCCESS, Some(GetDataResult::Data(value)))
+                    }
+                    Err(_) => {
+                        #[cfg(feature = "tracing")]
+                        warn!(
+                            class_id = d.class_id,
+                            instance = %d.instance_id,
+                            method_id = d.method_id,
+                            "ACTION: method returned error"
+                        );
+                        (data_access_result::OTHER_REASON, None)
+                    }
                 }
             },
         )
@@ -391,7 +401,7 @@ impl RequestDispatcher {
     pub fn dispatch(&mut self, request: &[u8]) -> Result<Vec<u8>, ServiceError> {
         match request.first() {
             Some(&tag::GET_REQUEST) => self.dispatch_get(request),
-            Some(&tag::SET_REQUEST) => self.dispatch_set(request),
+            Some(&tag::SET_REQUEST) => Ok(self.dispatch_set(request)),
             Some(&tag::ACTION_REQUEST) => self.dispatch_action(request),
             Some(&acse::AARQ_TAG) => Ok(self.handle_aarq(request)),
             Some(&acse::RLRQ_TAG) => Ok(self.handle_rlrq(request)),
@@ -474,7 +484,7 @@ impl RequestDispatcher {
         }
 
         let mechanism = aarq.mechanism_name.and_then(AuthMechanism::from_id).unwrap_or(AuthMechanism::None);
-        let user_information = self.negotiate_initiate_response(initiate.as_ref());
+        let user_information = Self::negotiate_initiate_response(initiate.as_ref());
         match mechanism {
             AuthMechanism::None => {
                 if let Some(assoc) = self.association.as_mut() {
@@ -566,7 +576,7 @@ impl RequestDispatcher {
 
     /// Builds the negotiated InitiateResponse: the conformance is ANDed with
     /// the client's proposal and the PDU size capped by the client's maximum.
-    fn negotiate_initiate_response(&self, ireq: Option<&InitiateRequest>) -> Vec<u8> {
+    fn negotiate_initiate_response(ireq: Option<&InitiateRequest>) -> Vec<u8> {
         let mut conformance = SERVER_CONFORMANCE;
         let mut pdu = SERVER_MAX_PDU;
         if let Some(ireq) = ireq {
@@ -670,40 +680,38 @@ impl RequestDispatcher {
         response.encode().unwrap_or_default()
     }
 
-    fn dispatch_set(&mut self, request: &[u8]) -> Result<Vec<u8>, ServiceError> {
+    fn dispatch_set(&mut self, request: &[u8]) -> Vec<u8> {
         // A malformed SET is answered with a data-access-result instead of
         // dropping the session.
         let Ok(decoded) = SetRequest::decode(request) else {
             let invoke_id_and_priority = request.get(2).copied().unwrap_or(0);
-            return Ok(
-                SetResponse::Normal { invoke_id_and_priority, result: data_access_result::OTHER_REASON }.encode()
-            );
+            return SetResponse::Normal { invoke_id_and_priority, result: data_access_result::OTHER_REASON }.encode();
         };
         match decoded {
             SetRequest::Normal { invoke_id_and_priority, attribute, value, .. } => {
                 let result = self.write_attribute(&attribute, value);
-                Ok(SetResponse::Normal { invoke_id_and_priority, result }.encode())
+                SetResponse::Normal { invoke_id_and_priority, result }.encode()
             }
             SetRequest::WithList { invoke_id_and_priority, attributes, values } => {
                 let results = attributes.iter().zip(values).map(|((a, _), v)| self.write_attribute(a, v)).collect();
-                Ok(SetResponse::WithList { invoke_id_and_priority, results }.encode())
+                SetResponse::WithList { invoke_id_and_priority, results }.encode()
             }
             // Begin reassembling a block-transferred value.
             SetRequest::WithFirstDatablock { invoke_id_and_priority, attribute, datablock, .. } => {
                 self.pending_set = Some(PendingSet { attribute, buffer: Vec::new() });
-                Ok(self.accumulate_set_block(invoke_id_and_priority, datablock))
+                self.accumulate_set_block(invoke_id_and_priority, &datablock)
             }
             SetRequest::WithDatablock { invoke_id_and_priority, datablock } => {
                 if self.pending_set.is_none() {
-                    return Ok(not_possible());
+                    return not_possible();
                 }
-                Ok(self.accumulate_set_block(invoke_id_and_priority, datablock))
+                self.accumulate_set_block(invoke_id_and_priority, &datablock)
             }
         }
     }
 
     /// Appends one SET datablock; on the last block, decodes and writes the value.
-    fn accumulate_set_block(&mut self, invoke_id_and_priority: u8, datablock: DataBlockSa) -> Vec<u8> {
+    fn accumulate_set_block(&mut self, invoke_id_and_priority: u8, datablock: &DataBlockSa) -> Vec<u8> {
         let Some(pending) = self.pending_set.as_mut() else {
             return not_possible();
         };
@@ -790,8 +798,8 @@ fn apply_selective_access(
 fn selective_index(value: &CosemDataType) -> Option<u32> {
     match value {
         CosemDataType::DoubleLongUnsigned(v) => Some(*v),
-        CosemDataType::LongUnsigned(v) => Some(*v as u32),
-        CosemDataType::Unsigned(v) => Some(*v as u32),
+        CosemDataType::LongUnsigned(v) => Some(u32::from(*v)),
+        CosemDataType::Unsigned(v) => Some(u32::from(*v)),
         _ => None,
     }
 }

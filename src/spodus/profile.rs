@@ -24,6 +24,8 @@ pub(crate) fn reference_profile(
             (object, 2u8)
         })
         .collect();
+    // An in-memory buffer never approaches u32::MAX entries.
+    #[allow(clippy::cast_possible_truncation)]
     let entries_in_use = buffer.len() as u32;
     ProfileGeneric::new(ProfileGenericConfig {
         logical_name,

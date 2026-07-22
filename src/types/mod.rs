@@ -63,7 +63,7 @@ impl CosemDataType {
             }
             CosemDataType::Array(items) => {
                 buf.push(0x01); // array [1]
-                write_length(items.len(), buf)?; // length = element count
+                write_length(items.len(), buf); // length = element count
                 for item in items {
                     item.serialize_ber(buf)?;
                 }
@@ -71,7 +71,7 @@ impl CosemDataType {
             }
             CosemDataType::Structure(items) => {
                 buf.push(0x02); // structure [2]
-                write_length(items.len(), buf)?; // length = element count
+                write_length(items.len(), buf); // length = element count
                 for item in items {
                     item.serialize_ber(buf)?;
                 }
@@ -84,6 +84,8 @@ impl CosemDataType {
             }
             CosemDataType::Integer(i) => {
                 buf.push(0x0F); // integer [15]
+                                // Raw octet round-tripped bit-for-bit via `as i8` on decode.
+                #[allow(clippy::cast_sign_loss)]
                 buf.push(*i as u8);
                 Ok(())
             }
@@ -114,13 +116,13 @@ impl CosemDataType {
             }
             CosemDataType::OctetString(s) => {
                 buf.push(0x09); // octet-string [9]
-                write_length(s.len(), buf)?;
+                write_length(s.len(), buf);
                 buf.extend_from_slice(s);
                 Ok(())
             }
             CosemDataType::DateTime(dt) => {
                 buf.push(0x19); // date-time [25]: octet-string SIZE(12) with a length octet
-                write_length(dt.len(), buf)?;
+                write_length(dt.len(), buf);
                 buf.extend_from_slice(dt);
                 Ok(())
             }
@@ -128,7 +130,7 @@ impl CosemDataType {
                 buf.push(0x04); // bit-string [4]
                                 // NB: in A-XDR the bit-string length is given in BITS; here the
                                 // byte count is stored, since the type model holds a raw Vec<u8>.
-                write_length(s.len(), buf)?;
+                write_length(s.len(), buf);
                 buf.extend_from_slice(s);
                 Ok(())
             }
@@ -177,7 +179,10 @@ impl CosemDataType {
             }
             0x0F => {
                 if data.len() >= 2 {
-                    Ok((CosemDataType::Integer(data[1] as i8), &data[2..]))
+                    // Raw octet round-tripped bit-for-bit from `as u8` on encode.
+                    #[allow(clippy::cast_possible_wrap)]
+                    let value = data[1] as i8;
+                    Ok((CosemDataType::Integer(value), &data[2..]))
                 } else {
                     Err(BerError::InvalidLength)
                 }
@@ -257,17 +262,17 @@ impl CosemDataType {
     }
 }
 
-fn write_length(length: usize, buf: &mut Vec<u8>) -> Result<(), BerError> {
+/// Writes a BER/A-XDR length octet (short or long form).
+#[allow(clippy::cast_possible_truncation)] // length < 128 and num_octets in 1..=8 always fit u8
+fn write_length(length: usize, buf: &mut Vec<u8>) {
     if length < 128 {
         buf.push(length as u8);
-        Ok(())
     } else {
         let bytes = (length as u64).to_be_bytes();
         let first_non_zero = bytes.iter().position(|&b| b != 0).unwrap_or(7);
         let num_octets = 8 - first_non_zero;
         buf.push(0x80 | num_octets as u8);
         buf.extend_from_slice(&bytes[first_non_zero..]);
-        Ok(())
     }
 }
 

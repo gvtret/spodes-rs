@@ -141,12 +141,12 @@ fn compare(a: &CosemDataType, b: &CosemDataType) -> Option<Ordering> {
 /// The integer value of a numeric COSEM type, if it is one.
 fn as_int(v: &CosemDataType) -> Option<i128> {
     Some(match v {
-        CosemDataType::Integer(i) => *i as i128,
-        CosemDataType::Long(i) => *i as i128,
-        CosemDataType::DoubleLong(i) => *i as i128,
-        CosemDataType::Unsigned(u) | CosemDataType::Enum(u) => *u as i128,
-        CosemDataType::LongUnsigned(u) => *u as i128,
-        CosemDataType::DoubleLongUnsigned(u) => *u as i128,
+        CosemDataType::Integer(i) => i128::from(*i),
+        CosemDataType::Long(i) => i128::from(*i),
+        CosemDataType::DoubleLong(i) => i128::from(*i),
+        CosemDataType::Unsigned(u) | CosemDataType::Enum(u) => i128::from(*u),
+        CosemDataType::LongUnsigned(u) => i128::from(*u),
+        CosemDataType::DoubleLongUnsigned(u) => i128::from(*u),
         _ => return None,
     })
 }
@@ -197,7 +197,10 @@ impl InterfaceClass for ProfileDataFilter {
                     .iter()
                     .filter(|r| matches!(r, CosemDataType::Structure(f) if self.passes(f, &filters)))
                     .count();
-                Ok(CosemDataType::Unsigned(count.min(u8::MAX as usize) as u8))
+                // Already clamped to u8::MAX above, so the cast can't truncate.
+                #[allow(clippy::cast_possible_truncation)]
+                let count = count.min(u8::MAX as usize) as u8;
+                Ok(CosemDataType::Unsigned(count))
             }
             // retrieve_entries and retrieve_entries_by_row share the filter+project logic.
             2 | 3 => {
@@ -235,7 +238,7 @@ mod tests {
         vec![ObisCode::new(0, 0, 94, 7, 128, 10), ObisCode::new(1, 0, 1, 8, 0, 255)]
     }
 
-    fn col_def(code: ObisCode) -> CosemDataType {
+    fn col_def(code: &ObisCode) -> CosemDataType {
         CosemDataType::Structure(vec![
             CosemDataType::LongUnsigned(1),
             CosemDataType::OctetString(code.to_bytes()),
@@ -258,9 +261,9 @@ mod tests {
     fn value_match_filter_and_projection() {
         let mut filter = build();
         // Select the value column for rows whose meter id is A or C.
-        let selected = vec![col_def(ObisCode::new(1, 0, 1, 8, 0, 255))];
+        let selected = vec![col_def(&ObisCode::new(1, 0, 1, 8, 0, 255))];
         let filters = vec![CosemDataType::Structure(vec![
-            col_def(ObisCode::new(0, 0, 94, 7, 128, 10)),
+            col_def(&ObisCode::new(0, 0, 94, 7, 128, 10)),
             CosemDataType::Null,
             CosemDataType::Null,
             CosemDataType::Array(vec![
@@ -284,7 +287,7 @@ mod tests {
         let mut filter = build();
         // Rows whose value column is in [150, 250] → only B (200).
         let filters = vec![CosemDataType::Structure(vec![
-            col_def(ObisCode::new(1, 0, 1, 8, 0, 255)),
+            col_def(&ObisCode::new(1, 0, 1, 8, 0, 255)),
             CosemDataType::LongUnsigned(150),
             CosemDataType::LongUnsigned(250),
             CosemDataType::Null,

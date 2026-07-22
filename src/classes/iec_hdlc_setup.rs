@@ -74,7 +74,12 @@ impl IecHdlcSetup {
         if self.version >= 1 {
             CosemDataType::LongUnsigned(value)
         } else {
-            CosemDataType::Unsigned(value as u8)
+            // Version 0 represents this attribute as `unsigned`; a value above
+            // 255 there is a misconfiguration (should have been version >= 1).
+            debug_assert!(value <= u16::from(u8::MAX), "max_info_field_length exceeds version 0's unsigned range");
+            #[allow(clippy::cast_possible_truncation)]
+            let v = value as u8;
+            CosemDataType::Unsigned(v)
         }
     }
 }
@@ -118,7 +123,7 @@ impl InterfaceClass for IecHdlcSetup {
             attr.serialize_ber(&mut seq_buf)?;
         }
         buf.push(0x02); // structure [2]
-        write_length(1 + self.attributes().len(), buf)?; // length = element count
+        write_length(1 + self.attributes().len(), buf); // length = element count
         buf.extend_from_slice(&seq_buf);
         Ok(())
     }
@@ -197,13 +202,14 @@ fn take_long_unsigned(value: &CosemDataType) -> Result<u16, BerError> {
 fn take_u16(value: &CosemDataType) -> Result<u16, BerError> {
     match value {
         CosemDataType::LongUnsigned(v) => Ok(*v),
-        CosemDataType::Unsigned(v) => Ok(*v as u16),
+        CosemDataType::Unsigned(v) => Ok(u16::from(*v)),
         _ => Err(BerError::InvalidTag),
     }
 }
 
 /// Writes a BER length octet (short or long form).
-fn write_length(length: usize, buf: &mut Vec<u8>) -> Result<(), BerError> {
+#[allow(clippy::cast_possible_truncation)] // length < 128 and num_octets in 1..=8 always fit u8
+fn write_length(length: usize, buf: &mut Vec<u8>) {
     if length < 128 {
         buf.push(length as u8);
     } else {
@@ -213,7 +219,6 @@ fn write_length(length: usize, buf: &mut Vec<u8>) -> Result<(), BerError> {
         buf.push(0x80 | num_octets as u8);
         buf.extend_from_slice(&bytes[first_non_zero..]);
     }
-    Ok(())
 }
 
 #[cfg(test)]

@@ -61,18 +61,18 @@ impl TableManager {
     }
 
     /// Method 2: `remove_entries` — remove rows by key; empty list clears all.
-    fn remove_entries(&mut self, keys: Vec<CosemDataType>) -> Result<CosemDataType, String> {
+    fn remove_entries(&mut self, keys: &[CosemDataType]) -> CosemDataType {
         let key_index = self.key_index;
         if keys.is_empty() {
             self.rows.clear();
         } else {
             self.rows.retain(|row| !keys.iter().any(|k| key_of(row, key_index).as_ref() == Some(k)));
         }
-        Ok(CosemDataType::Null)
+        CosemDataType::Null
     }
 
     /// Method 4: `retrieve_entries` — rows matching the keys; empty list = all.
-    fn retrieve_entries(&self, keys: Vec<CosemDataType>) -> CosemDataType {
+    fn retrieve_entries(&self, keys: &[CosemDataType]) -> CosemDataType {
         let key_index = self.key_index;
         let selected = if keys.is_empty() {
             self.rows.clone()
@@ -144,12 +144,17 @@ impl InterfaceClass for TableManager {
             }
             2 => {
                 let keys = Self::entries_list(params)?;
-                self.remove_entries(keys)
+                Ok(self.remove_entries(&keys))
             }
-            3 => Ok(CosemDataType::Unsigned(self.rows.len().min(u8::MAX as usize) as u8)),
+            3 => {
+                // Already clamped to u8::MAX above, so the cast can't truncate.
+                #[allow(clippy::cast_possible_truncation)]
+                let count = self.rows.len().min(u8::MAX as usize) as u8;
+                Ok(CosemDataType::Unsigned(count))
+            }
             4 => {
                 let keys = Self::entries_list(params)?;
-                Ok(self.retrieve_entries(keys))
+                Ok(self.retrieve_entries(&keys))
             }
             other => Err(format!("method {other} not supported for the Table manager class")),
         }
@@ -172,8 +177,8 @@ mod tests {
         CosemDataType::Structure(vec![key(id), CosemDataType::LongUnsigned(value)])
     }
 
-    fn wrap(entries: Vec<CosemDataType>) -> Option<CosemDataType> {
-        Some(CosemDataType::Structure(vec![CosemDataType::OctetString(vec![]), CosemDataType::Array(entries)]))
+    fn wrap(entries: Vec<CosemDataType>) -> CosemDataType {
+        CosemDataType::Structure(vec![CosemDataType::OctetString(vec![]), CosemDataType::Array(entries)])
     }
 
     #[test]
@@ -182,23 +187,23 @@ mod tests {
         assert_eq!(mgr.class_id(), 8200);
 
         // add two rows.
-        mgr.invoke_method(1, wrap(vec![row(b"A", 1), row(b"B", 2)])).unwrap();
+        mgr.invoke_method(1, Some(wrap(vec![row(b"A", 1), row(b"B", 2)]))).unwrap();
         assert_eq!(mgr.invoke_method(3, None).unwrap(), CosemDataType::Unsigned(2));
 
         // update A by its unique key.
-        mgr.invoke_method(1, wrap(vec![row(b"A", 100)])).unwrap();
+        mgr.invoke_method(1, Some(wrap(vec![row(b"A", 100)]))).unwrap();
         assert_eq!(mgr.invoke_method(3, None).unwrap(), CosemDataType::Unsigned(2));
-        let CosemDataType::Array(got) = mgr.invoke_method(4, wrap(vec![key(b"A")])).unwrap() else {
+        let CosemDataType::Array(got) = mgr.invoke_method(4, Some(wrap(vec![key(b"A")]))).unwrap() else {
             panic!("array");
         };
         assert_eq!(got, vec![row(b"A", 100)]);
 
         // remove B; one row left.
-        mgr.invoke_method(2, wrap(vec![key(b"B")])).unwrap();
+        mgr.invoke_method(2, Some(wrap(vec![key(b"B")]))).unwrap();
         assert_eq!(mgr.invoke_method(3, None).unwrap(), CosemDataType::Unsigned(1));
 
         // remove-all with an empty list.
-        mgr.invoke_method(2, wrap(vec![])).unwrap();
+        mgr.invoke_method(2, Some(wrap(vec![]))).unwrap();
         assert_eq!(mgr.invoke_method(3, None).unwrap(), CosemDataType::Unsigned(0));
     }
 }

@@ -28,8 +28,8 @@ impl SpecialDaysTable {
         SpecialDaysTable { logical_name: config.logical_name, entries: config.entries }
     }
 
-    fn insert(&mut self, data: CosemDataType) -> Result<CosemDataType, String> {
-        let entry = SpecialDayEntry::try_from(&data)?;
+    fn insert(&mut self, data: &CosemDataType) -> Result<CosemDataType, String> {
+        let entry = SpecialDayEntry::try_from(data)?;
         if entry.specialday_date.len() != 12 {
             return Err("Invalid DateTime length".to_string());
         }
@@ -37,8 +37,8 @@ impl SpecialDaysTable {
         Ok(CosemDataType::Null)
     }
 
-    fn delete(&mut self, data: CosemDataType) -> Result<CosemDataType, String> {
-        let entry = SpecialDayEntry::try_from(&data)?;
+    fn delete(&mut self, data: &CosemDataType) -> Result<CosemDataType, String> {
+        let entry = SpecialDayEntry::try_from(data)?;
         self.entries.retain(|e| e.index != entry.index);
         Ok(CosemDataType::Null)
     }
@@ -75,7 +75,7 @@ impl InterfaceClass for SpecialDaysTable {
             attr.serialize_ber(&mut seq_buf)?;
         }
         buf.push(0x02); // structure [2]
-        write_length(1 + self.attributes().len(), buf)?; // length = element count
+        write_length(1 + self.attributes().len(), buf); // length = element count
         buf.extend_from_slice(&seq_buf);
         Ok(())
     }
@@ -126,8 +126,8 @@ impl InterfaceClass for SpecialDaysTable {
 
     fn invoke_method(&mut self, method_id: u8, params: Option<CosemDataType>) -> Result<CosemDataType, String> {
         match method_id {
-            1 => self.insert(params.ok_or("Missing parameter for insert method")?),
-            2 => self.delete(params.ok_or("Missing parameter for delete method")?),
+            1 => self.insert(&params.ok_or("Missing parameter for insert method")?),
+            2 => self.delete(&params.ok_or("Missing parameter for delete method")?),
             _ => Err(format!("Method {method_id} not supported for SpecialDaysTable")),
         }
     }
@@ -137,7 +137,9 @@ impl InterfaceClass for SpecialDaysTable {
     }
 }
 
-fn write_length(length: usize, buf: &mut Vec<u8>) -> Result<(), BerError> {
+/// Writes a BER/A-XDR length octet (short or long form).
+#[allow(clippy::cast_possible_truncation)] // length < 128 and num_octets in 1..=8 always fit u8
+fn write_length(length: usize, buf: &mut Vec<u8>) {
     if length < 128 {
         buf.push(length as u8);
     } else {
@@ -147,5 +149,4 @@ fn write_length(length: usize, buf: &mut Vec<u8>) -> Result<(), BerError> {
         buf.push(0x80 | num_octets as u8);
         buf.extend_from_slice(&bytes[first_non_zero..]);
     }
-    Ok(())
 }

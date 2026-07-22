@@ -87,9 +87,9 @@ impl CompactData {
     }
 
     /// Method 1: `reset` — clears the compact buffer.
-    fn reset(&mut self) -> Result<CosemDataType, String> {
+    fn reset(&mut self) -> CosemDataType {
         self.compact_buffer.clear();
-        Ok(CosemDataType::Null)
+        CosemDataType::Null
     }
 
     /// Method 2: `capture` — reads every capture object's attribute and stores
@@ -137,11 +137,14 @@ impl InterfaceClass for CompactData {
             self.capture_objects
                 .iter()
                 .map(|(obj, attr_id)| {
+                    // Attribute ids are always <128 in practice (i8-valued on the wire).
+                    #[allow(clippy::cast_possible_wrap)]
+                    let attr_id = *attr_id as i8;
                     CosemDataType::Structure(vec![
                         CosemDataType::LongUnsigned(obj.class_id()),
                         CosemDataType::OctetString(obj.logical_name().to_bytes()),
-                        CosemDataType::Integer(*attr_id as i8), // attribute_index (integer)
-                        CosemDataType::LongUnsigned(0),         // data_index (long-unsigned, default 0)
+                        CosemDataType::Integer(attr_id), // attribute_index (integer)
+                        CosemDataType::LongUnsigned(0),  // data_index (long-unsigned, default 0)
                     ])
                 })
                 .collect(),
@@ -169,7 +172,7 @@ impl InterfaceClass for CompactData {
         CosemDataType::OctetString(self.template_description.clone()).serialize_ber(&mut seq_buf)?;
         CosemDataType::Enum(self.capture_method).serialize_ber(&mut seq_buf)?;
         buf.push(0x02); // structure [2]
-        write_length(6, buf)?;
+        write_length(6, buf);
         buf.extend_from_slice(&seq_buf);
         Ok(())
     }
@@ -222,7 +225,7 @@ impl InterfaceClass for CompactData {
 
     fn invoke_method(&mut self, method_id: u8, _params: Option<CosemDataType>) -> Result<CosemDataType, String> {
         match method_id {
-            1 => self.reset(),
+            1 => Ok(self.reset()),
             2 => self.capture(),
             _ => Err(format!("Method {method_id} not supported for Compact data class")),
         }
@@ -234,7 +237,8 @@ impl InterfaceClass for CompactData {
 }
 
 /// Writes a BER length octet (short or long form).
-fn write_length(length: usize, buf: &mut Vec<u8>) -> Result<(), BerError> {
+#[allow(clippy::cast_possible_truncation)] // length < 128 and num_octets in 1..=8 always fit u8
+fn write_length(length: usize, buf: &mut Vec<u8>) {
     if length < 128 {
         buf.push(length as u8);
     } else {
@@ -244,7 +248,6 @@ fn write_length(length: usize, buf: &mut Vec<u8>) -> Result<(), BerError> {
         buf.push(0x80 | num_octets as u8);
         buf.extend_from_slice(&bytes[first_non_zero..]);
     }
-    Ok(())
 }
 
 #[cfg(test)]

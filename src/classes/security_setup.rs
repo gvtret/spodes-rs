@@ -89,8 +89,8 @@ impl SecuritySetup {
     /// Method 1: `security_activate` — activates and strengthens the security
     /// policy (IEC 62056-6-2 §4.4.7.3.1). Strengthening is one-way: a value
     /// weaker than the current policy is rejected.
-    fn security_activate(&mut self, data: CosemDataType) -> Result<CosemDataType, String> {
-        let CosemDataType::Enum(new_policy) = data else {
+    fn security_activate(&mut self, data: &CosemDataType) -> Result<CosemDataType, String> {
+        let &CosemDataType::Enum(new_policy) = data else {
             return Err("security_activate expects an enum".to_string());
         };
         if new_policy < self.security_policy {
@@ -193,7 +193,7 @@ impl InterfaceClass for SecuritySetup {
             attr.serialize_ber(&mut seq_buf)?;
         }
         buf.push(0x02); // structure [2]
-        write_length(1 + self.attributes().len(), buf)?; // length = element count
+        write_length(1 + self.attributes().len(), buf); // length = element count
         buf.extend_from_slice(&seq_buf);
         Ok(())
     }
@@ -261,7 +261,7 @@ impl InterfaceClass for SecuritySetup {
     fn invoke_method(&mut self, method_id: u8, params: Option<CosemDataType>) -> Result<CosemDataType, String> {
         let params = params.ok_or("Missing method parameter")?;
         match method_id {
-            1 => self.security_activate(params),
+            1 => self.security_activate(&params),
             2 => self.key_transfer(params),
             3..=8 if self.version >= 1 => {
                 Err(format!("Method {method_id} requires security suite 1 or 2 (PKI/ECDH); not supported for suite 0"))
@@ -276,7 +276,8 @@ impl InterfaceClass for SecuritySetup {
 }
 
 /// Writes a BER length octet (short or long form).
-fn write_length(length: usize, buf: &mut Vec<u8>) -> Result<(), BerError> {
+#[allow(clippy::cast_possible_truncation)] // length < 128 and num_octets in 1..=8 always fit u8
+fn write_length(length: usize, buf: &mut Vec<u8>) {
     if length < 128 {
         buf.push(length as u8);
     } else {
@@ -286,7 +287,6 @@ fn write_length(length: usize, buf: &mut Vec<u8>) -> Result<(), BerError> {
         buf.push(0x80 | num_octets as u8);
         buf.extend_from_slice(&bytes[first_non_zero..]);
     }
-    Ok(())
 }
 
 #[cfg(test)]

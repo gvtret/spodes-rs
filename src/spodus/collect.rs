@@ -28,7 +28,10 @@ pub fn poll_meter<L: DataLinkLayer>(
         if let Ok(GetResponse::Normal { result: GetDataResult::Data(value), .. }) =
             session.get(*class_id, obis.clone(), *attribute)
         {
-            registry.store(meter_id, obis.clone(), *attribute as u8, value);
+            // Attribute ids are always <128 in practice (i8-valued on the wire).
+            #[allow(clippy::cast_sign_loss)]
+            let attribute_id = *attribute as u8;
+            registry.store(meter_id, obis.clone(), attribute_id, value);
             read += 1;
         }
     }

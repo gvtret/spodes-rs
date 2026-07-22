@@ -137,6 +137,9 @@ impl ImageTransfer {
     }
 
     /// Returns the number of the first block whose bit is still clear.
+    // The bitmap tracks image blocks; no realistic firmware image needs
+    // anywhere near u32::MAX/8 bytes of tracking bits.
+    #[allow(clippy::cast_possible_truncation)]
     fn first_clear_bit(&self) -> u32 {
         for (byte_index, byte) in self.image_transferred_blocks_status.iter().enumerate() {
             for bit in 0..8u32 {
@@ -190,7 +193,7 @@ impl InterfaceClass for ImageTransfer {
             attr.serialize_ber(&mut seq_buf)?;
         }
         buf.push(0x02); // structure [2]
-        write_length(1 + self.attributes().len(), buf)?; // length = element count
+        write_length(1 + self.attributes().len(), buf); // length = element count
         buf.extend_from_slice(&seq_buf);
         Ok(())
     }
@@ -271,7 +274,8 @@ impl InterfaceClass for ImageTransfer {
 }
 
 /// Writes a BER length octet (short or long form).
-fn write_length(length: usize, buf: &mut Vec<u8>) -> Result<(), BerError> {
+#[allow(clippy::cast_possible_truncation)] // length < 128 and num_octets in 1..=8 always fit u8
+fn write_length(length: usize, buf: &mut Vec<u8>) {
     if length < 128 {
         buf.push(length as u8);
     } else {
@@ -281,7 +285,6 @@ fn write_length(length: usize, buf: &mut Vec<u8>) -> Result<(), BerError> {
         buf.push(0x80 | num_octets as u8);
         buf.extend_from_slice(&bytes[first_non_zero..]);
     }
-    Ok(())
 }
 
 #[cfg(test)]

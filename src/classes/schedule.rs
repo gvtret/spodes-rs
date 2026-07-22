@@ -39,8 +39,8 @@ impl Schedule {
 
     /// Method 1: `enable_disable` — toggles the `enable` flag of the entry at
     /// the given 0-based index (IEC 62056-6-2 §4.5.3).
-    fn enable_disable(&mut self, params: Option<CosemDataType>) -> Result<CosemDataType, String> {
-        let idx = index_param(params.as_ref()).ok_or("enable_disable requires an entry index")?;
+    fn enable_disable(&mut self, params: Option<&CosemDataType>) -> Result<CosemDataType, String> {
+        let idx = index_param(params).ok_or("enable_disable requires an entry index")?;
         let entry = self.entries.get_mut(idx).ok_or_else(|| format!("No schedule entry at index {idx}"))?;
         entry.enable = !entry.enable;
         Ok(CosemDataType::Null)
@@ -57,8 +57,8 @@ impl Schedule {
 
     /// Method 3: `delete` — removes the entry at the given 0-based index
     /// (IEC 62056-6-2 §4.5.3).
-    fn delete(&mut self, params: Option<CosemDataType>) -> Result<CosemDataType, String> {
-        let idx = index_param(params.as_ref()).ok_or("delete requires an entry index")?;
+    fn delete(&mut self, params: Option<&CosemDataType>) -> Result<CosemDataType, String> {
+        let idx = index_param(params).ok_or("delete requires an entry index")?;
         if idx >= self.entries.len() {
             return Err(format!("No schedule entry at index {idx}"));
         }
@@ -120,7 +120,7 @@ impl InterfaceClass for Schedule {
         seq_buf.push(0x03); // boolean [3]
         seq_buf.push(if self.enabled { 0xFF } else { 0x00 }); // enabled value
         buf.push(0x02); // structure [2]
-        write_length(2 + self.attributes().len(), buf)?; // element count: class_id + attributes + enabled
+        write_length(2 + self.attributes().len(), buf); // element count: class_id + attributes + enabled
         buf.extend_from_slice(&seq_buf);
         Ok(())
     }
@@ -172,9 +172,9 @@ impl InterfaceClass for Schedule {
 
     fn invoke_method(&mut self, method_id: u8, params: Option<CosemDataType>) -> Result<CosemDataType, String> {
         match method_id {
-            1 => self.enable_disable(params),
+            1 => self.enable_disable(params.as_ref()),
             2 => self.insert(params),
-            3 => self.delete(params),
+            3 => self.delete(params.as_ref()),
             _ => Err(format!("Method {method_id} not supported for Schedule class")),
         }
     }
@@ -185,7 +185,8 @@ impl InterfaceClass for Schedule {
 }
 
 /// Writes a length in BER (short or long form).
-fn write_length(length: usize, buf: &mut Vec<u8>) -> Result<(), BerError> {
+#[allow(clippy::cast_possible_truncation)] // length < 128 and num_octets in 1..=8 always fit u8
+fn write_length(length: usize, buf: &mut Vec<u8>) {
     if length < 128 {
         buf.push(length as u8);
     } else {
@@ -195,5 +196,4 @@ fn write_length(length: usize, buf: &mut Vec<u8>) -> Result<(), BerError> {
         buf.push(0x80 | num_octets as u8);
         buf.extend_from_slice(&bytes[first_non_zero..]);
     }
-    Ok(())
 }

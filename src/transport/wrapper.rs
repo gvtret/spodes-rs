@@ -101,8 +101,17 @@ impl WrapperHeader {
 }
 
 /// Builds a complete wrapper PDU (header + APDU).
+///
+/// # Panics
+/// Panics (debug builds only) if `apdu` exceeds 65535 octets: the wrapper
+/// header's length field (IEC 62056-47) is 16 bits wide, and callers are
+/// expected to keep APDUs under the negotiated max-PDU size (a few KB at
+/// most in this crate) via GET/SET-WITH-DATABLOCK segmentation.
 pub fn encode(source: u16, destination: u16, apdu: &[u8]) -> Vec<u8> {
-    let header = WrapperHeader { version: WRAPPER_VERSION, source, destination, length: apdu.len() as u16 };
+    debug_assert!(apdu.len() <= usize::from(u16::MAX), "APDU exceeds the 16-bit wrapper length field");
+    #[allow(clippy::cast_possible_truncation)]
+    let length = apdu.len() as u16;
+    let header = WrapperHeader { version: WRAPPER_VERSION, source, destination, length };
     let mut buf = Vec::with_capacity(8 + apdu.len());
     header.encode(&mut buf);
     buf.extend_from_slice(apdu);

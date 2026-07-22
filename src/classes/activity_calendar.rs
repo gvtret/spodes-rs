@@ -66,12 +66,12 @@ impl ActivityCalendar {
 
     /// Method 1: `activate_passive_calendar` — copies the passive calendar over
     /// the active one, making it effective immediately (IEC 62056-6-2 §4.5.5.3).
-    fn activate_passive_calendar(&mut self) -> Result<CosemDataType, String> {
+    fn activate_passive_calendar(&mut self) -> CosemDataType {
         self.calendar_name_active = self.calendar_name_passive.clone();
         self.season_profile_active = self.season_profile_passive.clone();
         self.week_profile_table_active = self.week_profile_table_passive.clone();
         self.day_profile_table_active = self.day_profile_table_passive.clone();
-        Ok(CosemDataType::Null)
+        CosemDataType::Null
     }
 }
 
@@ -114,7 +114,7 @@ impl InterfaceClass for ActivityCalendar {
             attr.serialize_ber(&mut seq_buf)?;
         }
         buf.push(0x02); // structure [2]
-        write_length(1 + self.attributes().len(), buf)?; // length = element count
+        write_length(1 + self.attributes().len(), buf); // length = element count
         buf.extend_from_slice(&seq_buf);
         Ok(())
     }
@@ -161,7 +161,7 @@ impl InterfaceClass for ActivityCalendar {
 
     fn invoke_method(&mut self, method_id: u8, _params: Option<CosemDataType>) -> Result<CosemDataType, String> {
         match method_id {
-            1 => self.activate_passive_calendar(),
+            1 => Ok(self.activate_passive_calendar()),
             _ => Err(format!("Method {method_id} not supported for Activity calendar")),
         }
     }
@@ -190,7 +190,8 @@ fn take_typed_array<T: for<'a> TryFrom<&'a CosemDataType, Error = String>>(
 }
 
 /// Writes a BER length octet (short or long form).
-fn write_length(length: usize, buf: &mut Vec<u8>) -> Result<(), BerError> {
+#[allow(clippy::cast_possible_truncation)] // length < 128 and num_octets in 1..=8 always fit u8
+fn write_length(length: usize, buf: &mut Vec<u8>) {
     if length < 128 {
         buf.push(length as u8);
     } else {
@@ -200,7 +201,6 @@ fn write_length(length: usize, buf: &mut Vec<u8>) -> Result<(), BerError> {
         buf.push(0x80 | num_octets as u8);
         buf.extend_from_slice(&bytes[first_non_zero..]);
     }
-    Ok(())
 }
 
 #[cfg(test)]

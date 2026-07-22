@@ -41,9 +41,9 @@ impl RegisterTable {
     }
 
     /// Method 1: `reset` — clears the table cell values.
-    fn reset(&mut self) -> Result<CosemDataType, String> {
+    fn reset(&mut self) -> CosemDataType {
         self.table_cell_values.clear();
-        Ok(CosemDataType::Null)
+        CosemDataType::Null
     }
 
     /// Returns the table cell values (attribute 2).
@@ -85,7 +85,7 @@ impl InterfaceClass for RegisterTable {
             attr.serialize_ber(&mut seq_buf)?;
         }
         buf.push(0x02); // structure [2]
-        write_length(1 + self.attributes().len(), buf)?;
+        write_length(1 + self.attributes().len(), buf);
         buf.extend_from_slice(&seq_buf);
         Ok(())
     }
@@ -128,7 +128,7 @@ impl InterfaceClass for RegisterTable {
 
     fn invoke_method(&mut self, method_id: u8, _params: Option<CosemDataType>) -> Result<CosemDataType, String> {
         match method_id {
-            1 => self.reset(),
+            1 => Ok(self.reset()),
             // Method 2 `capture` is host-driven: the values live outside the
             // object model, so capturing is delegated to the application.
             2 => Ok(CosemDataType::Null),
@@ -142,7 +142,8 @@ impl InterfaceClass for RegisterTable {
 }
 
 /// Writes a BER length octet (short or long form).
-fn write_length(length: usize, buf: &mut Vec<u8>) -> Result<(), BerError> {
+#[allow(clippy::cast_possible_truncation)] // length < 128 and num_octets in 1..=8 always fit u8
+fn write_length(length: usize, buf: &mut Vec<u8>) {
     if length < 128 {
         buf.push(length as u8);
     } else {
@@ -152,7 +153,6 @@ fn write_length(length: usize, buf: &mut Vec<u8>) -> Result<(), BerError> {
         buf.push(0x80 | num_octets as u8);
         buf.extend_from_slice(&bytes[first_non_zero..]);
     }
-    Ok(())
 }
 
 #[cfg(test)]

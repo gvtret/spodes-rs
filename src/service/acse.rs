@@ -120,7 +120,7 @@ impl AssociationRequest {
     pub fn encode(&self) -> Vec<u8> {
         let mut content = Vec::new();
         // `[1]` application-context-name (OBJECT IDENTIFIER).
-        ber_tlv(0xA1, &object_identifier(&OID_PREFIX_APP_CONTEXT, self.application_context), &mut content);
+        ber_tlv(0xA1, &object_identifier(OID_PREFIX_APP_CONTEXT, self.application_context), &mut content);
         // `[6]` calling-AP-title (OCTET STRING) — only with ciphering.
         if let Some(title) = &self.calling_ap_title {
             ber_tlv(0xA6, &octet_string(title), &mut content);
@@ -131,7 +131,7 @@ impl AssociationRequest {
             content.extend_from_slice(&[0x8A, 0x02, 0x07, 0x80]);
             // `[11]` mechanism-name (OBJECT IDENTIFIER, IMPLICIT → raw 7 octets).
             content.push(0x8B);
-            let oid = raw_oid(&OID_PREFIX_MECHANISM, mech);
+            let oid = raw_oid(OID_PREFIX_MECHANISM, mech);
             push_length(oid.len(), &mut content);
             content.extend_from_slice(&oid);
             // `[12]` calling-authentication-value (EXPLICIT CHOICE charstring `[0]`).
@@ -197,7 +197,7 @@ impl AssociationResponse {
     pub fn encode(&self) -> Vec<u8> {
         let mut content = Vec::new();
         // `[1]` application-context-name.
-        ber_tlv(0xA1, &object_identifier(&OID_PREFIX_APP_CONTEXT, self.application_context), &mut content);
+        ber_tlv(0xA1, &object_identifier(OID_PREFIX_APP_CONTEXT, self.application_context), &mut content);
         // `[2]` result (INTEGER).
         ber_tlv(0xA2, &[0x02, 0x01, self.result], &mut content);
         // `[3]` result-source-diagnostic (CHOICE acse-service-user `[1]`).
@@ -316,15 +316,15 @@ impl ReleaseRequest {
 // --- BER helpers -----------------------------------------------------------
 
 /// Builds an OBJECT IDENTIFIER TLV value: `06 07 <prefix(6) last_arc>`.
-fn object_identifier(prefix: &[u8; 6], last_arc: u8) -> Vec<u8> {
+fn object_identifier(prefix: [u8; 6], last_arc: u8) -> Vec<u8> {
     let mut v = vec![0x06, 0x07];
-    v.extend_from_slice(prefix);
+    v.extend_from_slice(&prefix);
     v.push(last_arc);
     v
 }
 
 /// The raw 7-octet OID value (no tag), for IMPLICIT contexts.
-fn raw_oid(prefix: &[u8; 6], last_arc: u8) -> Vec<u8> {
+fn raw_oid(prefix: [u8; 6], last_arc: u8) -> Vec<u8> {
     let mut v = prefix.to_vec();
     v.push(last_arc);
     v
@@ -344,6 +344,8 @@ fn ber_tlv(tag: u8, value: &[u8], out: &mut Vec<u8>) {
     out.extend_from_slice(value);
 }
 
+/// Writes a BER length octet (short or long form).
+#[allow(clippy::cast_possible_truncation)] // length < 128 and n in 1..=8 always fit u8
 fn push_length(length: usize, out: &mut Vec<u8>) {
     if length < 128 {
         out.push(length as u8);

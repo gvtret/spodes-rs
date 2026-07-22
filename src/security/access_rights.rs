@@ -178,6 +178,8 @@ impl ObjectListEntry {
 }
 
 /// Builds an object_list entry with default read/write access for all attributes.
+// COSEM attribute/method indices are always <128 in practice (i8-valued on the wire).
+#[allow(clippy::cast_possible_wrap)]
 pub fn full_access_entry(class_id: u16, version: u8, obis: &[u8], attr_count: u8, method_count: u8) -> ObjectListEntry {
     let attribute_access = (1..=attr_count)
         .map(|id| AttributeAccessItem {
@@ -200,6 +202,8 @@ pub fn full_access_entry(class_id: u16, version: u8, obis: &[u8], attr_count: u8
 }
 
 /// Builds an object_list entry with read-only access for all attributes.
+// COSEM attribute/method indices are always <128 in practice (i8-valued on the wire).
+#[allow(clippy::cast_possible_wrap)]
 pub fn read_only_entry(class_id: u16, version: u8, obis: &[u8], attr_count: u8, method_count: u8) -> ObjectListEntry {
     let attribute_access = (1..=attr_count)
         .map(|id| AttributeAccessItem {

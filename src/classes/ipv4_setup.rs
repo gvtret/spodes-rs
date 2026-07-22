@@ -64,8 +64,8 @@ impl Ipv4Setup {
     }
 
     /// Method 1: `add_mc_IP_address` — adds a multicast IP address.
-    fn add_mc_ip_address(&mut self, data: CosemDataType) -> Result<CosemDataType, String> {
-        let addr = match &data {
+    fn add_mc_ip_address(&mut self, data: &CosemDataType) -> Result<CosemDataType, String> {
+        let addr = match data {
             CosemDataType::DoubleLongUnsigned(v) => *v,
             _ => return Err("add_mc_IP_address expects a double-long-unsigned".to_string()),
         };
@@ -76,8 +76,8 @@ impl Ipv4Setup {
     }
 
     /// Method 2: `delete_mc_IP_address` — removes a multicast IP address.
-    fn delete_mc_ip_address(&mut self, data: CosemDataType) -> Result<CosemDataType, String> {
-        let addr = match &data {
+    fn delete_mc_ip_address(&mut self, data: &CosemDataType) -> Result<CosemDataType, String> {
+        let addr = match data {
             CosemDataType::DoubleLongUnsigned(v) => *v,
             _ => return Err("delete_mc_IP_address expects a double-long-unsigned".to_string()),
         };
@@ -91,8 +91,11 @@ impl Ipv4Setup {
 
     /// Method 3: `get_nbof_mc_IP_addresses` — returns the number of multicast IP
     /// addresses currently configured.
-    fn get_nbof_mc_ip_addresses(&self) -> Result<CosemDataType, String> {
-        Ok(CosemDataType::LongUnsigned(self.multicast_ip_address.len() as u16))
+    fn get_nbof_mc_ip_addresses(&self) -> CosemDataType {
+        // A meter's multicast group membership count is always tiny.
+        #[allow(clippy::cast_possible_truncation)]
+        let count = self.multicast_ip_address.len() as u16;
+        CosemDataType::LongUnsigned(count)
     }
 }
 
@@ -144,7 +147,7 @@ impl InterfaceClass for Ipv4Setup {
             attr.serialize_ber(&mut seq_buf)?;
         }
         buf.push(0x02); // structure [2]
-        write_length(1 + self.attributes().len(), buf)?; // length = element count
+        write_length(1 + self.attributes().len(), buf); // length = element count
         buf.extend_from_slice(&seq_buf);
         Ok(())
     }
@@ -197,9 +200,9 @@ impl InterfaceClass for Ipv4Setup {
 
     fn invoke_method(&mut self, method_id: u8, params: Option<CosemDataType>) -> Result<CosemDataType, String> {
         match method_id {
-            1 => self.add_mc_ip_address(params.ok_or("Missing method parameter")?),
-            2 => self.delete_mc_ip_address(params.ok_or("Missing method parameter")?),
-            3 => self.get_nbof_mc_ip_addresses(),
+            1 => self.add_mc_ip_address(&params.ok_or("Missing method parameter")?),
+            2 => self.delete_mc_ip_address(&params.ok_or("Missing method parameter")?),
+            3 => Ok(self.get_nbof_mc_ip_addresses()),
             _ => Err(format!("Method {method_id} not supported for IPv4 setup")),
         }
     }
@@ -239,7 +242,8 @@ fn take_ip_option_array(value: &CosemDataType) -> Result<Vec<IpOption>, BerError
 }
 
 /// Writes a BER length octet (short or long form).
-fn write_length(length: usize, buf: &mut Vec<u8>) -> Result<(), BerError> {
+#[allow(clippy::cast_possible_truncation)] // length < 128 and num_octets in 1..=8 always fit u8
+fn write_length(length: usize, buf: &mut Vec<u8>) {
     if length < 128 {
         buf.push(length as u8);
     } else {
@@ -249,7 +253,6 @@ fn write_length(length: usize, buf: &mut Vec<u8>) -> Result<(), BerError> {
         buf.push(0x80 | num_octets as u8);
         buf.extend_from_slice(&bytes[first_non_zero..]);
     }
-    Ok(())
 }
 
 #[cfg(test)]

@@ -88,6 +88,8 @@ impl DiscoveredMeters {
     /// Builds the COSEM `ProfileGeneric` (IC 7, v1) object for this list.
     pub fn build(&self) -> ProfileGeneric {
         let buffer: Vec<CosemDataType> = self.records.iter().map(DiscoveredMeter::to_entry).collect();
+        // An in-memory buffer never approaches u32::MAX entries.
+        #[allow(clippy::cast_possible_truncation)]
         let entries_in_use = buffer.len() as u32;
         ProfileGeneric::new(ProfileGenericConfig {
             logical_name: obis::discovered_meters(),

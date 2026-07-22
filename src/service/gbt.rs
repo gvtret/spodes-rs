@@ -206,8 +206,8 @@ pub fn send<L: DataLinkLayer>(
 ///
 /// Returns the reassembled plain (or still-ciphered, if the segmented APDU
 /// was ciphered) APDU bytes.
-pub fn receive<L: DataLinkLayer>(link: &mut L, first: Vec<u8>) -> io::Result<Vec<u8>> {
-    let mut block = GeneralBlockTransfer::decode(&first)?;
+pub fn receive<L: DataLinkLayer>(link: &mut L, first: &[u8]) -> io::Result<Vec<u8>> {
+    let mut block = GeneralBlockTransfer::decode(first)?;
     let mut acc = Vec::new();
     let mut expected_block: u16 = 1;
     let mut peer_window: u8 = 0;
@@ -217,7 +217,9 @@ pub fn receive<L: DataLinkLayer>(link: &mut L, first: Vec<u8>) -> io::Result<Vec
         if block.block_number > expected_block {
             // Gap: request retransmission from `expected_block`.
             let gap = block.block_number - expected_block;
-            let win = if gap > WINDOW_MASK as u16 { WINDOW_MASK } else { gap.max(1) as u8 };
+            // The else branch only runs when gap <= WINDOW_MASK, so it always fits u8.
+            #[allow(clippy::cast_possible_truncation)]
+            let win = if gap > u16::from(WINDOW_MASK) { WINDOW_MASK } else { gap.max(1) as u8 };
             send_ack(link, win, expected_block.saturating_sub(1))?;
             block = read_block(link)?;
             continue;
@@ -478,7 +480,7 @@ mod tests {
         })
         .encode();
         let mut link = ScriptedLink::default();
-        let apdu = receive(&mut link, first).unwrap();
+        let apdu = receive(&mut link, &first).unwrap();
         assert_eq!(apdu, vec![0xC0, 0x01]);
         assert!(link.tx.is_empty(), "no window in use: no ack should be sent");
     }
@@ -507,7 +509,7 @@ mod tests {
             .encode(),
         );
 
-        let apdu = receive(&mut link, first).unwrap();
+        let apdu = receive(&mut link, &first).unwrap();
         assert_eq!(apdu, vec![0xC0, 0x01, 0xC1, 0x00]);
         // One ack sent, acknowledging block 1.
         assert_eq!(link.tx.len(), 1);
@@ -567,7 +569,7 @@ mod tests {
             .encode(),
         );
 
-        let apdu = receive(&mut link, first).unwrap();
+        let apdu = receive(&mut link, &first).unwrap();
         assert_eq!(apdu, vec![0xC0, 0x01, 0xC1, 0x00]);
         assert!(link.rx.is_empty());
     }

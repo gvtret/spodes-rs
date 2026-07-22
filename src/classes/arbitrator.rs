@@ -54,17 +54,17 @@ impl Arbitrator {
 
     /// Method 1: `request_action` — records a request in the most-recent-requests
     /// table (IEC 62056-6-2 §4.5.12.3).
-    fn request_action(&mut self, data: CosemDataType) -> Result<CosemDataType, String> {
+    fn request_action(&mut self, data: CosemDataType) -> CosemDataType {
         self.most_recent_requests_table.push(data);
-        Ok(CosemDataType::Null)
+        CosemDataType::Null
     }
 
     /// Method 2: `reset` — clears the most-recent-requests table and the last
     /// outcome.
-    fn reset(&mut self) -> Result<CosemDataType, String> {
+    fn reset(&mut self) -> CosemDataType {
         self.most_recent_requests_table.clear();
         self.last_outcome = 0;
-        Ok(CosemDataType::Null)
+        CosemDataType::Null
     }
 }
 
@@ -103,7 +103,7 @@ impl InterfaceClass for Arbitrator {
             attr.serialize_ber(&mut seq_buf)?;
         }
         buf.push(0x02); // structure [2]
-        write_length(1 + self.attributes().len(), buf)?; // length = element count
+        write_length(1 + self.attributes().len(), buf); // length = element count
         buf.extend_from_slice(&seq_buf);
         Ok(())
     }
@@ -152,8 +152,8 @@ impl InterfaceClass for Arbitrator {
 
     fn invoke_method(&mut self, method_id: u8, params: Option<CosemDataType>) -> Result<CosemDataType, String> {
         match method_id {
-            1 => self.request_action(params.ok_or("Missing method parameter")?),
-            2 => self.reset(),
+            1 => Ok(self.request_action(params.ok_or("Missing method parameter")?)),
+            2 => Ok(self.reset()),
             _ => Err(format!("Method {method_id} not supported for Arbitrator")),
         }
     }
@@ -171,7 +171,8 @@ fn take_array(value: &CosemDataType) -> Result<Vec<CosemDataType>, BerError> {
 }
 
 /// Writes a BER length octet (short or long form).
-fn write_length(length: usize, buf: &mut Vec<u8>) -> Result<(), BerError> {
+#[allow(clippy::cast_possible_truncation)] // length < 128 and num_octets in 1..=8 always fit u8
+fn write_length(length: usize, buf: &mut Vec<u8>) {
     if length < 128 {
         buf.push(length as u8);
     } else {
@@ -181,7 +182,6 @@ fn write_length(length: usize, buf: &mut Vec<u8>) -> Result<(), BerError> {
         buf.push(0x80 | num_octets as u8);
         buf.extend_from_slice(&bytes[first_non_zero..]);
     }
-    Ok(())
 }
 
 #[cfg(test)]

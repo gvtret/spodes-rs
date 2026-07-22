@@ -113,8 +113,9 @@ impl ScalerUnit {
     }
 
     /// Converts a raw value to the scaled value.
+    #[allow(clippy::cast_precision_loss)] // COSEM register readings stay far below 2^53
     pub fn apply(&self, raw: i64) -> f64 {
-        raw as f64 * 10f64.powi(self.scaler as i32)
+        raw as f64 * 10f64.powi(i32::from(self.scaler))
     }
 }
 
@@ -132,7 +133,7 @@ impl TryFrom<&CosemDataType> for ScalerUnit {
             CosemDataType::Structure(fields) if fields.len() >= 2 => {
                 let scaler = match &fields[0] {
                     CosemDataType::Integer(v) => *v,
-                    CosemDataType::Long(v) => *v as i8,
+                    CosemDataType::Long(v) => i8::try_from(*v).map_err(|_| "scaler must be integer".to_string())?,
                     _ => return Err("scaler must be integer".to_string()),
                 };
                 let unit = match &fields[1] {
@@ -196,12 +197,16 @@ impl TryFrom<&CosemDataType> for CaptureObjectDefinition {
                 };
                 let attribute_index = match &fields[2] {
                     CosemDataType::Unsigned(v) => *v,
-                    CosemDataType::Integer(v) => *v as u8,
+                    CosemDataType::Integer(v) => {
+                        u8::try_from(*v).map_err(|_| "attribute_index must be unsigned".to_string())?
+                    }
                     _ => return Err("attribute_index must be unsigned".to_string()),
                 };
                 let data_index = match &fields[3] {
                     CosemDataType::Unsigned(v) => *v,
-                    CosemDataType::LongUnsigned(v) => *v as u8,
+                    CosemDataType::LongUnsigned(v) => {
+                        u8::try_from(*v).map_err(|_| "data_index must be unsigned".to_string())?
+                    }
                     _ => return Err("data_index must be unsigned".to_string()),
                 };
                 Ok(CaptureObjectDefinition { class_id, logical_name, attribute_index, data_index })
@@ -1122,7 +1127,9 @@ impl TryFrom<&CosemDataType> for AttributeAccessItem {
             CosemDataType::Structure(fields) if fields.len() >= 3 => {
                 let attribute_id = match &fields[0] {
                     CosemDataType::Integer(v) => *v,
-                    CosemDataType::Long(v) => *v as i8,
+                    CosemDataType::Long(v) => {
+                        i8::try_from(*v).map_err(|_| "attribute_id must be integer".to_string())?
+                    }
                     _ => return Err("attribute_id must be integer".to_string()),
                 };
                 let access_mode = match &fields[1] {
@@ -1135,7 +1142,9 @@ impl TryFrom<&CosemDataType> for AttributeAccessItem {
                             .iter()
                             .map(|item| match item {
                                 CosemDataType::Integer(v) => Ok(*v),
-                                CosemDataType::Long(v) => Ok(*v as i8),
+                                CosemDataType::Long(v) => {
+                                    i8::try_from(*v).map_err(|_| "selector must be integer".to_string())
+                                }
                                 _ => Err("selector must be integer".to_string()),
                             })
                             .collect::<Result<Vec<_>, _>>()?;
@@ -1172,7 +1181,7 @@ impl TryFrom<&CosemDataType> for MethodAccessItem {
             CosemDataType::Structure(fields) if fields.len() >= 2 => {
                 let method_id = match &fields[0] {
                     CosemDataType::Integer(v) => *v,
-                    CosemDataType::Long(v) => *v as i8,
+                    CosemDataType::Long(v) => i8::try_from(*v).map_err(|_| "method_id must be integer".to_string())?,
                     _ => return Err("method_id must be integer".to_string()),
                 };
                 let access_mode = match &fields[1] {
@@ -1222,7 +1231,9 @@ impl TryFrom<&CosemDataType> for ObjectListElement {
                 };
                 let version = match &fields[1] {
                     CosemDataType::Unsigned(v) => *v,
-                    CosemDataType::LongUnsigned(v) => *v as u8,
+                    CosemDataType::LongUnsigned(v) => {
+                        u8::try_from(*v).map_err(|_| "version must be unsigned".to_string())?
+                    }
                     _ => return Err("version must be unsigned".to_string()),
                 };
                 let logical_name = match &fields[2] {
@@ -1265,12 +1276,12 @@ impl TryFrom<&CosemDataType> for AssociatedPartnersId {
             CosemDataType::Structure(fields) if fields.len() >= 2 => {
                 let client_sap = match &fields[0] {
                     CosemDataType::Integer(v) => *v,
-                    CosemDataType::Long(v) => *v as i8,
+                    CosemDataType::Long(v) => i8::try_from(*v).map_err(|_| "client_SAP must be integer".to_string())?,
                     _ => return Err("client_SAP must be integer".to_string()),
                 };
                 let server_sap = match &fields[1] {
                     CosemDataType::LongUnsigned(v) => *v,
-                    CosemDataType::Unsigned(v) => *v as u16,
+                    CosemDataType::Unsigned(v) => u16::from(*v),
                     _ => return Err("server_SAP must be long-unsigned".to_string()),
                 };
                 Ok(AssociatedPartnersId { client_sap, server_sap })
@@ -1433,7 +1444,9 @@ impl TryFrom<&CosemDataType> for XDLMSContextInfo {
                 };
                 let quality_of_service = match &fields[4] {
                     CosemDataType::Integer(v) => *v,
-                    CosemDataType::Long(v) => *v as i8,
+                    CosemDataType::Long(v) => {
+                        i8::try_from(*v).map_err(|_| "quality_of_service must be integer".to_string())?
+                    }
                     _ => return Err("quality_of_service must be integer".to_string()),
                 };
                 let cyphering_info = match &fields[5] {
@@ -1493,7 +1506,9 @@ impl TryFrom<&CosemDataType> for ValueDefinition {
                 };
                 let attribute_index = match &fields[2] {
                     CosemDataType::Integer(v) => *v,
-                    CosemDataType::Long(v) => *v as i8,
+                    CosemDataType::Long(v) => {
+                        i8::try_from(*v).map_err(|_| "attribute_index must be integer".to_string())?
+                    }
                     _ => return Err("attribute_index must be integer".to_string()),
                 };
                 Ok(ValueDefinition { class_id, logical_name, attribute_index })
@@ -1535,7 +1550,7 @@ impl TryFrom<&CosemDataType> for ActionItem {
                 };
                 let script_selector = match &fields[1] {
                     CosemDataType::LongUnsigned(v) => *v,
-                    CosemDataType::Unsigned(v) => *v as u16,
+                    CosemDataType::Unsigned(v) => u16::from(*v),
                     _ => return Err("script_selector must be long-unsigned".to_string()),
                 };
                 Ok(ActionItem { script_logical_name, script_selector })
@@ -1624,7 +1639,7 @@ impl TryFrom<&CosemDataType> for ActionSpecification {
                 };
                 let index = match &fields[3] {
                     CosemDataType::Integer(v) => *v,
-                    CosemDataType::Long(v) => *v as i8,
+                    CosemDataType::Long(v) => i8::try_from(*v).map_err(|_| "index must be integer".to_string())?,
                     _ => return Err("index must be integer".to_string()),
                 };
                 let parameter = fields[4].clone();
@@ -2383,7 +2398,7 @@ impl TryFrom<&CosemDataType> for SapAssignmentEntry {
             CosemDataType::Structure(fields) if fields.len() >= 2 => {
                 let sap = match &fields[0] {
                     CosemDataType::LongUnsigned(v) => *v,
-                    CosemDataType::Unsigned(v) => *v as u16,
+                    CosemDataType::Unsigned(v) => u16::from(*v),
                     _ => return Err("SAP must be long-unsigned".to_string()),
                 };
                 let logical_device_name = match &fields[1] {
@@ -2482,7 +2497,9 @@ impl TryFrom<&CosemDataType> for ProtectionObject {
                 };
                 let attribute_index = match &fields[2] {
                     CosemDataType::Integer(v) => *v,
-                    CosemDataType::Long(v) => *v as i8,
+                    CosemDataType::Long(v) => {
+                        i8::try_from(*v).map_err(|_| "attribute_index must be integer".to_string())?
+                    }
                     _ => return Err("attribute_index must be integer".to_string()),
                 };
                 Ok(ProtectionObject { class_id, logical_name, attribute_index })
@@ -3029,6 +3046,21 @@ mod tests {
         assert_eq!(su.unit, 27);
     }
 
+    #[test]
+    fn scaler_unit_accepts_in_range_long_scaler() {
+        let cd = CosemDataType::Structure(vec![CosemDataType::Long(-2), CosemDataType::Enum(30)]);
+        let su = ScalerUnit::try_from(&cd).unwrap();
+        assert_eq!(su.scaler, -2);
+    }
+
+    #[test]
+    fn scaler_unit_rejects_out_of_range_long_scaler() {
+        // A `Long` scaler outside i8's range must be rejected, not silently
+        // truncated to a different (wrong) in-range value.
+        let cd = CosemDataType::Structure(vec![CosemDataType::Long(200), CosemDataType::Enum(30)]);
+        assert!(ScalerUnit::try_from(&cd).is_err());
+    }
+
     // ========================================================================
     // CaptureObjectDefinition
     // ========================================================================
@@ -3037,6 +3069,28 @@ mod tests {
     fn capture_object_definition_round_trip() {
         let cod = CaptureObjectDefinition::new(3, obis(0, 0, 1, 0, 0, 255), 2, 0);
         round_trip(&cod);
+    }
+
+    #[test]
+    fn capture_object_definition_rejects_negative_attribute_index() {
+        let cd = CosemDataType::Structure(vec![
+            CosemDataType::LongUnsigned(3),
+            CosemDataType::OctetString(vec![0, 0, 1, 0, 0, 255]),
+            CosemDataType::Integer(-1),
+            CosemDataType::Unsigned(0),
+        ]);
+        assert!(CaptureObjectDefinition::try_from(&cd).is_err());
+    }
+
+    #[test]
+    fn capture_object_definition_rejects_out_of_range_data_index() {
+        let cd = CosemDataType::Structure(vec![
+            CosemDataType::LongUnsigned(3),
+            CosemDataType::OctetString(vec![0, 0, 1, 0, 0, 255]),
+            CosemDataType::Unsigned(2),
+            CosemDataType::LongUnsigned(300),
+        ]);
+        assert!(CaptureObjectDefinition::try_from(&cd).is_err());
     }
 
     // ========================================================================
@@ -3100,9 +3154,21 @@ mod tests {
     }
 
     #[test]
+    fn attribute_access_item_rejects_out_of_range_long_attribute_id() {
+        let cd = CosemDataType::Structure(vec![CosemDataType::Long(200), CosemDataType::Enum(1), CosemDataType::Null]);
+        assert!(AttributeAccessItem::try_from(&cd).is_err());
+    }
+
+    #[test]
     fn method_access_item_round_trip() {
         let item = MethodAccessItem { method_id: 1, access_mode: 1 };
         round_trip(&item);
+    }
+
+    #[test]
+    fn method_access_item_rejects_out_of_range_long_method_id() {
+        let cd = CosemDataType::Structure(vec![CosemDataType::Long(200), CosemDataType::Enum(1)]);
+        assert!(MethodAccessItem::try_from(&cd).is_err());
     }
 
     #[test]
@@ -3132,6 +3198,17 @@ mod tests {
         round_trip(&ole);
     }
 
+    #[test]
+    fn object_list_element_rejects_out_of_range_long_unsigned_version() {
+        let cd = CosemDataType::Structure(vec![
+            CosemDataType::LongUnsigned(3),
+            CosemDataType::LongUnsigned(300),
+            CosemDataType::OctetString(vec![0, 0, 1, 0, 0, 255]),
+            CosemDataType::Array(vec![]),
+        ]);
+        assert!(ObjectListElement::try_from(&cd).is_err());
+    }
+
     // ========================================================================
     // AssociatedPartnersId
     // ========================================================================
@@ -3145,6 +3222,12 @@ mod tests {
     #[test]
     fn associated_partners_id_try_from_wrong_type() {
         let cd = CosemDataType::Null;
+        assert!(AssociatedPartnersId::try_from(&cd).is_err());
+    }
+
+    #[test]
+    fn associated_partners_id_rejects_out_of_range_long_client_sap() {
+        let cd = CosemDataType::Structure(vec![CosemDataType::Long(200), CosemDataType::LongUnsigned(16)]);
         assert!(AssociatedPartnersId::try_from(&cd).is_err());
     }
 
@@ -3194,6 +3277,19 @@ mod tests {
         round_trip(&ctx);
     }
 
+    #[test]
+    fn xdlms_context_info_rejects_out_of_range_long_quality_of_service() {
+        let cd = CosemDataType::Structure(vec![
+            CosemDataType::BitString(vec![0xFF]),
+            CosemDataType::LongUnsigned(1024),
+            CosemDataType::LongUnsigned(1024),
+            CosemDataType::Unsigned(6),
+            CosemDataType::Long(200),
+            CosemDataType::OctetString(vec![]),
+        ]);
+        assert!(XDLMSContextInfo::try_from(&cd).is_err());
+    }
+
     // ========================================================================
     // ValueDefinition
     // ========================================================================
@@ -3202,6 +3298,16 @@ mod tests {
     fn value_definition_round_trip() {
         let vd = ValueDefinition { class_id: 3, logical_name: obis(0, 0, 1, 0, 0, 255), attribute_index: 2 };
         round_trip(&vd);
+    }
+
+    #[test]
+    fn value_definition_rejects_out_of_range_long_attribute_index() {
+        let cd = CosemDataType::Structure(vec![
+            CosemDataType::LongUnsigned(3),
+            CosemDataType::OctetString(vec![0, 0, 1, 0, 0, 255]),
+            CosemDataType::Long(200),
+        ]);
+        assert!(ValueDefinition::try_from(&cd).is_err());
     }
 
     // ========================================================================
@@ -3241,6 +3347,18 @@ mod tests {
             parameter: CosemDataType::Null,
         };
         round_trip(&aspec);
+    }
+
+    #[test]
+    fn action_specification_rejects_out_of_range_long_index() {
+        let cd = CosemDataType::Structure(vec![
+            CosemDataType::Enum(1),
+            CosemDataType::LongUnsigned(3),
+            CosemDataType::OctetString(vec![0, 0, 1, 0, 0, 255]),
+            CosemDataType::Long(200),
+            CosemDataType::Null,
+        ]);
+        assert!(ActionSpecification::try_from(&cd).is_err());
     }
 
     #[test]
@@ -3507,6 +3625,16 @@ mod tests {
     fn protection_object_round_trip() {
         let po = ProtectionObject { class_id: 3, logical_name: obis(0, 0, 1, 0, 0, 255), attribute_index: 2 };
         round_trip(&po);
+    }
+
+    #[test]
+    fn protection_object_rejects_out_of_range_long_attribute_index() {
+        let cd = CosemDataType::Structure(vec![
+            CosemDataType::LongUnsigned(3),
+            CosemDataType::OctetString(vec![0, 0, 1, 0, 0, 255]),
+            CosemDataType::Long(200),
+        ]);
+        assert!(ProtectionObject::try_from(&cd).is_err());
     }
 
     // ========================================================================
