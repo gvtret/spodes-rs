@@ -103,7 +103,7 @@ impl HdlcAddress {
         HdlcAddress { value: u32::from(value), length: 1 }
     }
 
-    fn encode(&self, out: &mut Vec<u8>) {
+    fn encode(self, out: &mut Vec<u8>) {
         for i in (0..self.length).rev() {
             let group = ((self.value >> (7 * i)) & 0x7F) as u8;
             let last = i == 0;
@@ -192,9 +192,9 @@ pub enum Control {
 }
 
 impl Control {
-    fn encode(&self) -> u8 {
+    fn encode(self) -> u8 {
         let pf = |b: bool| if b { 0x10 } else { 0x00 };
-        match *self {
+        match self {
             Control::Snrm { poll } => 0x83 | pf(poll),
             Control::Ua { final_bit } => 0x63 | pf(final_bit),
             Control::Disc { poll } => 0x43 | pf(poll),

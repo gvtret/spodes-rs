@@ -117,7 +117,7 @@ impl PushSetup {
     /// [`RequestDispatcher::build_push_delivery_request`](crate::server::RequestDispatcher::build_push_delivery_request)
     /// against the object registry to actually assemble and send the push. The
     /// ACTION itself only validates that the object is triggerable.
-    fn push(&mut self) -> Result<CosemDataType, String> {
+    fn push() -> Result<CosemDataType, String> {
         Ok(CosemDataType::Null)
     }
 
@@ -357,7 +357,7 @@ impl InterfaceClass for PushSetup {
 
     fn invoke_method(&mut self, method_id: u8, _params: Option<CosemDataType>) -> Result<CosemDataType, String> {
         match method_id {
-            1 => self.push(),
+            1 => Self::push(),
             2 if self.version >= 2 => self.reset(),
             _ => Err(format!("Method {} not supported for Push setup version {}", method_id, self.version)),
         }

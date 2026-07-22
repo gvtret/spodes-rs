@@ -484,7 +484,7 @@ impl RequestDispatcher {
         }
 
         let mechanism = aarq.mechanism_name.and_then(AuthMechanism::from_id).unwrap_or(AuthMechanism::None);
-        let user_information = self.negotiate_initiate_response(initiate.as_ref());
+        let user_information = Self::negotiate_initiate_response(initiate.as_ref());
         match mechanism {
             AuthMechanism::None => {
                 if let Some(assoc) = self.association.as_mut() {
@@ -576,7 +576,7 @@ impl RequestDispatcher {
 
     /// Builds the negotiated InitiateResponse: the conformance is ANDed with
     /// the client's proposal and the PDU size capped by the client's maximum.
-    fn negotiate_initiate_response(&self, ireq: Option<&InitiateRequest>) -> Vec<u8> {
+    fn negotiate_initiate_response(ireq: Option<&InitiateRequest>) -> Vec<u8> {
         let mut conformance = SERVER_CONFORMANCE;
         let mut pdu = SERVER_MAX_PDU;
         if let Some(ireq) = ireq {

@@ -135,7 +135,7 @@ impl Clock {
     }
 
     /// Preset-time adjustment (stub).
-    fn preset_adjusting_time(&mut self) -> Result<CosemDataType, String> {
+    fn preset_adjusting_time() -> Result<CosemDataType, String> {
         Ok(CosemDataType::Null)
     }
 }
@@ -247,7 +247,7 @@ impl InterfaceClass for Clock {
             1 => self.adjust_to_quarter(),
             2 => self.adjust_to_minute(),
             3 => self.adjust_to_preset_time(params),
-            4 => self.preset_adjusting_time(),
+            4 => Self::preset_adjusting_time(),
             _ => Err(format!("Method {method_id} not supported for Clock class")),
         }
     }

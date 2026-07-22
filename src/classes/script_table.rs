@@ -43,7 +43,7 @@ impl ScriptTable {
     /// # Returns
     /// * `Ok(CosemDataType::Null)` - If the script was found and executed.
     /// * `Err(String)` - If the script was not found or the parameter is invalid.
-    fn execute(&mut self, params: Option<CosemDataType>) -> Result<CosemDataType, String> {
+    fn execute(&self, params: Option<CosemDataType>) -> Result<CosemDataType, String> {
         if let Some(CosemDataType::LongUnsigned(script_id)) = params {
             for script in &self.scripts {
                 if script.script_identifier == script_id {

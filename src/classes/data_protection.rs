@@ -74,7 +74,7 @@ impl DataProtection {
 
     /// Method 3: `invoke_protected_method` — invokes a protected method.
     /// Best-effort: succeeds after validating a parameter is present.
-    fn invoke_protected_method(&mut self, _data: CosemDataType) -> Result<CosemDataType, String> {
+    fn invoke_protected_method(_data: CosemDataType) -> Result<CosemDataType, String> {
         Ok(CosemDataType::Null)
     }
 }
@@ -180,7 +180,7 @@ impl InterfaceClass for DataProtection {
         match method_id {
             1 => self.get_protected_attributes(params),
             2 => self.set_protected_attributes(params),
-            3 => self.invoke_protected_method(params),
+            3 => Self::invoke_protected_method(params),
             _ => Err(format!("Method {method_id} not supported for Data protection")),
         }
     }
