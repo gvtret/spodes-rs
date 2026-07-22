@@ -57,12 +57,7 @@ impl TryFrom<&CosemDataType> for DateTime {
 
     fn try_from(value: &CosemDataType) -> Result<Self, String> {
         match value {
-            CosemDataType::DateTime(bytes) if bytes.len() == 12 => {
-                let mut buf = [0u8; 12];
-                buf.copy_from_slice(bytes);
-                Ok(DateTime(buf))
-            }
-            CosemDataType::OctetString(bytes) if bytes.len() == 12 => {
+            CosemDataType::DateTime(bytes) | CosemDataType::OctetString(bytes) if bytes.len() == 12 => {
                 let mut buf = [0u8; 12];
                 buf.copy_from_slice(bytes);
                 Ok(DateTime(buf))
@@ -141,8 +136,7 @@ impl TryFrom<&CosemDataType> for ScalerUnit {
                     _ => return Err("scaler must be integer".to_string()),
                 };
                 let unit = match &fields[1] {
-                    CosemDataType::Enum(v) => *v,
-                    CosemDataType::Unsigned(v) => *v,
+                    CosemDataType::Enum(v) | CosemDataType::Unsigned(v) => *v,
                     _ => return Err("unit must be enum".to_string()),
                 };
                 Ok(ScalerUnit { scaler, unit })
@@ -1133,12 +1127,10 @@ impl TryFrom<&CosemDataType> for AttributeAccessItem {
                     _ => return Err("attribute_id must be integer".to_string()),
                 };
                 let access_mode = match &fields[1] {
-                    CosemDataType::Enum(v) => *v,
-                    CosemDataType::Unsigned(v) => *v,
+                    CosemDataType::Enum(v) | CosemDataType::Unsigned(v) => *v,
                     _ => return Err("access_mode must be enum".to_string()),
                 };
                 let access_selectors = match &fields[2] {
-                    CosemDataType::Null => None,
                     CosemDataType::Array(items) => {
                         let ids = items
                             .iter()
@@ -1185,8 +1177,7 @@ impl TryFrom<&CosemDataType> for MethodAccessItem {
                     _ => return Err("method_id must be integer".to_string()),
                 };
                 let access_mode = match &fields[1] {
-                    CosemDataType::Enum(v) => *v,
-                    CosemDataType::Unsigned(v) => *v,
+                    CosemDataType::Enum(v) | CosemDataType::Unsigned(v) => *v,
                     _ => return Err("access_mode must be enum".to_string()),
                 };
                 Ok(MethodAccessItem { method_id, access_mode })
@@ -1619,8 +1610,7 @@ impl TryFrom<&CosemDataType> for ActionSpecification {
         match value {
             CosemDataType::Structure(fields) if fields.len() >= 5 => {
                 let service_id = match &fields[0] {
-                    CosemDataType::Enum(v) => *v,
-                    CosemDataType::Unsigned(v) => *v,
+                    CosemDataType::Enum(v) | CosemDataType::Unsigned(v) => *v,
                     _ => return Err("service_id must be enum".to_string()),
                 };
                 let class_id = match &fields[1] {
@@ -2072,8 +2062,7 @@ impl TryFrom<&CosemDataType> for SendDestinationAndMethod {
         match value {
             CosemDataType::Structure(fields) if fields.len() >= 3 => {
                 let transport_service = match &fields[0] {
-                    CosemDataType::Enum(v) => *v,
-                    CosemDataType::Unsigned(v) => *v,
+                    CosemDataType::Enum(v) | CosemDataType::Unsigned(v) => *v,
                     _ => return Err("transport_service must be enum".to_string()),
                 };
                 let destination = match &fields[1] {
@@ -2081,8 +2070,7 @@ impl TryFrom<&CosemDataType> for SendDestinationAndMethod {
                     _ => return Err("destination must be octet-string".to_string()),
                 };
                 let message = match &fields[2] {
-                    CosemDataType::Enum(v) => *v,
-                    CosemDataType::Unsigned(v) => *v,
+                    CosemDataType::Enum(v) | CosemDataType::Unsigned(v) => *v,
                     _ => return Err("message must be enum".to_string()),
                 };
                 Ok(SendDestinationAndMethod { transport_service, destination, message })

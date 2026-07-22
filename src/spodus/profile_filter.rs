@@ -144,10 +144,9 @@ fn as_int(v: &CosemDataType) -> Option<i128> {
         CosemDataType::Integer(i) => *i as i128,
         CosemDataType::Long(i) => *i as i128,
         CosemDataType::DoubleLong(i) => *i as i128,
-        CosemDataType::Unsigned(u) => *u as i128,
+        CosemDataType::Unsigned(u) | CosemDataType::Enum(u) => *u as i128,
         CosemDataType::LongUnsigned(u) => *u as i128,
         CosemDataType::DoubleLongUnsigned(u) => *u as i128,
-        CosemDataType::Enum(u) => *u as i128,
         _ => return None,
     })
 }

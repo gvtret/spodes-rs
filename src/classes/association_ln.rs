@@ -651,8 +651,7 @@ impl InterfaceClass for AssociationLn {
             _ => return Err(BerError::InvalidTag),
         };
         self.association_status = match &seq[8] {
-            CosemDataType::Enum(v) => *v,
-            CosemDataType::Unsigned(v) => *v,
+            CosemDataType::Enum(v) | CosemDataType::Unsigned(v) => *v,
             _ => return Err(BerError::InvalidTag),
         };
         // Attribute 9 (security_setup_reference) is present in versions 1 and 2.
