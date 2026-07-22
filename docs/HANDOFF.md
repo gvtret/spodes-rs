@@ -382,3 +382,31 @@ integration, PhysicalTransport::set_read_timeout, HdlcLayer
 connect/disconnect/XID/timeouts, XidParams, 6 new IC classes, new
 CipherError variants, key_rotation_needed, HLS rate limiting). Still
 awaiting user go-ahead to actually cut the release.
+
+## 2026-07-22 — Released v0.6.0
+
+**Done:** Cargo.toml → 0.6.0; CHANGELOG `[Unreleased]` closed into
+`## [0.6.0] - 2026-07-22` (folding in the never-separately-tagged 0.5.0
+work-in-progress entry too, since crates.io's latest published version was
+still 0.4.0 — 0.5.0 was committed to CHANGELOG but never tagged/released).
+Fixed the changelog compare links accordingly: `[0.6.0]` compares
+`v0.4.0...v0.6.0`, dropped the dead `[0.5.0]` link.
+
+Full quality gate re-run clean at the new version: `cargo build`, `fmt
+--check`, `clippy --all-targets -D warnings`, `cargo test` (371 lib + 90
+across 7 integration suites), `cargo doc --no-deps -D warnings`, `cargo
+package`.
+
+Commit `8805902` "Release v0.6.0" pushed to `main`. Tag `v0.6.0` pushed →
+GitHub Actions Release workflow run `29905139631`: both jobs green (GitHub
+Release + Publish to crates.io). Confirmed live on crates.io
+(`0.6.0` in the versions list, jumping from `0.4.0` — the last actually
+published version). CI run on `main` (`29905132764`) also green.
+
+**State:** fully released and clean. `main` at `8805902` = `v0.6.0`, nothing
+uncommitted, nothing unpushed.
+
+**Next:** none pending from this work block. docs.rs will rebuild
+automatically from the new publish (usually within a few minutes) —
+https://docs.rs/spodes-rs/0.6.0/spodes_rs/. If further work resumes, start
+fresh from a clean `main`.
