@@ -37,27 +37,53 @@ impl Schedule {
         Schedule { logical_name: config.logical_name, entries: config.entries, enabled: config.enabled }
     }
 
-    /// Enables the schedule.
-    ///
-    /// # Returns
-    /// * `Ok(CosemDataType::Null)` - If the schedule was enabled.
-    fn enable(&mut self) -> Result<CosemDataType, String> {
-        self.enabled = true;
+    /// Method 1: `enable_disable` — toggles the `enable` flag of the entry at
+    /// the given 0-based index (IEC 62056-6-2 §4.5.3).
+    fn enable_disable(&mut self, params: Option<CosemDataType>) -> Result<CosemDataType, String> {
+        let idx = index_param(params.as_ref()).ok_or("enable_disable requires an entry index")?;
+        let entry = self.entries.get_mut(idx).ok_or_else(|| format!("No schedule entry at index {idx}"))?;
+        entry.enable = !entry.enable;
         Ok(CosemDataType::Null)
     }
 
-    /// Disables the schedule.
-    ///
-    /// # Returns
-    /// * `Ok(CosemDataType::Null)` - If the schedule was disabled.
-    fn disable(&mut self) -> Result<CosemDataType, String> {
-        self.enabled = false;
+    /// Method 2: `insert` — appends a new `schedule_table_entry`
+    /// (IEC 62056-6-2 §4.5.3).
+    fn insert(&mut self, params: Option<CosemDataType>) -> Result<CosemDataType, String> {
+        let value = params.ok_or("insert requires a schedule_table_entry structure")?;
+        let entry = ScheduleTableEntry::try_from(&value).map_err(|e| format!("Invalid schedule_table_entry: {e}"))?;
+        self.entries.push(entry);
+        Ok(CosemDataType::Null)
+    }
+
+    /// Method 3: `delete` — removes the entry at the given 0-based index
+    /// (IEC 62056-6-2 §4.5.3).
+    fn delete(&mut self, params: Option<CosemDataType>) -> Result<CosemDataType, String> {
+        let idx = index_param(params.as_ref()).ok_or("delete requires an entry index")?;
+        if idx >= self.entries.len() {
+            return Err(format!("No schedule entry at index {idx}"));
+        }
+        self.entries.remove(idx);
         Ok(CosemDataType::Null)
     }
 
     /// Returns the schedule state (enabled/disabled).
     pub fn is_enabled(&self) -> bool {
         self.enabled
+    }
+
+    /// Returns the schedule entries.
+    pub fn entries(&self) -> &[ScheduleTableEntry] {
+        &self.entries
+    }
+}
+
+/// Extracts an entry index from an unsigned method parameter.
+fn index_param(value: Option<&CosemDataType>) -> Option<usize> {
+    match value? {
+        CosemDataType::Unsigned(v) => Some(*v as usize),
+        CosemDataType::LongUnsigned(v) => Some(*v as usize),
+        CosemDataType::DoubleLongUnsigned(v) => Some(*v as usize),
+        _ => None,
     }
 }
 
@@ -82,7 +108,7 @@ impl InterfaceClass for Schedule {
     }
 
     fn methods(&self) -> Vec<(u8, String)> {
-        vec![(1, "enable".to_string()), (2, "disable".to_string())]
+        vec![(1, "enable_disable".to_string()), (2, "insert".to_string()), (3, "delete".to_string())]
     }
 
     fn serialize_ber(&self, buf: &mut Vec<u8>) -> Result<(), BerError> {
@@ -145,10 +171,11 @@ impl InterfaceClass for Schedule {
         }
     }
 
-    fn invoke_method(&mut self, method_id: u8, _params: Option<CosemDataType>) -> Result<CosemDataType, String> {
+    fn invoke_method(&mut self, method_id: u8, params: Option<CosemDataType>) -> Result<CosemDataType, String> {
         match method_id {
-            1 => self.enable(),
-            2 => self.disable(),
+            1 => self.enable_disable(params),
+            2 => self.insert(params),
+            3 => self.delete(params),
             _ => Err(format!("Method {} not supported for Schedule class", method_id)),
         }
     }

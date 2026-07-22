@@ -703,16 +703,31 @@ fn test_schedule_enable_disable() {
         end_date: vec![],
     }];
 
-    let config = ScheduleConfig { logical_name: obis, entries, enabled: false };
+    let config = ScheduleConfig { logical_name: obis, entries: entries.clone(), enabled: false };
     let mut schedule = Schedule::new(config);
 
-    let result = schedule.invoke_method(1, None).expect("Enable schedule failed");
+    // Method 1: enable_disable toggles the entry's enable flag by index.
+    let result = schedule.invoke_method(1, Some(CosemDataType::Unsigned(0))).expect("enable_disable failed");
     assert_eq!(result, CosemDataType::Null);
-    assert!(schedule.is_enabled());
+    assert!(!schedule.entries()[0].enable);
+    schedule.invoke_method(1, Some(CosemDataType::Unsigned(0))).expect("enable_disable failed");
+    assert!(schedule.entries()[0].enable);
 
-    let result = schedule.invoke_method(2, None).expect("Disable schedule failed");
-    assert_eq!(result, CosemDataType::Null);
-    assert!(!schedule.is_enabled());
+    // Method 2: insert appends a new entry.
+    let mut new_entry = entries[0].clone();
+    new_entry.index = 2;
+    schedule.invoke_method(2, Some(CosemDataType::from(new_entry))).expect("insert failed");
+    assert_eq!(schedule.entries().len(), 2);
+
+    // Method 3: delete removes an entry by index.
+    schedule.invoke_method(3, Some(CosemDataType::Unsigned(0))).expect("delete failed");
+    assert_eq!(schedule.entries().len(), 1);
+    assert_eq!(schedule.entries()[0].index, 2);
+
+    // Out-of-range index is rejected.
+    assert!(schedule.invoke_method(3, Some(CosemDataType::Unsigned(5))).is_err());
+    // Missing parameter is rejected.
+    assert!(schedule.invoke_method(1, None).is_err());
 }
 
 #[test]

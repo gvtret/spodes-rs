@@ -296,9 +296,24 @@ impl RequestDispatcher {
     }
 
     fn dispatch_get(&mut self, request: &[u8]) -> Result<Vec<u8>, ServiceError> {
-        match GetRequest::decode(request)? {
-            GetRequest::Normal { invoke_id_and_priority, attribute, .. } => {
-                match self.read_attribute(&attribute) {
+        // A malformed GET from an associated client is answered with a
+        // data-access-result instead of dropping the session (the invoke-id is
+        // salvaged from the raw APDU when present).
+        let decoded = match GetRequest::decode(request) {
+            Ok(r) => r,
+            Err(_) => {
+                let invoke_id_and_priority = request.get(2).copied().unwrap_or(0);
+                return GetResponse::Normal {
+                    invoke_id_and_priority,
+                    result: GetDataResult::AccessResult(data_access_result::OTHER_REASON),
+                }
+                .encode();
+            }
+        };
+        match decoded {
+            GetRequest::Normal { invoke_id_and_priority, attribute, access_selection } => {
+                let read = self.read_attribute(&attribute);
+                match apply_selective_access(&attribute, read, access_selection.as_ref()) {
                     // A too-large value is segmented into datablocks.
                     GetDataResult::Data(value) => {
                         let mut raw = Vec::new();
@@ -312,7 +327,13 @@ impl RequestDispatcher {
                 }
             }
             GetRequest::WithList { invoke_id_and_priority, attributes } => {
-                let results = attributes.iter().map(|(a, _)| self.read_attribute(a)).collect();
+                let results = attributes
+                    .iter()
+                    .map(|(a, sel)| {
+                        let read = self.read_attribute(a);
+                        apply_selective_access(a, read, sel.as_ref())
+                    })
+                    .collect();
                 GetResponse::WithList { invoke_id_and_priority, results }.encode()
             }
             // Deliver the next block of a segmented result.
@@ -361,7 +382,18 @@ impl RequestDispatcher {
     }
 
     fn dispatch_set(&mut self, request: &[u8]) -> Result<Vec<u8>, ServiceError> {
-        match SetRequest::decode(request)? {
+        // A malformed SET is answered with a data-access-result instead of
+        // dropping the session.
+        let decoded = match SetRequest::decode(request) {
+            Ok(r) => r,
+            Err(_) => {
+                let invoke_id_and_priority = request.get(2).copied().unwrap_or(0);
+                return Ok(
+                    SetResponse::Normal { invoke_id_and_priority, result: data_access_result::OTHER_REASON }.encode()
+                );
+            }
+        };
+        match decoded {
             SetRequest::Normal { invoke_id_and_priority, attribute, value, .. } => {
                 let result = self.write_attribute(&attribute, value);
                 Ok(SetResponse::Normal { invoke_id_and_priority, result }.encode())
@@ -420,6 +452,61 @@ impl RequestDispatcher {
             | ActionRequest::WithFirstPblock { .. }
             | ActionRequest::WithPblock { .. } => Ok(not_possible()),
         }
+    }
+}
+
+/// Applies GET selective access to a read result (IEC 62056-5-3 §7.4.1.6 /
+/// IEC 62056-6-2 §4.3.6.2). Only the ProfileGeneric buffer (class 7,
+/// attribute 2) is filtered:
+///
+/// * selector 2 (`entry_descriptor`) — keeps the 1-based entry window
+///   `[from_entry, to_entry]` of the buffer array; `to_entry` = 0 keeps all
+///   remaining entries.
+/// * selector 1 (`range_descriptor`) — value-range filtering needs the sort
+///   column; like the reference implementation the buffer is returned
+///   unfiltered.
+///
+/// Any other selector on the buffer, or a malformed descriptor, yields
+/// `other-reason`; selective access on other attributes is ignored.
+fn apply_selective_access(
+    attribute: &AttributeDescriptor,
+    read: GetDataResult,
+    selection: Option<&crate::service::get::AccessSelection>,
+) -> GetDataResult {
+    let Some(sel) = selection else { return read };
+    if attribute.class_id != 7 || attribute.attribute_id != 2 {
+        return read;
+    }
+    let GetDataResult::Data(CosemDataType::Array(rows)) = read else { return read };
+    match sel.selector {
+        1 => GetDataResult::Data(CosemDataType::Array(rows)),
+        2 => {
+            let fields = match &sel.parameters {
+                CosemDataType::Structure(fields) if fields.len() >= 2 => fields,
+                _ => return GetDataResult::AccessResult(data_access_result::OTHER_REASON),
+            };
+            let (Some(from), Some(to)) = (selective_index(&fields[0]), selective_index(&fields[1])) else {
+                return GetDataResult::AccessResult(data_access_result::OTHER_REASON);
+            };
+            if from == 0 {
+                return GetDataResult::AccessResult(data_access_result::OTHER_REASON);
+            }
+            let start = (from - 1) as usize;
+            let end = if to == 0 { rows.len() } else { (to as usize).min(rows.len()) };
+            let slice = if start < end { rows[start..end].to_vec() } else { Vec::new() };
+            GetDataResult::Data(CosemDataType::Array(slice))
+        }
+        _ => GetDataResult::AccessResult(data_access_result::OTHER_REASON),
+    }
+}
+
+/// Reads a non-negative COSEM integer used as a selective-access entry index.
+fn selective_index(value: &CosemDataType) -> Option<u32> {
+    match value {
+        CosemDataType::DoubleLongUnsigned(v) => Some(*v),
+        CosemDataType::LongUnsigned(v) => Some(*v as u32),
+        CosemDataType::Unsigned(v) => Some(*v as u32),
+        _ => None,
     }
 }
 
@@ -582,6 +669,79 @@ mod tests {
         match GetResponse::decode(&got).unwrap() {
             GetResponse::Normal { result: GetDataResult::Data(v), .. } => {
                 assert_eq!(v, CosemDataType::OctetString(vec![0x5A; 40]));
+            }
+            other => panic!("unexpected {other:?}"),
+        }
+    }
+
+    #[test]
+    fn malformed_get_returns_other_reason() {
+        let mut d = dispatcher_with_data();
+        // GET-REQUEST with an unknown choice (0x77) and a salvageable invoke-id.
+        let resp = d.dispatch(&[tag::GET_REQUEST, 0x77, 0xC1]).unwrap();
+        let decoded = GetResponse::decode(&resp).unwrap();
+        assert_eq!(
+            decoded,
+            GetResponse::Normal {
+                invoke_id_and_priority: 0xC1,
+                result: GetDataResult::AccessResult(data_access_result::OTHER_REASON),
+            }
+        );
+    }
+
+    #[test]
+    fn malformed_set_returns_other_reason() {
+        let mut d = dispatcher_with_data();
+        let resp = d.dispatch(&[tag::SET_REQUEST, 0x77, 0xC1]).unwrap();
+        let decoded = SetResponse::decode(&resp).unwrap();
+        assert_eq!(
+            decoded,
+            SetResponse::Normal { invoke_id_and_priority: 0xC1, result: data_access_result::OTHER_REASON }
+        );
+    }
+
+    #[test]
+    fn selective_access_by_entry_filters_profile_buffer() {
+        use crate::classes::profile_generic::{ProfileGeneric, ProfileGenericConfig};
+        use crate::service::get::AccessSelection;
+
+        let obis = ObisCode::new(1, 0, 99, 1, 0, 0xFF);
+        let buffer: Vec<CosemDataType> =
+            (1u32..=5).map(|i| CosemDataType::Structure(vec![CosemDataType::DoubleLongUnsigned(i)])).collect();
+        let profile = ProfileGeneric::new(ProfileGenericConfig {
+            logical_name: obis.clone(),
+            version: 1,
+            buffer,
+            capture_objects: vec![],
+            capture_period: 0,
+            sort_method: crate::types::attrs::SortMethod::Fifo,
+            sort_object: None,
+            entries_in_use: 5,
+            profile_entries: 10,
+        });
+        let mut d = RequestDispatcher::new();
+        d.add(Box::new(profile));
+
+        // entry_descriptor: entries 2..4 (1-based, inclusive).
+        let req = GetRequest::Normal {
+            invoke_id_and_priority: 0xC1,
+            attribute: AttributeDescriptor::new(7, obis, 2),
+            access_selection: Some(AccessSelection {
+                selector: 2,
+                parameters: CosemDataType::Structure(vec![
+                    CosemDataType::DoubleLongUnsigned(2),
+                    CosemDataType::DoubleLongUnsigned(4),
+                    CosemDataType::LongUnsigned(1),
+                    CosemDataType::LongUnsigned(0),
+                ]),
+            }),
+        };
+        let resp = GetResponse::decode(&d.dispatch(&req.encode().unwrap()).unwrap()).unwrap();
+        match resp {
+            GetResponse::Normal { result: GetDataResult::Data(CosemDataType::Array(rows)), .. } => {
+                assert_eq!(rows.len(), 3);
+                assert_eq!(rows[0], CosemDataType::Structure(vec![CosemDataType::DoubleLongUnsigned(2)]));
+                assert_eq!(rows[2], CosemDataType::Structure(vec![CosemDataType::DoubleLongUnsigned(4)]));
             }
             other => panic!("unexpected {other:?}"),
         }

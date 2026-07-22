@@ -8,6 +8,38 @@ While the crate is at `0.x`, minor releases may contain breaking changes.
 
 ## [Unreleased]
 
+### Added (ported from the openspodes C implementation)
+
+- **Six new interface classes** (IEC 62056-6-2): Compact data (62) with
+  `reset`/`capture` methods, Register table (61), Status mapping (63),
+  Utility tables (26), Parameter monitor (65) and the M-Bus slave device
+  descriptor (76).
+- **Server-side selective access** for the ProfileGeneric buffer (class 7,
+  attribute 2): `entry_descriptor` (selector 2) filters the returned rows by
+  the 1-based entry window in GET-REQUEST-NORMAL and WITH-LIST;
+  `range_descriptor` (selector 1) returns the buffer unfiltered, matching the
+  reference implementation.
+
+### Fixed (Blue Book compliance, per openspodes 2.4.0)
+
+- **Data (class 1) method 1** is now `reset`: sets the value to null-data per
+  IEC 62056-6-2 §4.3.1.3.1 (previously rejected as unsupported).
+- **Schedule (class 10) methods** now follow §4.5.3: method 1
+  `enable_disable` toggles the entry's enable flag by index, method 2
+  `insert` appends a `schedule_table_entry`, method 3 `delete` removes an
+  entry by index (previously methods 1/2 enabled/disabled the whole
+  schedule).
+- **Malformed GET/SET requests** from an associated client are now answered
+  with a `other-reason` data-access-result response instead of an error that
+  drops the session.
+
+### Security (per openspodes 1.10.0 audit)
+
+- **BER length decoding hardened**: long-form lengths are limited to
+  4 octets (previously up to 127 octets shifted into a `usize`, overflowing
+  on crafted input) and a declared length beyond the remaining buffer is
+  rejected before any allocation.
+
 ## [0.5.0] - 2026-07-12
 
 ### Added

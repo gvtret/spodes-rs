@@ -52,7 +52,7 @@ impl InterfaceClass for Data {
     }
 
     fn methods(&self) -> Vec<(u8, String)> {
-        vec![]
+        vec![(1, "reset".to_string())]
     }
 
     fn serialize_ber(&self, buf: &mut Vec<u8>) -> Result<(), BerError> {
@@ -96,7 +96,15 @@ impl InterfaceClass for Data {
     }
 
     fn invoke_method(&mut self, method_id: u8, _params: Option<CosemDataType>) -> Result<CosemDataType, String> {
-        Err(format!("Method {} not supported for Data class", method_id))
+        match method_id {
+            // Method 1: `reset` — sets the value to its default (null-data),
+            // per IEC 62056-6-2 §4.3.1.3.1.
+            1 => {
+                self.value = CosemDataType::Null;
+                Ok(CosemDataType::Null)
+            }
+            _ => Err(format!("Method {} not supported for Data class", method_id)),
+        }
     }
 
     fn as_any(&self) -> &dyn Any {

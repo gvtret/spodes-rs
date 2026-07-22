@@ -9,6 +9,8 @@ pub mod arbitrator;
 pub mod association_ln;
 /// Clock (class 8).
 pub mod clock;
+/// Compact data (class 62).
+pub mod compact_data;
 /// Data (class 1).
 pub mod data;
 /// Data protection (class 30).
@@ -37,8 +39,12 @@ pub mod ipv6_setup;
 pub mod limiter;
 /// MAC address setup (class 43).
 pub mod mac_address_setup;
+/// M-Bus slave device descriptor (class 76).
+pub mod mbus_slave;
 /// M-Bus slave port setup (class 25).
 pub mod mbus_slave_port_setup;
+/// Parameter monitor (class 65).
+pub mod parameter_monitor;
 /// Profile generic (class 7).
 pub mod profile_generic;
 /// Push setup (class 40).
@@ -49,6 +55,8 @@ pub mod register;
 pub mod register_activation;
 /// Register monitor (class 21).
 pub mod register_monitor;
+/// Register table (class 61).
+pub mod register_table;
 /// SAP assignment (class 17).
 pub mod sap_assignment;
 /// Schedule (class 10).
@@ -61,5 +69,9 @@ pub mod security_setup;
 pub mod single_action_schedule;
 /// Special days table (class 11).
 pub mod special_days_table;
+/// Status mapping (class 63).
+pub mod status_mapping;
 /// TCP-UDP setup (class 41).
 pub mod tcp_udp_setup;
+/// Utility tables (class 26).
+pub mod utility_tables;

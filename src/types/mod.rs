@@ -279,14 +279,22 @@ fn read_length(data: &[u8]) -> Result<(usize, &[u8]), BerError> {
         Ok((data[0] as usize, &data[1..]))
     } else {
         let num_octets = (data[0] & 0x7F) as usize;
-        if num_octets == 0 || data.len() < num_octets + 1 {
+        // Longer length fields would overflow on crafted input; 4 octets
+        // (lengths up to 2^32-1) are more than any DLMS PDU can carry.
+        if num_octets == 0 || num_octets > 4 || data.len() < num_octets + 1 {
             return Err(BerError::InvalidLength);
         }
-        let mut len = 0;
+        let mut len: usize = 0;
         for &b in &data[1..=num_octets] {
             len = (len << 8) + b as usize;
         }
-        Ok((len, &data[num_octets + 1..]))
+        let rest = &data[num_octets + 1..];
+        // A declared length beyond the remaining buffer is malformed; rejecting
+        // it here prevents oversized allocations from crafted headers.
+        if len > rest.len() {
+            return Err(BerError::InvalidLength);
+        }
+        Ok((len, rest))
     }
 }
 
@@ -337,6 +345,18 @@ mod tests {
         let mut buf = Vec::new();
         v.serialize_ber(&mut buf).unwrap();
         buf
+    }
+
+    /// A crafted long-form length must not overflow or allocate: more than
+    /// 4 length octets, or a declared length beyond the buffer, is rejected.
+    #[test]
+    fn crafted_ber_length_is_rejected() {
+        // octet-string, long form with 9 length octets (would shift-overflow).
+        let crafted = [0x09, 0x89, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF];
+        assert!(CosemDataType::deserialize_ber(&crafted).is_err());
+        // octet-string declaring 0xFFFFFFFF octets with an empty body.
+        let oversized = [0x09, 0x84, 0xFF, 0xFF, 0xFF, 0xFF];
+        assert!(CosemDataType::deserialize_ber(&oversized).is_err());
     }
 
     /// Reference A-XDR vector from DLMS UA 1000-1 (context_name encoding example,
