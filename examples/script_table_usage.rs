@@ -21,7 +21,7 @@ fn main() {
     let scripts = vec![Script { script_identifier: 1, actions: vec![action] }];
 
     // Создаём конфигурацию ScriptTable
-    let config = ScriptTableConfig { logical_name: obis.clone(), scripts: scripts.clone() };
+    let config = ScriptTableConfig { logical_name: obis.clone(), scripts };
 
     // Создаём объект ScriptTable
     let mut script_table = ScriptTable::new(config);
@@ -35,7 +35,7 @@ fn main() {
     println!("Serialized data: {serialized:?}");
 
     // Создаём новый объект для десериализации
-    let config = ScriptTableConfig { logical_name: obis.clone(), scripts: vec![] };
+    let config = ScriptTableConfig { logical_name: obis, scripts: vec![] };
     let mut deserialized = ScriptTable::new(config);
 
     // Десериализуем данные

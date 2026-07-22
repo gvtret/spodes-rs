@@ -30,7 +30,7 @@ fn main() {
     println!("Serialized clock: {serialized:?}");
 
     let config = ClockConfig {
-        logical_name: obis.clone(),
+        logical_name: obis,
         time: DateTime([0u8; 12]),
         time_zone: 0,
         status: 0,

@@ -17,7 +17,7 @@ fn main() {
     }];
 
     // Создаём конфигурацию SpecialDaysTable
-    let config = SpecialDaysTableConfig { logical_name: obis.clone(), entries: entries.clone() };
+    let config = SpecialDaysTableConfig { logical_name: obis.clone(), entries };
 
     // Создаём объект SpecialDaysTable
     let mut special_days_table = SpecialDaysTable::new(config);
@@ -31,7 +31,7 @@ fn main() {
     println!("Serialized data: {serialized:?}");
 
     // Создаём новый объект для десериализации
-    let config = SpecialDaysTableConfig { logical_name: obis.clone(), entries: vec![] };
+    let config = SpecialDaysTableConfig { logical_name: obis, entries: vec![] };
     let mut deserialized = SpecialDaysTable::new(config);
 
     // Десериализуем данные
@@ -47,7 +47,7 @@ fn main() {
         CosemDataType::OctetString(vec![0x07, 0xE5, 0x12, 0x25, 0xFF, 0xFF, 0xFF]), // 25 декабря 2025
         CosemDataType::Unsigned(2),                                                 // day_id
     ]);
-    let result = special_days_table.invoke_method(1, Some(new_date.clone())).expect("Insert method failed");
+    let result = special_days_table.invoke_method(1, Some(new_date)).expect("Insert method failed");
     println!("Insert result: {result:?}");
     if let CosemDataType::Array(items) = &special_days_table.attributes()[1].1 {
         println!("Entries after insert: {:?}", items.len());

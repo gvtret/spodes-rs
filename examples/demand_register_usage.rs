@@ -56,7 +56,7 @@ fn main() {
     // Сериализация и десериализация
     let serialized = serialize_object(&demand_register).expect("Serialization failed");
     let config = DemandRegisterConfig {
-        logical_name: obis.clone(),
+        logical_name: obis,
         current_average_value: CosemDataType::Null,
         last_average_value: CosemDataType::Null,
         scaler_unit: ScalerUnit::new(0, 0),

@@ -49,7 +49,7 @@ fn main() {
     // Сериализация и десериализация
     let serialized = serialize_object(&extended_register).expect("Serialization failed");
     let mut deserialized = ExtendedRegister::new(
-        obis.clone(),
+        obis,
         CosemDataType::Null,
         ScalerUnit::new(0, 0),
         CosemDataType::Null,

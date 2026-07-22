@@ -37,7 +37,7 @@ fn main() {
         CosemDataType::OctetString(vec![0x54, 0x41, 0x52, 0x49, 0x46, 0x46, 0x32]), // mask_name: "TARIFF2"
         CosemDataType::Array(vec![CosemDataType::Unsigned(2)]),                     // register_indices
     ]);
-    match register_activation.invoke_method(1, Some(new_mask.clone())) {
+    match register_activation.invoke_method(1, Some(new_mask)) {
         Ok(result) => println!("Add mask result: {result:?}"),
         Err(e) => println!("Add mask failed: {e}"),
     }
@@ -64,7 +64,7 @@ fn main() {
     // Сериализация и десериализация
     let serialized = serialize_object(&register_activation).expect("Serialization failed");
     let config = RegisterActivationConfig {
-        logical_name: obis.clone(),
+        logical_name: obis,
         register_assignment: vec![],
         mask_list: vec![],
         active_mask: vec![],

@@ -3107,7 +3107,7 @@ mod tests {
     #[test]
     fn attribute_access_item_with_selectors() {
         let item = AttributeAccessItem { attribute_id: 3, access_mode: 3, access_selectors: Some(vec![1, 2]) };
-        let cd: CosemDataType = item.clone().into();
+        let cd: CosemDataType = item.into();
         let back = AttributeAccessItem::try_from(&cd).unwrap();
         assert_eq!(back.access_selectors, Some(vec![1, 2]));
     }
@@ -3265,7 +3265,7 @@ mod tests {
             index: 1,
             parameter: CosemDataType::LongUnsigned(42),
         };
-        let cd: CosemDataType = aspec.clone().into();
+        let cd: CosemDataType = aspec.into();
         let back = ActionSpecification::try_from(&cd).unwrap();
         assert_eq!(back.parameter, CosemDataType::LongUnsigned(42));
     }

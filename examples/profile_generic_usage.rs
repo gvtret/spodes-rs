@@ -10,7 +10,7 @@ use std::sync::Arc;
 fn main() {
     let profile_obis = ObisCode::new(1, 0, 99, 1, 0, 255);
     let data_obis = ObisCode::new(0, 0, 96, 1, 0, 255);
-    let data = Data::new(data_obis.clone(), CosemDataType::Integer(42));
+    let data = Data::new(data_obis, CosemDataType::Integer(42));
     let capture_objects = vec![(Arc::new(data) as Arc<dyn InterfaceClass + Send + Sync>, 2)];
     let config = ProfileGenericConfig {
         logical_name: profile_obis.clone(),

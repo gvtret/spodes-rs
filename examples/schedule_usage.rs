@@ -23,7 +23,7 @@ fn main() {
     }];
 
     // Создаём конфигурацию Schedule
-    let config = ScheduleConfig { logical_name: obis.clone(), entries: entries.clone(), enabled: true };
+    let config = ScheduleConfig { logical_name: obis.clone(), entries, enabled: true };
 
     // Создаём объект Schedule
     let schedule = Schedule::new(config);
@@ -38,7 +38,7 @@ fn main() {
     println!("Serialized data: {serialized:?}");
 
     // Создаём новый объект для десериализации
-    let config = ScheduleConfig { logical_name: obis.clone(), entries: vec![], enabled: false };
+    let config = ScheduleConfig { logical_name: obis, entries: vec![], enabled: false };
     let mut deserialized = Schedule::new(config);
 
     // Десериализуем данные

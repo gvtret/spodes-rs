@@ -498,7 +498,7 @@ impl RequestDispatcher {
                 // HLS pass 1/2: store CtoS, reply with a fresh StoC; the
                 // handshake completes with the reply_to_HLS_authentication
                 // ACTION (pass 3/4), served by the Association LN object.
-                let Some(ctos) = aarq.calling_authentication_value.clone() else {
+                let Some(ctos) = aarq.calling_authentication_value else {
                     return reject_aare(echo_context, diag::AUTHENTICATION_FAILURE, None);
                 };
                 let Some(assoc) = self.association.as_mut() else {
