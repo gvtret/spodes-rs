@@ -8,6 +8,30 @@ While the crate is at `0.x`, minor releases may contain breaking changes.
 
 ## [Unreleased]
 
+### Added (HDLC XID negotiation and outbound I-frame segmentation)
+
+- **XID parameter negotiation during SNRM/UA** (IEC 62056-46 §6.4.4.4.3.2,
+  ported from openspodes `hdlc_session.c`): new `transport::hdlc::XidParams`
+  (max information field length and window size, per direction).
+  `HdlcLayer::set_xid_ceiling`/`xid()` configure the proposed ceiling and
+  read back the negotiated values (tightened to the smaller of the two
+  sides; a zero/absent field from the peer leaves that direction
+  unchanged, and a ceiling is only ever narrowed, never widened). The
+  client encodes its ceiling into SNRM and negotiates against UA's reply;
+  the server resets to its own ceiling on every fresh SNRM, negotiates
+  against the client's proposal, and echoes the result in UA. Defaults:
+  1280/1280/1/1 (client), 512/512/1/1 (server), matching the reference.
+- **Outbound I-frame segmentation**: `HdlcLayer::send_apdu` now splits an
+  APDU whose LLC-prefixed payload exceeds the negotiated `max_info_tx` into
+  consecutive I-frames with the format field's segmentation bit set on
+  every frame but the last — the send-side mirror of the segmented-frame
+  reassembly `receive_apdu` already performed. (The openspodes C reference
+  does not actually implement this despite modelling the segmentation bit
+  on receive: its own `send_apdu` just rejects an oversized APDU outright;
+  this is a genuine addition, not a straight port, verified by feeding one
+  `HdlcLayer`'s segmented output directly into a second, independent
+  `HdlcLayer`'s `receive_apdu` and confirming it reassembles correctly.)
+
 ### Added (general block transfer, ported from openspodes gbt.c / client.c)
 
 - **`service::gbt::send`/`receive`**: drive the general-block-transfer codec

@@ -234,6 +234,101 @@ impl Control {
     }
 }
 
+/// XID parameters negotiated during the SNRM/UA exchange (IEC 62056-46
+/// §6.4.4.4.3.2): the maximum information field length and window size each
+/// station uses in each direction.
+///
+/// Encoded on the wire as the SNRM/UA information field:
+/// `81 80 <group-len> 05 02 <max_info_tx:u16> 06 02 <max_info_rx:u16>
+/// 07 04 <window_tx:u32> 08 04 <window_rx:u32>` (big-endian values; the
+/// window fields are 4 octets on the wire though only small values, 1..7,
+/// are meaningful).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct XidParams {
+    /// Maximum information field length this station will transmit.
+    pub max_info_tx: u16,
+    /// Maximum information field length this station will receive.
+    pub max_info_rx: u16,
+    /// Window size (1..7) this station uses when transmitting.
+    pub window_tx: u8,
+    /// Window size (1..7) this station uses when receiving.
+    pub window_rx: u8,
+}
+
+impl XidParams {
+    /// The client's default ceiling: 1280-octet info fields, window 1.
+    pub fn client_default() -> Self {
+        XidParams { max_info_tx: 1280, max_info_rx: 1280, window_tx: 1, window_rx: 1 }
+    }
+
+    /// The server's default ceiling: 512-octet info fields, window 1.
+    pub fn server_default() -> Self {
+        XidParams { max_info_tx: 512, max_info_rx: 512, window_tx: 1, window_rx: 1 }
+    }
+
+    fn encode(self) -> Vec<u8> {
+        let mut params = Vec::new();
+        params.push(0x05);
+        params.push(0x02);
+        params.extend_from_slice(&self.max_info_tx.to_be_bytes());
+        params.push(0x06);
+        params.push(0x02);
+        params.extend_from_slice(&self.max_info_rx.to_be_bytes());
+        params.push(0x07);
+        params.push(0x04);
+        params.extend_from_slice(&(self.window_tx as u32).to_be_bytes());
+        params.push(0x08);
+        params.push(0x04);
+        params.extend_from_slice(&(self.window_rx as u32).to_be_bytes());
+
+        let mut out = vec![0x81, 0x80, params.len() as u8];
+        out.extend_from_slice(&params);
+        out
+    }
+
+    /// Decodes XID parameters from an SNRM/UA information field. Fields not
+    /// present (or a field whose value is 0, meaning "no opinion") are left
+    /// at 0 so [`Self::negotiate`] treats them as absent.
+    fn decode(data: &[u8]) -> XidParams {
+        let mut p = XidParams { max_info_tx: 0, max_info_rx: 0, window_tx: 0, window_rx: 0 };
+        // Skip the format ID (0x81), group ID (0x80) and group-length octets.
+        let mut idx = if data.len() >= 3 && data[0] == 0x81 && data[1] == 0x80 { 3 } else { 0 };
+        while idx + 2 <= data.len() {
+            let param_id = data[idx];
+            let param_len = data[idx + 1] as usize;
+            idx += 2;
+            let Some(value) = data.get(idx..idx + param_len) else { break };
+            match (param_id, value.len()) {
+                (0x05, 2) => p.max_info_tx = u16::from_be_bytes([value[0], value[1]]),
+                (0x06, 2) => p.max_info_rx = u16::from_be_bytes([value[0], value[1]]),
+                (0x07, 4) => p.window_tx = u32::from_be_bytes([value[0], value[1], value[2], value[3]]) as u8,
+                (0x08, 4) => p.window_rx = u32::from_be_bytes([value[0], value[1], value[2], value[3]]) as u8,
+                _ => {}
+            }
+            idx += param_len;
+        }
+        p
+    }
+
+    /// Tightens `self` (this station's ceiling) against `peer`'s proposal: a
+    /// direction is only ever narrowed, and a zero value from the peer (no
+    /// opinion / absent) leaves that field unchanged.
+    fn negotiate(&mut self, peer: XidParams) {
+        if peer.max_info_tx > 0 && peer.max_info_tx < self.max_info_rx {
+            self.max_info_rx = peer.max_info_tx;
+        }
+        if peer.max_info_rx > 0 && peer.max_info_rx < self.max_info_tx {
+            self.max_info_tx = peer.max_info_rx;
+        }
+        if peer.window_tx > 0 && peer.window_tx < self.window_rx {
+            self.window_rx = peer.window_tx;
+        }
+        if peer.window_rx > 0 && peer.window_rx < self.window_tx {
+            self.window_tx = peer.window_rx;
+        }
+    }
+}
+
 /// A decoded HDLC frame.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct HdlcFrame {
@@ -372,6 +467,12 @@ pub struct HdlcLayer<T: PhysicalTransport> {
     /// Maximum time to wait for a *new* frame to start (IEC 62056-46
     /// "межкадровый" / inactivity timeout); `None` waits indefinitely.
     inactivity_timeout: Option<Duration>,
+    /// This station's configured XID ceiling, restored at the start of every
+    /// SNRM/UA negotiation.
+    xid_configured: XidParams,
+    /// The XID parameters actually negotiated with the peer (tightened from
+    /// `xid_configured` by the last SNRM/UA exchange).
+    xid: XidParams,
 }
 
 /// How many consecutive undecodable (bad FCS/HCS, malformed) frames are
@@ -401,6 +502,8 @@ impl<T: PhysicalTransport> HdlcLayer<T> {
             connected: false,
             inter_octet_timeout: Duration::from_millis(INTER_OCTET_DEFAULT_MS as u64),
             inactivity_timeout: None,
+            xid_configured: XidParams::client_default(),
+            xid: XidParams::client_default(),
         }
     }
 
@@ -416,6 +519,8 @@ impl<T: PhysicalTransport> HdlcLayer<T> {
             connected: false,
             inter_octet_timeout: Duration::from_millis(INTER_OCTET_DEFAULT_MS as u64),
             inactivity_timeout: None,
+            xid_configured: XidParams::server_default(),
+            xid: XidParams::server_default(),
         }
     }
 
@@ -444,14 +549,37 @@ impl<T: PhysicalTransport> HdlcLayer<T> {
         self.inactivity_timeout = if seconds == 0 { None } else { Some(Duration::from_secs(seconds as u64)) };
     }
 
-    /// Client: establishes the data link (NDM → NRM) with an SNRM/UA exchange
-    /// and resets both sequence numbers (IEC 62056-46 §6.4.4.2).
+    /// Sets this station's XID ceiling — the ceiling is what SNRM proposes
+    /// and what UA's negotiated values are tightened from — and immediately
+    /// resets the negotiated [`Self::xid`] to it. Call before [`Self::connect`]
+    /// (client) or before the next SNRM is received (server).
+    pub fn set_xid_ceiling(&mut self, xid: XidParams) {
+        self.xid_configured = xid;
+        self.xid = xid;
+    }
+
+    /// Returns the XID parameters actually negotiated with the peer (the
+    /// ceiling, tightened by the peer's counter-proposal in the last SNRM/UA
+    /// exchange). Before the first successful exchange this equals the
+    /// configured ceiling.
+    pub fn xid(&self) -> XidParams {
+        self.xid
+    }
+
+    /// Client: establishes the data link (NDM → NRM) with an SNRM/UA
+    /// exchange, negotiating XID parameters (IEC 62056-46 §6.4.4.4.3.2 —
+    /// see [`Self::set_xid_ceiling`] / [`Self::xid`]) and resetting both
+    /// sequence numbers (§6.4.4.2).
     pub fn connect(&mut self) -> io::Result<()> {
-        let frame = HdlcFrame::new(self.peer, self.own, Control::Snrm { poll: true }, Vec::new());
+        self.xid = self.xid_configured;
+        let frame = HdlcFrame::new(self.peer, self.own, Control::Snrm { poll: true }, self.xid_configured.encode());
         self.transport.send(&frame.encode())?;
         let reply = self.read_decoded_frame()?;
         match reply.control {
             Control::Ua { .. } => {
+                if !reply.information.is_empty() {
+                    self.xid.negotiate(XidParams::decode(&reply.information));
+                }
                 self.send_seq = 0;
                 self.recv_seq = 0;
                 self.connected = true;
@@ -496,7 +624,13 @@ impl<T: PhysicalTransport> HdlcLayer<T> {
 
     /// Sends an unnumbered response frame (server side).
     fn send_unnumbered(&mut self, control: Control) -> io::Result<()> {
-        let frame = HdlcFrame::new(self.peer, self.own, control, Vec::new());
+        self.send_unnumbered_with_info(control, Vec::new())
+    }
+
+    /// Sends an unnumbered frame carrying an information field (used for
+    /// UA's XID reply to SNRM).
+    fn send_unnumbered_with_info(&mut self, control: Control, information: Vec<u8>) -> io::Result<()> {
+        let frame = HdlcFrame::new(self.peer, self.own, control, information);
         self.transport.send(&frame.encode())
     }
 
@@ -597,16 +731,36 @@ fn inter_octet_timeout(e: io::Error) -> io::Error {
 }
 
 impl<T: PhysicalTransport> DataLinkLayer for HdlcLayer<T> {
+    /// Frames and sends `apdu`, splitting it into consecutive I-frames (the
+    /// format field's segmentation bit set on every frame but the last) when
+    /// the LLC-prefixed payload exceeds the negotiated `max_info_tx` (see
+    /// [`Self::xid`]) — the mirror of the segmented-frame reassembly already
+    /// performed by [`Self::receive_apdu`]. Each segment consumes one N(S)
+    /// slot; segments are sent back-to-back without waiting for the peer's
+    /// per-segment `RR` (this layer doesn't model true windowed flow
+    /// control, and a stray `RR` is harmlessly skipped by the next
+    /// `receive_apdu` call regardless).
     fn send_apdu(&mut self, apdu: &[u8]) -> io::Result<()> {
         #[cfg(feature = "tracing")]
         trace!(send_seq = self.send_seq, recv_seq = self.recv_seq, apdu_len = apdu.len(), "hdlc send");
-        let mut information = Vec::with_capacity(3 + apdu.len());
-        information.extend_from_slice(&self.llc());
-        information.extend_from_slice(apdu);
-        let control = Control::Information { send_seq: self.send_seq, recv_seq: self.recv_seq, poll: true };
-        let frame = HdlcFrame::new(self.peer, self.own, control, information);
-        self.transport.send(&frame.encode())?;
-        self.send_seq = (self.send_seq + 1) & 0x07;
+        let mut payload = Vec::with_capacity(3 + apdu.len());
+        payload.extend_from_slice(&self.llc());
+        payload.extend_from_slice(apdu);
+
+        // The LLC prefix makes `payload` at least 3 octets, so this always
+        // sends at least one frame.
+        let max_info = (self.xid.max_info_tx as usize).max(1);
+        let mut offset = 0;
+        while offset < payload.len() {
+            let chunk = (payload.len() - offset).min(max_info);
+            let last = offset + chunk >= payload.len();
+            let control = Control::Information { send_seq: self.send_seq, recv_seq: self.recv_seq, poll: true };
+            let mut frame = HdlcFrame::new(self.peer, self.own, control, payload[offset..offset + chunk].to_vec());
+            frame.segmented = !last;
+            self.transport.send(&frame.encode())?;
+            self.send_seq = (self.send_seq + 1) & 0x07;
+            offset += chunk;
+        }
         Ok(())
     }
 
@@ -634,13 +788,19 @@ impl<T: PhysicalTransport> DataLinkLayer for HdlcLayer<T> {
                     information.extend_from_slice(&frame.information);
                     break;
                 }
-                // Server: SNRM (re)establishes NRM — answer UA and reset the
-                // sequence numbers for the fresh association.
+                // Server: SNRM (re)establishes NRM — reset the XID ceiling,
+                // negotiate against the client's proposal, answer UA with the
+                // negotiated values, and reset the sequence numbers for the
+                // fresh association.
                 Control::Snrm { .. } if !self.is_client => {
+                    self.xid = self.xid_configured;
+                    if !frame.information.is_empty() {
+                        self.xid.negotiate(XidParams::decode(&frame.information));
+                    }
                     self.send_seq = 0;
                     self.recv_seq = 0;
                     self.connected = true;
-                    self.send_unnumbered(Control::Ua { final_bit: true })?;
+                    self.send_unnumbered_with_info(Control::Ua { final_bit: true }, self.xid.encode())?;
                     continue;
                 }
                 // Server: DISC in NRM → UA and back to NDM; DISC in NDM → DM
@@ -1004,5 +1164,164 @@ mod tests {
         assert_eq!(err.kind(), io::ErrorKind::TimedOut);
         assert!(err.to_string().contains("inter-octet"), "unexpected message: {err}");
         assert!(layer.is_connected(), "an inter-octet timeout must not by itself drop the connection");
+    }
+
+    // ------------------------------------------------------------------
+    // XID negotiation.
+    // ------------------------------------------------------------------
+
+    #[test]
+    fn xid_params_round_trip_through_wire_encoding() {
+        let xid = XidParams { max_info_tx: 1280, max_info_rx: 512, window_tx: 3, window_rx: 1 };
+        let encoded = xid.encode();
+        assert_eq!(&encoded[..2], &[0x81, 0x80]);
+        assert_eq!(XidParams::decode(&encoded), xid);
+    }
+
+    #[test]
+    fn xid_negotiate_tightens_to_the_smaller_value() {
+        let mut mine = XidParams { max_info_tx: 1280, max_info_rx: 1280, window_tx: 3, window_rx: 3 };
+        let peer = XidParams { max_info_tx: 200, max_info_rx: 400, window_tx: 1, window_rx: 2 };
+        mine.negotiate(peer);
+        // My rx is capped by the peer's tx, and vice-versa.
+        assert_eq!(mine, XidParams { max_info_tx: 400, max_info_rx: 200, window_tx: 2, window_rx: 1 });
+    }
+
+    #[test]
+    fn xid_negotiate_ignores_zero_fields_from_peer() {
+        let mut mine = XidParams::client_default();
+        let peer = XidParams { max_info_tx: 0, max_info_rx: 0, window_tx: 0, window_rx: 0 };
+        mine.negotiate(peer);
+        assert_eq!(mine, XidParams::client_default(), "an all-zero (absent) proposal changes nothing");
+    }
+
+    #[test]
+    fn xid_negotiate_never_widens_the_ceiling() {
+        let mut mine = XidParams { max_info_tx: 200, max_info_rx: 200, window_tx: 1, window_rx: 1 };
+        let peer = XidParams { max_info_tx: 5000, max_info_rx: 5000, window_tx: 7, window_rx: 7 };
+        mine.negotiate(peer);
+        assert_eq!(mine, XidParams { max_info_tx: 200, max_info_rx: 200, window_tx: 1, window_rx: 1 });
+    }
+
+    #[test]
+    fn connect_sends_configured_xid_and_negotiates_the_ua_reply() {
+        let mut client =
+            HdlcLayer::new_client(MemoryTransport::new(), HdlcAddress::one_byte(0x10), HdlcAddress::one_byte(0x03));
+        let server_xid = XidParams { max_info_tx: 200, max_info_rx: 300, window_tx: 1, window_rx: 1 };
+        let ua = HdlcFrame::new(
+            HdlcAddress::one_byte(0x10),
+            HdlcAddress::one_byte(0x03),
+            Control::Ua { final_bit: true },
+            server_xid.encode(),
+        );
+        client.transport_mut().feed(&ua.encode());
+        client.connect().unwrap();
+
+        // Negotiated against the client's 1280/1280/1/1 default: tx capped
+        // by the server's rx (300), rx capped by the server's tx (200).
+        assert_eq!(client.xid(), XidParams { max_info_tx: 300, max_info_rx: 200, window_tx: 1, window_rx: 1 });
+
+        // The SNRM the client sent carried its configured (unnegotiated)
+        // ceiling; nothing has consumed it yet since the UA was pre-fed.
+        let mut raw = vec![0u8; 128];
+        let n = client.transport_mut().receive(&mut raw).unwrap();
+        let sent = HdlcFrame::decode(&raw[..n]).unwrap();
+        assert!(matches!(sent.control, Control::Snrm { .. }));
+        assert_eq!(XidParams::decode(&sent.information), XidParams::client_default());
+    }
+
+    #[test]
+    fn server_answers_snrm_with_negotiated_xid() {
+        let mut server = server_layer();
+        let client_xid = XidParams { max_info_tx: 128, max_info_rx: 128, window_tx: 1, window_rx: 1 };
+        let snrm = client_frame(Control::Snrm { poll: true }, client_xid.encode());
+        server.transport_mut().feed(&snrm);
+        server
+            .transport_mut()
+            .feed(&client_frame(Control::Information { send_seq: 0, recv_seq: 0, poll: true }, vec![0xC0]));
+
+        server.receive_apdu().unwrap();
+
+        // Negotiated against the server's 512/512/1/1 default.
+        assert_eq!(server.xid(), XidParams { max_info_tx: 128, max_info_rx: 128, window_tx: 1, window_rx: 1 });
+    }
+
+    #[test]
+    fn snrm_without_xid_info_leaves_the_configured_ceiling_untouched() {
+        let mut client =
+            HdlcLayer::new_client(MemoryTransport::new(), HdlcAddress::one_byte(0x10), HdlcAddress::one_byte(0x03));
+        let ua = HdlcFrame::new(
+            HdlcAddress::one_byte(0x10),
+            HdlcAddress::one_byte(0x03),
+            Control::Ua { final_bit: true },
+            Vec::new(), // no XID info field at all
+        );
+        client.transport_mut().feed(&ua.encode());
+        client.connect().unwrap();
+        assert_eq!(client.xid(), XidParams::client_default());
+    }
+
+    // ------------------------------------------------------------------
+    // Outbound I-frame segmentation.
+    // ------------------------------------------------------------------
+
+    #[test]
+    fn send_apdu_does_not_segment_when_it_fits_the_ceiling() {
+        let mut client =
+            HdlcLayer::new_client(MemoryTransport::new(), HdlcAddress::one_byte(0x10), HdlcAddress::one_byte(0x03));
+        client.send_apdu(&[0xC0, 0x01]).unwrap();
+        assert_eq!(client.send_seq, 1, "a single small APDU is sent as exactly one frame");
+    }
+
+    #[test]
+    fn send_apdu_segments_when_it_exceeds_max_info_tx() {
+        let mut client =
+            HdlcLayer::new_client(MemoryTransport::new(), HdlcAddress::one_byte(0x10), HdlcAddress::one_byte(0x03));
+        client.set_xid_ceiling(XidParams { max_info_tx: 10, max_info_rx: 10, window_tx: 1, window_rx: 1 });
+        let apdu: Vec<u8> = (0u8..25).collect();
+        client.send_apdu(&apdu).unwrap();
+        // LLC(3) + 25 = 28 octets, split into 10-octet blocks -> ceil(28/10) = 3 frames,
+        // one N(S) slot consumed per frame.
+        assert_eq!(client.send_seq, 3);
+    }
+
+    #[test]
+    fn send_apdu_segments_are_reassembled_correctly_by_a_peer() {
+        let mut client =
+            HdlcLayer::new_client(MemoryTransport::new(), HdlcAddress::one_byte(0x10), HdlcAddress::one_byte(0x03));
+        client.set_xid_ceiling(XidParams { max_info_tx: 10, max_info_rx: 10, window_tx: 1, window_rx: 1 });
+        let apdu: Vec<u8> = (0u8..25).collect();
+        client.send_apdu(&apdu).unwrap();
+
+        // Drain every byte the client produced and feed it into a fresh
+        // server's transport, proving send_apdu's segmentation and
+        // receive_apdu's reassembly are wire-compatible with each other.
+        let mut buf = [0u8; 4096];
+        let n = client.transport_mut().receive(&mut buf).unwrap();
+
+        let mut server = server_layer();
+        server.transport_mut().feed(&buf[..n]);
+        let reassembled = server.receive_apdu().unwrap();
+        assert_eq!(reassembled, apdu);
+    }
+
+    #[test]
+    fn send_apdu_respects_the_negotiated_ceiling_after_connect() {
+        let mut client =
+            HdlcLayer::new_client(MemoryTransport::new(), HdlcAddress::one_byte(0x10), HdlcAddress::one_byte(0x03));
+        let tiny_ceiling = XidParams { max_info_tx: 8, max_info_rx: 8, window_tx: 1, window_rx: 1 };
+        let ua = HdlcFrame::new(
+            HdlcAddress::one_byte(0x10),
+            HdlcAddress::one_byte(0x03),
+            Control::Ua { final_bit: true },
+            tiny_ceiling.encode(),
+        );
+        client.transport_mut().feed(&ua.encode());
+        client.connect().unwrap();
+        assert_eq!(client.xid().max_info_tx, 8);
+
+        let apdu = vec![0xAAu8; 20]; // LLC(3) + 20 = 23 octets -> ceil(23/8) = 3 frames.
+        client.send_apdu(&apdu).unwrap();
+        assert_eq!(client.send_seq, 3, "send_apdu must use the negotiated ceiling, not the configured default");
     }
 }

@@ -319,3 +319,66 @@ connect/disconnect + timeouts, 6 new IC classes, new CipherError variants,
 key_rotation_needed), 0.6.0 is the right next version per semver (still 0.x,
 so technically optional, but the surface added is substantial). Not
 released yet — awaiting user go-ahead per the `release` skill's normal flow.
+
+## 2026-07-22 — Closed the last two HDLC tails: XID negotiation + outbound segmentation
+
+**User: "outbound I-frame segmentation - тоже надо реализовать. Вообще надо
+закрыть все хвосты!!!"** (also asked "Согласование XID при SNRM
+реализовано?" first — answer was no; user asked to implement it too). Both
+now done.
+
+**Done:**
+1. **XID negotiation** (src/transport/hdlc.rs): new `pub struct XidParams
+   { max_info_tx, max_info_rx: u16, window_tx, window_rx: u8 }` with
+   `encode`/`decode` (wire format `81 80 <grouplen> 05 02 <tx:u16> 06 02
+   <rx:u16> 07 04 <tx:u32> 08 04 <rx:u32>`, matching openspodes exactly) and
+   `negotiate(&mut self, peer)` (tighten-only, zero-from-peer = no
+   opinion). `HdlcLayer` gained `xid_configured`/`xid` fields,
+   `set_xid_ceiling()`/`xid()` public API, `client_default()` =
+   1280/1280/1/1, `server_default()` = 512/512/1/1. `connect()` sends
+   `xid_configured.encode()` in SNRM's info field, negotiates against UA's
+   reply. Server's SNRM branch in `receive_apdu` resets `xid =
+   xid_configured` then negotiates against the SNRM's info field, answers
+   UA via new `send_unnumbered_with_info` (added; `send_unnumbered` now
+   delegates to it with empty info). 7 new tests incl. full
+   client-sends/server-answers round trips using `MemoryTransport` loopback
+   tricks (feed UA first, then read back what SNRM the client actually
+   sent from the still-buffered tail).
+
+2. **Outbound I-frame segmentation** (same file): `send_apdu` now chunks
+   the LLC-prefixed payload by `self.xid.max_info_tx` (falls back
+   sensibly since defaults are always positive), setting
+   `frame.segmented = !last` per chunk and consuming one N(S) slot per
+   segment; sent back-to-back with no per-segment ack wait (this
+   implementation has no true windowed flow control beyond stop-and-wait
+   per whole APDU, and a stray RR is harmlessly skipped by the *next*
+   `receive_apdu` call's existing `ReceiveReady => continue` branch
+   regardless). **Important finding, now in CHANGELOG**: re-checked the C
+   reference's own `osp_hdlc_session_send_apdu` and it does NOT segment —
+   it only rejects an oversized APDU (`OSP_ERR_NOMEM`). Only the *receive*
+   path models the segmentation bit in C. So this is a genuine Rust-side
+   addition beyond parity, not a straight port — flagged as such rather
+   than silently claiming C parity. 4 new tests, including a true two-party
+   proof: send from one independent `HdlcLayer`, feed the raw bytes into a
+   *second, separate* `HdlcLayer`, confirm `receive_apdu` reassembles
+   correctly — plus a test confirming `send_apdu` uses the *negotiated*
+   ceiling (not just the configured default) after `connect()`.
+
+**State:** branch `main`, all quality gates green — 371 lib tests (was 360)
++ 90 across 7 integration suites; fmt/clippy/doc `-D warnings` clean.
+Committed after this entry.
+
+**This closes the HDLC "remaining un-ported items" list from the prior
+2026-07-22 entries in full: inter-octet/inactivity timeouts (done earlier
+today), XID negotiation (done), outbound I-frame segmentation (done).** No
+known gaps remain in the HDLC layer relative to either the C reference or
+the standard's documented mechanisms, modulo the deliberate non-parity note
+above (Rust now does MORE than the C reference here, not less).
+
+**Next:** release. Public API surface added across all of today's five
+rounds is now large enough that 0.6.0 is clearly the right next version
+(handle_aarq, build_push_delivery_request, GBT send/receive + session
+integration, PhysicalTransport::set_read_timeout, HdlcLayer
+connect/disconnect/XID/timeouts, XidParams, 6 new IC classes, new
+CipherError variants, key_rotation_needed, HLS rate limiting). Still
+awaiting user go-ahead to actually cut the release.
