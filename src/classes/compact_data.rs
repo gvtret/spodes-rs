@@ -234,6 +234,7 @@ impl InterfaceClass for CompactData {
 }
 
 /// Writes a BER length octet (short or long form).
+#[allow(clippy::cast_possible_truncation)] // length < 128 and num_octets in 1..=8 always fit u8
 fn write_length(length: usize, buf: &mut Vec<u8>) -> Result<(), BerError> {
     if length < 128 {
         buf.push(length as u8);

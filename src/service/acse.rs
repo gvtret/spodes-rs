@@ -344,6 +344,8 @@ fn ber_tlv(tag: u8, value: &[u8], out: &mut Vec<u8>) {
     out.extend_from_slice(value);
 }
 
+/// Writes a BER length octet (short or long form).
+#[allow(clippy::cast_possible_truncation)] // length < 128 and n in 1..=8 always fit u8
 fn push_length(length: usize, out: &mut Vec<u8>) {
     if length < 128 {
         out.push(length as u8);
