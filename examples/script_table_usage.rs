@@ -6,11 +6,11 @@ use spodes_rs::types::attrs::{ActionSpecification, Script};
 use spodes_rs::types::CosemDataType;
 
 fn main() {
-    // Создаём OBIS-код для объекта ScriptTable
+    // Build the OBIS code for the ScriptTable object
     let obis = ObisCode::new(0, 0, 10, 100, 0, 255);
 
-    // Создаём список скриптов
-    // Каждый скрипт — структура с идентификатором и действием
+    // Build the list of scripts
+    // Each script is a structure with an identifier and an action
     let action = ActionSpecification {
         service_id: 1,
         class_id: 3, // Register
@@ -20,37 +20,37 @@ fn main() {
     };
     let scripts = vec![Script { script_identifier: 1, actions: vec![action] }];
 
-    // Создаём конфигурацию ScriptTable
+    // Build the ScriptTable configuration
     let config = ScriptTableConfig { logical_name: obis.clone(), scripts };
 
-    // Создаём объект ScriptTable
+    // Build the ScriptTable object
     let mut script_table = ScriptTable::new(config);
 
-    // Проверяем атрибуты
+    // Check the attributes
     println!("Logical Name: {:?}", script_table.logical_name().to_bytes());
     println!("Scripts: {:?}", script_table.attributes()[1].1);
 
-    // Сериализуем объект
+    // Serialize the object
     let serialized = serialize_object(&script_table).expect("Serialization failed");
     println!("Serialized data: {serialized:?}");
 
-    // Создаём новый объект для десериализации
+    // Build a new object for deserialization
     let config = ScriptTableConfig { logical_name: obis, scripts: vec![] };
     let mut deserialized = ScriptTable::new(config);
 
-    // Десериализуем данные
+    // Deserialize the data
     deserialize_object(&mut deserialized, &serialized).expect("Deserialization failed");
 
-    // Проверяем десериализованный объект
+    // Check the deserialized object
     println!("Deserialized Logical Name: {:?}", deserialized.logical_name().to_bytes());
     println!("Deserialized Scripts: {:?}", deserialized.attributes()[1].1);
 
-    // Вызываем метод execute для скрипта с идентификатором 1
+    // Invoke the execute method for the script with identifier 1
     let script_id = CosemDataType::LongUnsigned(1);
     let result = script_table.invoke_method(1, Some(script_id)).expect("Execute script failed");
     println!("Execute script result: {result:?}");
 
-    // Проверяем выполнение несуществующего скрипта
+    // Check execution of a nonexistent script
     let invalid_script_id = CosemDataType::LongUnsigned(2);
     let result = script_table.invoke_method(1, Some(invalid_script_id));
     match result {

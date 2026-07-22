@@ -6,10 +6,10 @@ use spodes_rs::types::attrs::{ObjectDefinition, RegisterActMask};
 use spodes_rs::types::CosemDataType;
 
 fn main() {
-    // Создаём OBIS-код для RegisterActivation
+    // Build the OBIS code for RegisterActivation
     let obis = ObisCode::new(0, 0, 10, 106, 0, 255);
 
-    // Инициализируем конфигурацию RegisterActivation
+    // Initialize the RegisterActivation configuration
     let config = RegisterActivationConfig {
         logical_name: obis.clone(),
         register_assignment: vec![ObjectDefinition {
@@ -23,16 +23,16 @@ fn main() {
         active_mask: vec![0x54, 0x41, 0x52, 0x49, 0x46, 0x46, 0x31], // "TARIFF1"
     };
 
-    // Создаём объект RegisterActivation
+    // Build the RegisterActivation object
     let mut register_activation = RegisterActivation::new(config);
 
-    // Выводим начальные атрибуты
+    // Print the initial attributes
     println!("Initial attributes:");
     for (id, value) in register_activation.attributes() {
         println!("Attribute {id}: {value:?}");
     }
 
-    // Добавляем новую маску
+    // Add a new mask
     let new_mask = CosemDataType::Structure(vec![
         CosemDataType::OctetString(vec![0x54, 0x41, 0x52, 0x49, 0x46, 0x46, 0x32]), // mask_name: "TARIFF2"
         CosemDataType::Array(vec![CosemDataType::Unsigned(2)]),                     // register_indices
@@ -42,26 +42,26 @@ fn main() {
         Err(e) => println!("Add mask failed: {e}"),
     }
 
-    // Выводим атрибуты после добавления маски
+    // Print the attributes after adding the mask
     println!("\nAttributes after adding mask:");
     for (id, value) in register_activation.attributes() {
         println!("Attribute {id}: {value:?}");
     }
 
-    // Удаляем маску "TARIFF1"
+    // Delete the "TARIFF1" mask
     let mask_name = CosemDataType::OctetString(vec![0x54, 0x41, 0x52, 0x49, 0x46, 0x46, 0x31]);
     match register_activation.invoke_method(2, Some(mask_name)) {
         Ok(result) => println!("Delete mask result: {result:?}"),
         Err(e) => println!("Delete mask failed: {e}"),
     }
 
-    // Выводим атрибуты после удаления маски
+    // Print the attributes after deleting the mask
     println!("\nAttributes after deleting mask:");
     for (id, value) in register_activation.attributes() {
         println!("Attribute {id}: {value:?}");
     }
 
-    // Сериализация и десериализация
+    // Serialize and deserialize
     let serialized = serialize_object(&register_activation).expect("Serialization failed");
     let config = RegisterActivationConfig {
         logical_name: obis,
@@ -72,7 +72,7 @@ fn main() {
     let mut deserialized = RegisterActivation::new(config);
     deserialize_object(&mut deserialized, &serialized).expect("Deserialization failed");
 
-    // Выводим атрибуты после десериализации
+    // Print the attributes after deserialization
     println!("\nAttributes after deserialization:");
     for (id, value) in deserialized.attributes() {
         println!("Attribute {id}: {value:?}");

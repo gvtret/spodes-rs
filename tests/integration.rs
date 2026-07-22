@@ -61,11 +61,11 @@ fn test_profile_generic_serialization_deserialization() {
     let buffer = vec![CosemDataType::Structure(vec![
         CosemDataType::DoubleLong(1000),
         CosemDataType::DateTime(vec![
-            0x07, 0xE5, 0x05, 0x01, // Год: 2025, Месяц: 5, День: 1
-            0x02, // День недели: вторник
-            0x00, 0x00, 0x00, // Час: 0, Минуты: 0, Секунды: 0
-            0x00, // Сотые доли секунды: 0
-            0x00, 0x00, 0x00, // Отклонение от UTC: 0
+            0x07, 0xE5, 0x05, 0x01, // Year: 2025, Month: 5, Day: 1
+            0x02, // Day of week: Tuesday
+            0x00, 0x00, 0x00, // Hour: 0, Minutes: 0, Seconds: 0
+            0x00, // Hundredths of a second: 0
+            0x00, 0x00, 0x00, // Deviation from UTC: 0
         ]),
     ])];
     let capture_objects = vec![];
@@ -242,9 +242,9 @@ fn test_clock_adjust_to_minute() {
     let result = clock.invoke_method(2, None).expect("Adjust to minute failed");
     assert_eq!(result, CosemDataType::Null);
     if let CosemDataType::DateTime(dt) = &clock.attributes()[1].1 {
-        assert_eq!(dt[6], 37); // Минуты: 37 (без изменений)
-        assert_eq!(dt[7], 0); // Секунды: 0
-        assert_eq!(dt[8], 0); // Сотые доли: 0
+        assert_eq!(dt[6], 37); // Minutes: 37 (unchanged)
+        assert_eq!(dt[7], 0); // Seconds: 0
+        assert_eq!(dt[8], 0); // Hundredths: 0
     } else {
         panic!("Expected DateTime");
     }
@@ -282,11 +282,11 @@ fn test_extended_register_serialization_deserialization() {
     let scaler_unit = ScalerUnit::new(0, 0x1B);
     let status = CosemDataType::Unsigned(1);
     let capture_time = DateTime::new([
-        0x07, 0xE5, 0x05, 0x01, // Год: 2025, Месяц: 5, День: 1
-        0x02, // День недели: вторник
-        0x10, 0x30, 0x00, // Час: 16, Минуты: 30, Секунды: 0
-        0x00, // Сотые доли секунды: 0
-        0x00, 0x00, 0x00, // Отклонение от UTC: 0
+        0x07, 0xE5, 0x05, 0x01, // Year: 2025, Month: 5, Day: 1
+        0x02, // Day of week: Tuesday
+        0x10, 0x30, 0x00, // Hour: 16, Minutes: 30, Seconds: 0
+        0x00, // Hundredths of a second: 0
+        0x00, 0x00, 0x00, // Deviation from UTC: 0
     ]);
 
     let extended_register =
@@ -319,11 +319,11 @@ fn test_extended_register_reset_method() {
     let scaler_unit = ScalerUnit::new(0, 0x1B);
     let status = CosemDataType::Unsigned(1);
     let capture_time = DateTime::new([
-        0x07, 0xE5, 0x05, 0x01, // Год: 2025, Месяц: 5, День: 1
-        0x02, // День недели: вторник
-        0x10, 0x30, 0x00, // Час: 16, Минуты: 30, Секунды: 0
-        0x00, // Сотые доли секунды: 0
-        0x00, 0x00, 0x00, // Отклонение от UTC: 0
+        0x07, 0xE5, 0x05, 0x01, // Year: 2025, Month: 5, Day: 1
+        0x02, // Day of week: Tuesday
+        0x10, 0x30, 0x00, // Hour: 16, Minutes: 30, Seconds: 0
+        0x00, // Hundredths of a second: 0
+        0x00, 0x00, 0x00, // Deviation from UTC: 0
     ]);
     let mut extended_register = ExtendedRegister::new(obis, value, scaler_unit, status, capture_time);
 
@@ -361,18 +361,18 @@ fn test_demand_register_serialization_deserialization() {
     let scaler_unit = ScalerUnit::new(0, 0x1B);
     let status = CosemDataType::Unsigned(1);
     let capture_time = DateTime::new([
-        0x07, 0xE5, 0x05, 0x01, // Год: 2025, Месяц: 5, День: 1
-        0x02, // День недели: вторник
-        0x10, 0x30, 0x00, // Час: 16, Минуты: 30, Секунды: 0
-        0x00, // Сотые доли секунды: 0
-        0x00, 0x00, 0x00, // Отклонение от UTC: 0
+        0x07, 0xE5, 0x05, 0x01, // Year: 2025, Month: 5, Day: 1
+        0x02, // Day of week: Tuesday
+        0x10, 0x30, 0x00, // Hour: 16, Minutes: 30, Seconds: 0
+        0x00, // Hundredths of a second: 0
+        0x00, 0x00, 0x00, // Deviation from UTC: 0
     ]);
     let start_time_current = DateTime::new([
-        0x07, 0xE5, 0x05, 0x01, // Год: 2025, Месяц: 5, День: 1
-        0x02, // День недели: вторник
-        0x10, 0x00, 0x00, // Час: 16, Минуты: 0, Секунды: 0
-        0x00, // Сотые доли секунды: 0
-        0x00, 0x00, 0x00, // Отклонение от UTC: 0
+        0x07, 0xE5, 0x05, 0x01, // Year: 2025, Month: 5, Day: 1
+        0x02, // Day of week: Tuesday
+        0x10, 0x00, 0x00, // Hour: 16, Minutes: 0, Seconds: 0
+        0x00, // Hundredths of a second: 0
+        0x00, 0x00, 0x00, // Deviation from UTC: 0
     ]);
     let period = 3600u32;
     let number_of_periods = 24u16;
@@ -427,18 +427,18 @@ fn test_demand_register_reset_method() {
     let scaler_unit = ScalerUnit::new(0, 0x1B);
     let status = CosemDataType::Unsigned(1);
     let capture_time = DateTime::new([
-        0x07, 0xE5, 0x05, 0x01, // Год: 2025, Месяц: 5, День: 1
-        0x02, // День недели: вторник
-        0x10, 0x30, 0x00, // Час: 16, Минуты: 30, Секунды: 0
-        0x00, // Сотые доли секунды: 0
-        0x00, 0x00, 0x00, // Отклонение от UTC: 0
+        0x07, 0xE5, 0x05, 0x01, // Year: 2025, Month: 5, Day: 1
+        0x02, // Day of week: Tuesday
+        0x10, 0x30, 0x00, // Hour: 16, Minutes: 30, Seconds: 0
+        0x00, // Hundredths of a second: 0
+        0x00, 0x00, 0x00, // Deviation from UTC: 0
     ]);
     let start_time_current = DateTime::new([
-        0x07, 0xE5, 0x05, 0x01, // Год: 2025, Месяц: 5, День: 1
-        0x02, // День недели: вторник
-        0x10, 0x00, 0x00, // Час: 16, Минуты: 0, Секунды: 0
-        0x00, // Сотые доли секунды: 0
-        0x00, 0x00, 0x00, // Отклонение от UTC: 0
+        0x07, 0xE5, 0x05, 0x01, // Year: 2025, Month: 5, Day: 1
+        0x02, // Day of week: Tuesday
+        0x10, 0x00, 0x00, // Hour: 16, Minutes: 0, Seconds: 0
+        0x00, // Hundredths of a second: 0
+        0x00, 0x00, 0x00, // Deviation from UTC: 0
     ]);
     let period = 3600u32;
     let number_of_periods = 24u16;
@@ -1021,7 +1021,7 @@ fn test_association_ln_lls_authentication() {
 fn test_association_ln_hls4_sha1_authentication() {
     let obis = ObisCode::new(0, 0, 40, 0, 0, 255);
     let secret = vec![0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08, 0x09, 0x0A, 0x0B, 0x0C, 0x0D, 0x0E, 0x0F, 0x10];
-    // Pass 1: клиент прислал CtoS; Pass 2: сервер отправил StoC.
+    // Pass 1: client sent CtoS; Pass 2: server sent StoC.
     let ctos = vec![0x11, 0x22, 0x33, 0x44];
     let stoc = vec![0xAA, 0xBB, 0xCC, 0xDD];
     let config = AssociationLnConfig {
@@ -1052,13 +1052,13 @@ fn test_association_ln_hls4_sha1_authentication() {
     association_ln.set_ctos(ctos.clone());
     association_ln.set_stoc(stoc.clone());
 
-    // Pass 3: клиент присылает f(StoC) = SHA-1(StoC ‖ secret).
+    // Pass 3: client sends f(StoC) = SHA-1(StoC ‖ secret).
     let mut hasher = Sha1::new();
     hasher.update(&stoc);
     hasher.update(&secret);
     let f_stoc = hasher.finalize().to_vec();
 
-    // Pass 4: сервер возвращает f(CtoS) = SHA-1(CtoS ‖ secret).
+    // Pass 4: server returns f(CtoS) = SHA-1(CtoS ‖ secret).
     let mut hasher = Sha1::new();
     hasher.update(&ctos);
     hasher.update(&secret);
@@ -1069,7 +1069,7 @@ fn test_association_ln_hls4_sha1_authentication() {
         .expect("HLS4 SHA1 authentication failed");
     assert_eq!(result, CosemDataType::OctetString(expected_f_ctos));
 
-    // Неверное f(StoC) отклоняется.
+    // An incorrect f(StoC) is rejected.
     let mut wrong = f_stoc;
     wrong[0] ^= 0xFF;
     assert!(association_ln.invoke_method(1, Some(CosemDataType::OctetString(wrong))).is_err());
@@ -1207,7 +1207,7 @@ fn test_association_ln_remove_object() {
         panic!("Expected Array for object_list");
     }
 
-    // Повторное удаление отсутствующего объекта — ошибка.
+    // Deleting a missing object again is an error.
     let missing = CosemDataType::Structure(vec![
         CosemDataType::LongUnsigned(1),
         CosemDataType::Unsigned(0),

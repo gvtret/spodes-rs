@@ -49,11 +49,11 @@ fn main() {
     println!("Clock after adjust to quarter: {clock:?}");
 
     let new_time = CosemDataType::DateTime(vec![
-        0x07, 0xE5, 0x05, 0x02, // Год: 2025, Месяц: 5, День: 2
-        0x03, // День недели: среда
-        0x12, 0x00, 0x00, // Час: 18, Минуты: 0, Секунды: 0
-        0x00, // Сотые доли секунды: 0
-        0x00, 0x00, 0x00, // Отклонение от UTC: 0
+        0x07, 0xE5, 0x05, 0x02, // Year: 2025, Month: 5, Day: 2
+        0x03, // Day of week: Wednesday
+        0x12, 0x00, 0x00, // Hour: 18, Minutes: 0, Seconds: 0
+        0x00, // Hundredths of a second: 0
+        0x00, 0x00, 0x00, // Deviation from UTC: 0
     ]);
     let result = clock.invoke_method(3, Some(new_time)).expect("Adjust to preset time failed");
     println!("Adjust to preset time result: {result:?}");
