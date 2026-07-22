@@ -137,6 +137,9 @@ impl ImageTransfer {
     }
 
     /// Returns the number of the first block whose bit is still clear.
+    // The bitmap tracks image blocks; no realistic firmware image needs
+    // anywhere near u32::MAX/8 bytes of tracking bits.
+    #[allow(clippy::cast_possible_truncation)]
     fn first_clear_bit(&self) -> u32 {
         for (byte_index, byte) in self.image_transferred_blocks_status.iter().enumerate() {
             for bit in 0..8u32 {

@@ -197,7 +197,10 @@ impl InterfaceClass for ProfileDataFilter {
                     .iter()
                     .filter(|r| matches!(r, CosemDataType::Structure(f) if self.passes(f, &filters)))
                     .count();
-                Ok(CosemDataType::Unsigned(count.min(u8::MAX as usize) as u8))
+                // Already clamped to u8::MAX above, so the cast can't truncate.
+                #[allow(clippy::cast_possible_truncation)]
+                let count = count.min(u8::MAX as usize) as u8;
+                Ok(CosemDataType::Unsigned(count))
             }
             // retrieve_entries and retrieve_entries_by_row share the filter+project logic.
             2 | 3 => {

@@ -74,7 +74,12 @@ impl IecHdlcSetup {
         if self.version >= 1 {
             CosemDataType::LongUnsigned(value)
         } else {
-            CosemDataType::Unsigned(value as u8)
+            // Version 0 represents this attribute as `unsigned`; a value above
+            // 255 there is a misconfiguration (should have been version >= 1).
+            debug_assert!(value <= u16::from(u8::MAX), "max_info_field_length exceeds version 0's unsigned range");
+            #[allow(clippy::cast_possible_truncation)]
+            let v = value as u8;
+            CosemDataType::Unsigned(v)
         }
     }
 }

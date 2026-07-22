@@ -137,11 +137,14 @@ impl InterfaceClass for CompactData {
             self.capture_objects
                 .iter()
                 .map(|(obj, attr_id)| {
+                    // Attribute ids are always <128 in practice (i8-valued on the wire).
+                    #[allow(clippy::cast_possible_wrap)]
+                    let attr_id = *attr_id as i8;
                     CosemDataType::Structure(vec![
                         CosemDataType::LongUnsigned(obj.class_id()),
                         CosemDataType::OctetString(obj.logical_name().to_bytes()),
-                        CosemDataType::Integer(*attr_id as i8), // attribute_index (integer)
-                        CosemDataType::LongUnsigned(0),         // data_index (long-unsigned, default 0)
+                        CosemDataType::Integer(attr_id), // attribute_index (integer)
+                        CosemDataType::LongUnsigned(0),  // data_index (long-unsigned, default 0)
                     ])
                 })
                 .collect(),

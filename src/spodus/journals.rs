@@ -63,8 +63,13 @@ pub struct ExchangeRecord {
 
 impl ExchangeRecord {
     fn to_entry(&self) -> CosemDataType {
+        // task_id is practically always <=u16::MAX (a concentrator won't
+        // schedule 65536+ tasks); the wire field is long-unsigned regardless
+        // of the wider in-memory type.
+        #[allow(clippy::cast_possible_truncation)]
+        let task_id = self.task_id as u16;
         CosemDataType::Structure(vec![
-            CosemDataType::LongUnsigned(self.task_id as u16),
+            CosemDataType::LongUnsigned(task_id),
             CosemDataType::OctetString(self.meter_uid.clone()),
             CosemDataType::DateTime(self.start.clone()),
             CosemDataType::Unsigned(self.status),
@@ -106,6 +111,8 @@ impl ExchangeStatusJournal {
     /// Builds the COSEM `ProfileGeneric` (IC 7, v1) journal object.
     pub fn build(&self) -> ProfileGeneric {
         let buffer: Vec<CosemDataType> = self.records.iter().map(ExchangeRecord::to_entry).collect();
+        // An in-memory buffer never approaches u32::MAX entries.
+        #[allow(clippy::cast_possible_truncation)]
         let entries_in_use = buffer.len() as u32;
         ProfileGeneric::new(ProfileGenericConfig {
             logical_name: obis::exchange_status_journal(),
@@ -150,6 +157,8 @@ impl EventJournal {
                 CosemDataType::Structure(vec![CosemDataType::DateTime(ts.clone()), CosemDataType::LongUnsigned(*code)])
             })
             .collect();
+        // An in-memory buffer never approaches u32::MAX entries.
+        #[allow(clippy::cast_possible_truncation)]
         let entries_in_use = buffer.len() as u32;
         let columns = vec![
             column(ObisCode::new(0, 0, 1, 0, 0, 255)), // Clock timestamp

@@ -289,9 +289,14 @@ pub fn vko(d: &[u8], q_pub: &[u8], ukm: &[u8]) -> Result<[u8; 32], GostError> {
 /// in bits, encoded as a 16-bit big-endian integer. In the DLMS GOST profile
 /// the diversified key is 768 bits: `Key = LSB512`, `M = MSB256`.
 pub fn kdf_tree(k: &[u8], label: &[u8], seed: &[u8], output_len: usize) -> Vec<u8> {
-    let l_bits = (output_len * 8) as u16;
     let blocks = output_len.div_ceil(32);
+    // R = 1 (one-octet counter) caps this construction at 255 blocks (8160
+    // bytes) by design (RFC 7836); this crate only ever asks for 96.
+    debug_assert!(blocks <= 255, "kdf_tree output_len exceeds the one-octet-counter limit");
+    #[allow(clippy::cast_possible_truncation)]
+    let l_bits = (output_len * 8) as u16;
     let mut out = Vec::with_capacity(blocks * 32);
+    #[allow(clippy::cast_possible_truncation)]
     for i in 1..=blocks as u8 {
         let mut mac =
             <Hmac<Streebog256> as hmac::digest::KeyInit>::new_from_slice(k).expect("HMAC accepts any key length");

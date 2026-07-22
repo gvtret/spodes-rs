@@ -84,6 +84,8 @@ impl CosemDataType {
             }
             CosemDataType::Integer(i) => {
                 buf.push(0x0F); // integer [15]
+                                // Raw octet round-tripped bit-for-bit via `as i8` on decode.
+                #[allow(clippy::cast_sign_loss)]
                 buf.push(*i as u8);
                 Ok(())
             }
@@ -177,7 +179,10 @@ impl CosemDataType {
             }
             0x0F => {
                 if data.len() >= 2 {
-                    Ok((CosemDataType::Integer(data[1] as i8), &data[2..]))
+                    // Raw octet round-tripped bit-for-bit from `as u8` on encode.
+                    #[allow(clippy::cast_possible_wrap)]
+                    let value = data[1] as i8;
+                    Ok((CosemDataType::Integer(value), &data[2..]))
                 } else {
                     Err(BerError::InvalidLength)
                 }

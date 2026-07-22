@@ -92,7 +92,10 @@ impl Ipv4Setup {
     /// Method 3: `get_nbof_mc_IP_addresses` — returns the number of multicast IP
     /// addresses currently configured.
     fn get_nbof_mc_ip_addresses(&self) -> Result<CosemDataType, String> {
-        Ok(CosemDataType::LongUnsigned(self.multicast_ip_address.len() as u16))
+        // A meter's multicast group membership count is always tiny.
+        #[allow(clippy::cast_possible_truncation)]
+        let count = self.multicast_ip_address.len() as u16;
+        Ok(CosemDataType::LongUnsigned(count))
     }
 }
 

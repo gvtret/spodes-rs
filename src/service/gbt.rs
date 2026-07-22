@@ -217,6 +217,8 @@ pub fn receive<L: DataLinkLayer>(link: &mut L, first: Vec<u8>) -> io::Result<Vec
         if block.block_number > expected_block {
             // Gap: request retransmission from `expected_block`.
             let gap = block.block_number - expected_block;
+            // The else branch only runs when gap <= WINDOW_MASK, so it always fits u8.
+            #[allow(clippy::cast_possible_truncation)]
             let win = if gap > u16::from(WINDOW_MASK) { WINDOW_MASK } else { gap.max(1) as u8 };
             send_ack(link, win, expected_block.saturating_sub(1))?;
             block = read_block(link)?;

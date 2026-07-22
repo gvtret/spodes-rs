@@ -99,7 +99,7 @@ impl Clock {
     /// Adjusts the time to the nearest quarter hour (minute 0, 15, 30 or 45).
     fn adjust_to_quarter(&mut self) -> Result<CosemDataType, String> {
         let minutes = u32::from(self.time.0[6]);
-        let new_minutes = if minutes < 8 {
+        let new_minutes: u8 = if minutes < 8 {
             0
         } else if minutes < 23 {
             15
@@ -108,7 +108,7 @@ impl Clock {
         } else {
             45
         };
-        self.time.0[6] = new_minutes as u8;
+        self.time.0[6] = new_minutes;
         self.time.0[7] = 0;
         self.time.0[8] = 0;
         Ok(CosemDataType::Null)

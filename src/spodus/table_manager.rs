@@ -146,7 +146,12 @@ impl InterfaceClass for TableManager {
                 let keys = Self::entries_list(params)?;
                 self.remove_entries(keys)
             }
-            3 => Ok(CosemDataType::Unsigned(self.rows.len().min(u8::MAX as usize) as u8)),
+            3 => {
+                // Already clamped to u8::MAX above, so the cast can't truncate.
+                #[allow(clippy::cast_possible_truncation)]
+                let count = self.rows.len().min(u8::MAX as usize) as u8;
+                Ok(CosemDataType::Unsigned(count))
+            }
             4 => {
                 let keys = Self::entries_list(params)?;
                 Ok(self.retrieve_entries(keys))
