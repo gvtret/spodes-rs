@@ -245,6 +245,8 @@ impl RequestDispatcher {
                 );
                 GetDataResult::AccessResult(data_access_result::OBJECT_UNDEFINED)
             },
+            // Attribute ids are always <128 in practice (i8-valued on the wire).
+            #[allow(clippy::cast_possible_wrap)]
             |obj| match obj.attributes().into_iter().find(|(id, _)| *id as i8 == attr_id) {
                 Some((_, value)) => {
                     #[cfg(feature = "tracing")]
@@ -286,18 +288,23 @@ impl RequestDispatcher {
                 );
                 data_access_result::OBJECT_UNDEFINED
             },
-            |obj| match obj.set_attribute(d.attribute_id as u8, value) {
-                Ok(()) => {
-                    #[cfg(feature = "tracing")]
-                    debug!(
-                        class_id = d.class_id,
-                        instance = %d.instance_id,
-                        attr_id = d.attribute_id,
-                        "SET: success"
-                    );
-                    data_access_result::SUCCESS
+            |obj| {
+                // Attribute ids are always <128 in practice (i8-valued on the wire).
+                #[allow(clippy::cast_sign_loss)]
+                let attribute_id = d.attribute_id as u8;
+                match obj.set_attribute(attribute_id, value) {
+                    Ok(()) => {
+                        #[cfg(feature = "tracing")]
+                        debug!(
+                            class_id = d.class_id,
+                            instance = %d.instance_id,
+                            attr_id = d.attribute_id,
+                            "SET: success"
+                        );
+                        data_access_result::SUCCESS
+                    }
+                    Err(_) => data_access_result::READ_WRITE_DENIED,
                 }
-                Err(_) => data_access_result::READ_WRITE_DENIED,
             },
         )
     }
@@ -327,12 +334,10 @@ impl RequestDispatcher {
             && (d.instance_id == ObisCode::new(0, 0, 40, 0, 0, 255)
                 || self.association.as_ref().is_some_and(|assoc| assoc.logical_name() == &d.instance_id));
         if routed_to_assoc {
-            return match self
-                .association
-                .as_mut()
-                .expect("association routing")
-                .invoke_method(d.method_id as u8, params)
-            {
+            // Method ids are always <128 in practice (i8-valued on the wire).
+            #[allow(clippy::cast_sign_loss)]
+            let method_id = d.method_id as u8;
+            return match self.association.as_mut().expect("association routing").invoke_method(method_id, params) {
                 Ok(crate::types::CosemDataType::Null) => (data_access_result::SUCCESS, None),
                 Ok(value) => (data_access_result::SUCCESS, Some(GetDataResult::Data(value))),
                 Err(_) => (data_access_result::OTHER_REASON, None),
@@ -349,36 +354,41 @@ impl RequestDispatcher {
                 );
                 (data_access_result::OBJECT_UNDEFINED, None)
             },
-            |obj| match obj.invoke_method(d.method_id as u8, params) {
-                Ok(crate::types::CosemDataType::Null) => {
-                    #[cfg(feature = "tracing")]
-                    debug!(
-                        class_id = d.class_id,
-                        instance = %d.instance_id,
-                        method_id = d.method_id,
-                        "ACTION: success"
-                    );
-                    (data_access_result::SUCCESS, None)
-                }
-                Ok(value) => {
-                    #[cfg(feature = "tracing")]
-                    debug!(
-                        class_id = d.class_id,
-                        instance = %d.instance_id,
-                        method_id = d.method_id,
-                        "ACTION: success (with return value)"
-                    );
-                    (data_access_result::SUCCESS, Some(GetDataResult::Data(value)))
-                }
-                Err(_) => {
-                    #[cfg(feature = "tracing")]
-                    warn!(
-                        class_id = d.class_id,
-                        instance = %d.instance_id,
-                        method_id = d.method_id,
-                        "ACTION: method returned error"
-                    );
-                    (data_access_result::OTHER_REASON, None)
+            |obj| {
+                // Method ids are always <128 in practice (i8-valued on the wire).
+                #[allow(clippy::cast_sign_loss)]
+                let method_id = d.method_id as u8;
+                match obj.invoke_method(method_id, params) {
+                    Ok(crate::types::CosemDataType::Null) => {
+                        #[cfg(feature = "tracing")]
+                        debug!(
+                            class_id = d.class_id,
+                            instance = %d.instance_id,
+                            method_id = d.method_id,
+                            "ACTION: success"
+                        );
+                        (data_access_result::SUCCESS, None)
+                    }
+                    Ok(value) => {
+                        #[cfg(feature = "tracing")]
+                        debug!(
+                            class_id = d.class_id,
+                            instance = %d.instance_id,
+                            method_id = d.method_id,
+                            "ACTION: success (with return value)"
+                        );
+                        (data_access_result::SUCCESS, Some(GetDataResult::Data(value)))
+                    }
+                    Err(_) => {
+                        #[cfg(feature = "tracing")]
+                        warn!(
+                            class_id = d.class_id,
+                            instance = %d.instance_id,
+                            method_id = d.method_id,
+                            "ACTION: method returned error"
+                        );
+                        (data_access_result::OTHER_REASON, None)
+                    }
                 }
             },
         )

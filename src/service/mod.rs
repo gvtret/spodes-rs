@@ -143,6 +143,8 @@ impl AttributeDescriptor {
     pub fn encode(&self, buf: &mut Vec<u8>) {
         buf.extend_from_slice(&self.class_id.to_be_bytes());
         buf.extend_from_slice(&self.instance_id.to_bytes());
+        // Raw octet round-tripped bit-for-bit via `as i8` on decode.
+        #[allow(clippy::cast_sign_loss)]
         buf.push(self.attribute_id as u8);
     }
 
@@ -154,7 +156,10 @@ impl AttributeDescriptor {
         let class_id = u16::from_be_bytes([bytes[0], bytes[1]]);
         let o = &bytes[2..8];
         let instance_id = ObisCode::new(o[0], o[1], o[2], o[3], o[4], o[5]);
-        Ok((AttributeDescriptor { class_id, instance_id, attribute_id: bytes[8] as i8 }, 9))
+        // Raw octet round-tripped bit-for-bit from `attribute_id as u8` on encode.
+        #[allow(clippy::cast_possible_wrap)]
+        let attribute_id = bytes[8] as i8;
+        Ok((AttributeDescriptor { class_id, instance_id, attribute_id }, 9))
     }
 }
 
@@ -180,6 +185,8 @@ impl MethodDescriptor {
     pub fn encode(&self, buf: &mut Vec<u8>) {
         buf.extend_from_slice(&self.class_id.to_be_bytes());
         buf.extend_from_slice(&self.instance_id.to_bytes());
+        // Raw octet round-tripped bit-for-bit via `as i8` on decode.
+        #[allow(clippy::cast_sign_loss)]
         buf.push(self.method_id as u8);
     }
 
@@ -191,7 +198,10 @@ impl MethodDescriptor {
         let class_id = u16::from_be_bytes([bytes[0], bytes[1]]);
         let o = &bytes[2..8];
         let instance_id = ObisCode::new(o[0], o[1], o[2], o[3], o[4], o[5]);
-        Ok((MethodDescriptor { class_id, instance_id, method_id: bytes[8] as i8 }, 9))
+        // Raw octet round-tripped bit-for-bit from `method_id as u8` on encode.
+        #[allow(clippy::cast_possible_wrap)]
+        let method_id = bytes[8] as i8;
+        Ok((MethodDescriptor { class_id, instance_id, method_id }, 9))
     }
 }
 

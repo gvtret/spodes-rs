@@ -50,7 +50,10 @@ impl InitiateRequest {
             None => buf.push(0x00),
             Some(key) => {
                 buf.push(0x01);
-                buf.push(key.len() as u8);
+                // Dedicated keys are AES key material (<=32 bytes in practice).
+                #[allow(clippy::cast_possible_truncation)]
+                let len = key.len() as u8;
+                buf.push(len);
                 buf.extend_from_slice(key);
             }
         }
@@ -65,6 +68,8 @@ impl InitiateRequest {
             None => buf.push(0x00),
             Some(q) => {
                 buf.push(0x01);
+                // Raw octet round-tripped bit-for-bit via `as i8` on decode.
+                #[allow(clippy::cast_sign_loss)]
                 buf.push(q as u8);
             }
         }
@@ -114,6 +119,8 @@ impl InitiateRequest {
                 None
             }
             Some(0x01) => {
+                // Raw octet round-tripped bit-for-bit from `q as u8` on encode.
+                #[allow(clippy::cast_possible_wrap)]
                 let q = *bytes.get(pos + 1).ok_or(ServiceError::Truncated)? as i8;
                 pos += 2;
                 Some(q)
@@ -161,6 +168,8 @@ impl InitiateResponse {
             None => buf.push(0x00),
             Some(q) => {
                 buf.push(0x01);
+                // Raw octet round-tripped bit-for-bit via `as i8` on decode.
+                #[allow(clippy::cast_sign_loss)]
                 buf.push(q as u8);
             }
         }
@@ -183,6 +192,8 @@ impl InitiateResponse {
                 None
             }
             Some(0x01) => {
+                // Raw octet round-tripped bit-for-bit from `q as u8` on encode.
+                #[allow(clippy::cast_possible_wrap)]
                 let q = *bytes.get(pos + 1).ok_or(ServiceError::Truncated)? as i8;
                 pos += 2;
                 Some(q)
