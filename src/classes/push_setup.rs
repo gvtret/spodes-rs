@@ -117,15 +117,15 @@ impl PushSetup {
     /// [`RequestDispatcher::build_push_delivery_request`](crate::server::RequestDispatcher::build_push_delivery_request)
     /// against the object registry to actually assemble and send the push. The
     /// ACTION itself only validates that the object is triggerable.
-    fn push() -> Result<CosemDataType, String> {
-        Ok(CosemDataType::Null)
+    fn push() -> CosemDataType {
+        CosemDataType::Null
     }
 
     /// Method 2: `reset` — resets the push confirmation state by clearing
     /// `last_confirmation_date_time`.
-    fn reset(&mut self) -> Result<CosemDataType, String> {
+    fn reset(&mut self) -> CosemDataType {
         self.last_confirmation_date_time = DateTime::new([0u8; 12]);
-        Ok(CosemDataType::Null)
+        CosemDataType::Null
     }
 
     /// Returns the push object list (attribute 2): the objects and attribute
@@ -357,8 +357,8 @@ impl InterfaceClass for PushSetup {
 
     fn invoke_method(&mut self, method_id: u8, _params: Option<CosemDataType>) -> Result<CosemDataType, String> {
         match method_id {
-            1 => Self::push(),
-            2 if self.version >= 2 => self.reset(),
+            1 => Ok(Self::push()),
+            2 if self.version >= 2 => Ok(self.reset()),
             _ => Err(format!("Method {} not supported for Push setup version {}", method_id, self.version)),
         }
     }

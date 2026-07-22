@@ -87,9 +87,9 @@ impl CompactData {
     }
 
     /// Method 1: `reset` — clears the compact buffer.
-    fn reset(&mut self) -> Result<CosemDataType, String> {
+    fn reset(&mut self) -> CosemDataType {
         self.compact_buffer.clear();
-        Ok(CosemDataType::Null)
+        CosemDataType::Null
     }
 
     /// Method 2: `capture` — reads every capture object's attribute and stores
@@ -225,7 +225,7 @@ impl InterfaceClass for CompactData {
 
     fn invoke_method(&mut self, method_id: u8, _params: Option<CosemDataType>) -> Result<CosemDataType, String> {
         match method_id {
-            1 => self.reset(),
+            1 => Ok(self.reset()),
             2 => self.capture(),
             _ => Err(format!("Method {method_id} not supported for Compact data class")),
         }

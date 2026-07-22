@@ -55,8 +55,8 @@ impl DataProtection {
 
     /// Method 1: `get_protected_attributes` — returns the protected data built
     /// from the object list. Best-effort: returns the current protection buffer.
-    fn get_protected_attributes(&self, _data: CosemDataType) -> Result<CosemDataType, String> {
-        Ok(CosemDataType::OctetString(self.protection_buffer.clone()))
+    fn get_protected_attributes(&self, _data: CosemDataType) -> CosemDataType {
+        CosemDataType::OctetString(self.protection_buffer.clone())
     }
 
     /// Method 2: `set_protected_attributes` — applies protected attribute values.
@@ -74,8 +74,8 @@ impl DataProtection {
 
     /// Method 3: `invoke_protected_method` — invokes a protected method.
     /// Best-effort: succeeds after validating a parameter is present.
-    fn invoke_protected_method(_data: CosemDataType) -> Result<CosemDataType, String> {
-        Ok(CosemDataType::Null)
+    fn invoke_protected_method(_data: CosemDataType) -> CosemDataType {
+        CosemDataType::Null
     }
 }
 
@@ -178,9 +178,9 @@ impl InterfaceClass for DataProtection {
     fn invoke_method(&mut self, method_id: u8, params: Option<CosemDataType>) -> Result<CosemDataType, String> {
         let params = params.ok_or("Missing method parameter")?;
         match method_id {
-            1 => self.get_protected_attributes(params),
+            1 => Ok(self.get_protected_attributes(params)),
             2 => self.set_protected_attributes(params),
-            3 => Self::invoke_protected_method(params),
+            3 => Ok(Self::invoke_protected_method(params)),
             _ => Err(format!("Method {method_id} not supported for Data protection")),
         }
     }

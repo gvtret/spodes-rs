@@ -280,7 +280,7 @@ impl AssociationLn {
         match mechanism {
             // Mechanisms 3/4: f(challenge) = HASH(challenge ‖ secret).
             AuthMechanism::HlsMd5 | AuthMechanism::HlsSha1 => {
-                let secret = self.secret_bytes()?;
+                let secret = self.secret_bytes();
                 let expected = hls::hash_legacy(mechanism, stoc, secret).ok_or("HLS hash computation failed")?;
                 if expected != f_stoc {
                     return Err("HLS authentication failed: f(StoC) mismatch".to_string());
@@ -290,7 +290,7 @@ impl AssociationLn {
             }
             // Mechanisms 6/9: f = HASH(secret ‖ ST_a ‖ ST_b ‖ chal_a ‖ chal_b).
             AuthMechanism::HlsSha256 | AuthMechanism::HlsGostStreebog => {
-                let secret = self.secret_bytes()?;
+                let secret = self.secret_bytes();
                 let ctx = self.hls_context.as_ref().ok_or("HLS context (system titles) not set")?;
                 let expected = hls::hash_with_titles(
                     mechanism,
@@ -386,7 +386,7 @@ impl AssociationLn {
             // Mechanism 2 (manufacturer-specific): f(challenge) = AES-128 over
             // the challenge keyed by the secret (Gurux / TI "high" scheme).
             AuthMechanism::HlsManufacturer => {
-                let secret = self.secret_bytes()?;
+                let secret = self.secret_bytes();
                 let expected = hls::manufacturer_aes(secret, stoc);
                 if expected != f_stoc {
                     return Err("HLS authentication failed: f(StoC) mismatch".to_string());
@@ -420,8 +420,8 @@ impl AssociationLn {
     }
 
     /// Returns the secret as bytes.
-    fn secret_bytes(&self) -> Result<&[u8], String> {
-        Ok(&self.secret)
+    fn secret_bytes(&self) -> &[u8] {
+        &self.secret
     }
 
     /// Method 3: `add_object` — adds an `object_list_element` to `object_list`.

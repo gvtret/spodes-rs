@@ -52,12 +52,12 @@ impl DisconnectControl {
     /// Method 1: `remote_disconnect` — forces the object into the `disconnected`
     /// state if remote disconnection is enabled (control_mode > 0). When
     /// control_mode is 0 the method has no effect (IEC 62056-6-2 §4.5.8.3.1).
-    fn remote_disconnect(&mut self) -> Result<CosemDataType, String> {
+    fn remote_disconnect(&mut self) -> CosemDataType {
         if self.control_mode > 0 {
             self.control_state = control_state::DISCONNECTED;
             self.output_state = false;
         }
-        Ok(CosemDataType::Null)
+        CosemDataType::Null
     }
 
     /// Method 2: `remote_reconnect` — forces the object into the
@@ -65,7 +65,7 @@ impl DisconnectControl {
     /// (control_mode 1, 3, 5, 6), or directly into the `connected` state when it
     /// is enabled (control_mode 2, 4). When control_mode is 0 the method has no
     /// effect (IEC 62056-6-2 §4.5.8.3.2).
-    fn remote_reconnect(&mut self) -> Result<CosemDataType, String> {
+    fn remote_reconnect(&mut self) -> CosemDataType {
         match self.control_mode {
             2 | 4 => {
                 self.control_state = control_state::CONNECTED;
@@ -77,7 +77,7 @@ impl DisconnectControl {
             }
             _ => {}
         }
-        Ok(CosemDataType::Null)
+        CosemDataType::Null
     }
 }
 
@@ -164,8 +164,8 @@ impl InterfaceClass for DisconnectControl {
 
     fn invoke_method(&mut self, method_id: u8, _params: Option<CosemDataType>) -> Result<CosemDataType, String> {
         match method_id {
-            1 => self.remote_disconnect(),
-            2 => self.remote_reconnect(),
+            1 => Ok(self.remote_disconnect()),
+            2 => Ok(self.remote_reconnect()),
             _ => Err(format!("Method {method_id} not supported for Disconnect control")),
         }
     }

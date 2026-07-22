@@ -97,7 +97,7 @@ impl Clock {
     }
 
     /// Adjusts the time to the nearest quarter hour (minute 0, 15, 30 or 45).
-    fn adjust_to_quarter(&mut self) -> Result<CosemDataType, String> {
+    fn adjust_to_quarter(&mut self) -> CosemDataType {
         let minutes = u32::from(self.time.0[6]);
         let new_minutes: u8 = if minutes < 8 {
             0
@@ -111,14 +111,14 @@ impl Clock {
         self.time.0[6] = new_minutes;
         self.time.0[7] = 0;
         self.time.0[8] = 0;
-        Ok(CosemDataType::Null)
+        CosemDataType::Null
     }
 
     /// Adjusts the time to the nearest minute.
-    fn adjust_to_minute(&mut self) -> Result<CosemDataType, String> {
+    fn adjust_to_minute(&mut self) -> CosemDataType {
         self.time.0[7] = 0;
         self.time.0[8] = 0;
-        Ok(CosemDataType::Null)
+        CosemDataType::Null
     }
 
     /// Sets a preset time.
@@ -135,8 +135,8 @@ impl Clock {
     }
 
     /// Preset-time adjustment (stub).
-    fn preset_adjusting_time() -> Result<CosemDataType, String> {
-        Ok(CosemDataType::Null)
+    fn preset_adjusting_time() -> CosemDataType {
+        CosemDataType::Null
     }
 }
 
@@ -244,10 +244,10 @@ impl InterfaceClass for Clock {
 
     fn invoke_method(&mut self, method_id: u8, params: Option<CosemDataType>) -> Result<CosemDataType, String> {
         match method_id {
-            1 => self.adjust_to_quarter(),
-            2 => self.adjust_to_minute(),
+            1 => Ok(self.adjust_to_quarter()),
+            2 => Ok(self.adjust_to_minute()),
             3 => self.adjust_to_preset_time(params),
-            4 => Self::preset_adjusting_time(),
+            4 => Ok(Self::preset_adjusting_time()),
             _ => Err(format!("Method {method_id} not supported for Clock class")),
         }
     }

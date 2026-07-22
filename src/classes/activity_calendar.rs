@@ -66,12 +66,12 @@ impl ActivityCalendar {
 
     /// Method 1: `activate_passive_calendar` — copies the passive calendar over
     /// the active one, making it effective immediately (IEC 62056-6-2 §4.5.5.3).
-    fn activate_passive_calendar(&mut self) -> Result<CosemDataType, String> {
+    fn activate_passive_calendar(&mut self) -> CosemDataType {
         self.calendar_name_active = self.calendar_name_passive.clone();
         self.season_profile_active = self.season_profile_passive.clone();
         self.week_profile_table_active = self.week_profile_table_passive.clone();
         self.day_profile_table_active = self.day_profile_table_passive.clone();
-        Ok(CosemDataType::Null)
+        CosemDataType::Null
     }
 }
 
@@ -161,7 +161,7 @@ impl InterfaceClass for ActivityCalendar {
 
     fn invoke_method(&mut self, method_id: u8, _params: Option<CosemDataType>) -> Result<CosemDataType, String> {
         match method_id {
-            1 => self.activate_passive_calendar(),
+            1 => Ok(self.activate_passive_calendar()),
             _ => Err(format!("Method {method_id} not supported for Activity calendar")),
         }
     }

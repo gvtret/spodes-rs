@@ -41,9 +41,9 @@ impl RegisterTable {
     }
 
     /// Method 1: `reset` — clears the table cell values.
-    fn reset(&mut self) -> Result<CosemDataType, String> {
+    fn reset(&mut self) -> CosemDataType {
         self.table_cell_values.clear();
-        Ok(CosemDataType::Null)
+        CosemDataType::Null
     }
 
     /// Returns the table cell values (attribute 2).
@@ -128,7 +128,7 @@ impl InterfaceClass for RegisterTable {
 
     fn invoke_method(&mut self, method_id: u8, _params: Option<CosemDataType>) -> Result<CosemDataType, String> {
         match method_id {
-            1 => self.reset(),
+            1 => Ok(self.reset()),
             // Method 2 `capture` is host-driven: the values live outside the
             // object model, so capturing is delegated to the application.
             2 => Ok(CosemDataType::Null),

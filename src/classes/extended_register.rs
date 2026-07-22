@@ -108,10 +108,10 @@ impl ExtendedRegister {
     /// # Returns
     /// * `Ok(CosemDataType::Null)` - On a successful capture.
     /// * `Err(String)` - On error.
-    fn capture(&mut self) -> Result<CosemDataType, String> {
+    fn capture(&mut self) -> CosemDataType {
         self.status = CosemDataType::Unsigned(1);
         self.capture_time = DateTime::new([0x07, 0xE5, 0x05, 0x01, 0x02, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00]);
-        Ok(CosemDataType::Null)
+        CosemDataType::Null
     }
 }
 
@@ -191,7 +191,7 @@ impl InterfaceClass for ExtendedRegister {
     fn invoke_method(&mut self, method_id: u8, _params: Option<CosemDataType>) -> Result<CosemDataType, String> {
         match method_id {
             1 => self.reset(),
-            2 => self.capture(),
+            2 => Ok(self.capture()),
             _ => Err(format!("Method {method_id} not supported for ExtendedRegister class")),
         }
     }

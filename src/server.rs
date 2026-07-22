@@ -401,7 +401,7 @@ impl RequestDispatcher {
     pub fn dispatch(&mut self, request: &[u8]) -> Result<Vec<u8>, ServiceError> {
         match request.first() {
             Some(&tag::GET_REQUEST) => self.dispatch_get(request),
-            Some(&tag::SET_REQUEST) => self.dispatch_set(request),
+            Some(&tag::SET_REQUEST) => Ok(self.dispatch_set(request)),
             Some(&tag::ACTION_REQUEST) => self.dispatch_action(request),
             Some(&acse::AARQ_TAG) => Ok(self.handle_aarq(request)),
             Some(&acse::RLRQ_TAG) => Ok(self.handle_rlrq(request)),
@@ -680,34 +680,32 @@ impl RequestDispatcher {
         response.encode().unwrap_or_default()
     }
 
-    fn dispatch_set(&mut self, request: &[u8]) -> Result<Vec<u8>, ServiceError> {
+    fn dispatch_set(&mut self, request: &[u8]) -> Vec<u8> {
         // A malformed SET is answered with a data-access-result instead of
         // dropping the session.
         let Ok(decoded) = SetRequest::decode(request) else {
             let invoke_id_and_priority = request.get(2).copied().unwrap_or(0);
-            return Ok(
-                SetResponse::Normal { invoke_id_and_priority, result: data_access_result::OTHER_REASON }.encode()
-            );
+            return SetResponse::Normal { invoke_id_and_priority, result: data_access_result::OTHER_REASON }.encode();
         };
         match decoded {
             SetRequest::Normal { invoke_id_and_priority, attribute, value, .. } => {
                 let result = self.write_attribute(&attribute, value);
-                Ok(SetResponse::Normal { invoke_id_and_priority, result }.encode())
+                SetResponse::Normal { invoke_id_and_priority, result }.encode()
             }
             SetRequest::WithList { invoke_id_and_priority, attributes, values } => {
                 let results = attributes.iter().zip(values).map(|((a, _), v)| self.write_attribute(a, v)).collect();
-                Ok(SetResponse::WithList { invoke_id_and_priority, results }.encode())
+                SetResponse::WithList { invoke_id_and_priority, results }.encode()
             }
             // Begin reassembling a block-transferred value.
             SetRequest::WithFirstDatablock { invoke_id_and_priority, attribute, datablock, .. } => {
                 self.pending_set = Some(PendingSet { attribute, buffer: Vec::new() });
-                Ok(self.accumulate_set_block(invoke_id_and_priority, &datablock))
+                self.accumulate_set_block(invoke_id_and_priority, &datablock)
             }
             SetRequest::WithDatablock { invoke_id_and_priority, datablock } => {
                 if self.pending_set.is_none() {
-                    return Ok(not_possible());
+                    return not_possible();
                 }
-                Ok(self.accumulate_set_block(invoke_id_and_priority, &datablock))
+                self.accumulate_set_block(invoke_id_and_priority, &datablock)
             }
         }
     }

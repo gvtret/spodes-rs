@@ -109,10 +109,10 @@ impl ProfileGeneric {
     /// # Returns
     /// * `Ok(CosemDataType::Null)` - If the reset succeeded.
     /// * `Err(String)` - If an error occurred.
-    fn reset(&mut self) -> Result<CosemDataType, String> {
+    fn reset(&mut self) -> CosemDataType {
         self.buffer.clear();
         self.entries_in_use = 0;
-        Ok(CosemDataType::Null)
+        CosemDataType::Null
     }
 
     /// Captures a new entry into the profile buffer, reading the attribute values
@@ -158,8 +158,8 @@ impl ProfileGeneric {
     /// Full range filtering requires evaluating the sort object of each entry;
     /// that ordering logic is not modelled here, so this returns the whole
     /// buffer as a best effort.
-    fn get_buffer_by_range(&self, _params: Option<CosemDataType>) -> Result<CosemDataType, String> {
-        Ok(CosemDataType::Array(self.buffer.clone()))
+    fn get_buffer_by_range(&self, _params: Option<CosemDataType>) -> CosemDataType {
+        CosemDataType::Array(self.buffer.clone())
     }
 
     /// Method 4 (version 0 only): `get_buffer_by_index` — returns the buffer
@@ -335,10 +335,10 @@ impl InterfaceClass for ProfileGeneric {
 
     fn invoke_method(&mut self, method_id: u8, params: Option<CosemDataType>) -> Result<CosemDataType, String> {
         match method_id {
-            1 => self.reset(),
+            1 => Ok(self.reset()),
             2 => self.capture(),
             // Methods 3 and 4 exist only in version 0.
-            3 if self.version == 0 => self.get_buffer_by_range(params),
+            3 if self.version == 0 => Ok(self.get_buffer_by_range(params)),
             4 if self.version == 0 => self.get_buffer_by_index(params),
             _ => Err(format!("Method {} not supported for ProfileGeneric version {}", method_id, self.version)),
         }
