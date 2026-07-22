@@ -505,7 +505,7 @@ fn gost_cmac_tag(key: &[u8], data: &[u8]) -> Result<Vec<u8>, CipherError> {
 
     // Generate subkeys K1 and K2
     let mut l = cipher::Array::from([0u8; 16]);
-    cipher.clone().encrypt_block(&mut l);
+    cipher.encrypt_block(&mut l);
     let l_bytes: [u8; 16] = l.into();
 
     let k1 = ghash_subkey(&l_bytes);
@@ -521,14 +521,14 @@ fn gost_cmac_tag(key: &[u8], data: &[u8]) -> Result<Vec<u8>, CipherError> {
         for chunk in &chunks {
             xor_blocks(&mut state, chunk);
             let mut block = cipher::Array::from(state);
-            cipher.clone().encrypt_block(&mut block);
+            cipher.encrypt_block(&mut block);
             state = block.into();
         }
         if !data.is_empty() && last_block.is_some_and(|b| b.len() == 16) {
             // XOR K1 into state before final block
             xor_blocks(&mut state, &k1);
             let mut block = cipher::Array::from(state);
-            cipher.clone().encrypt_block(&mut block);
+            cipher.encrypt_block(&mut block);
             state = block.into();
         }
     } else {
@@ -540,14 +540,14 @@ fn gost_cmac_tag(key: &[u8], data: &[u8]) -> Result<Vec<u8>, CipherError> {
         for chunk in &chunks[..chunks.len() - 1] {
             xor_blocks(&mut state, chunk);
             let mut block = cipher::Array::from(state);
-            cipher.clone().encrypt_block(&mut block);
+            cipher.encrypt_block(&mut block);
             state = block.into();
         }
         // Process last padded block with K2
         xor_blocks(&mut state, &padded);
         xor_blocks(&mut state, &k2);
         let mut block = cipher::Array::from(state);
-        cipher.clone().encrypt_block(&mut block);
+        cipher.encrypt_block(&mut block);
         state = block.into();
     }
 
@@ -614,7 +614,7 @@ pub fn gost_gmac_tag(key: &[u8], iv: &[u8; 12], aad: &[u8], plaintext: &[u8]) ->
 
     // Generate hash subkey H = E(K, 0^128)
     let mut h = cipher::Array::from([0u8; 16]);
-    cipher.clone().encrypt_block(&mut h);
+    cipher.encrypt_block(&mut h);
     let _h_bytes: [u8; 16] = h.into();
 
     // Compute GHASH over AAD || ciphertext || len(AAD)||len(ciphertext)
@@ -629,7 +629,7 @@ pub fn gost_gmac_tag(key: &[u8], iv: &[u8; 12], aad: &[u8], plaintext: &[u8]) ->
         }
         xor_blocks(&mut state, &block);
         let mut block_arr = cipher::Array::from(state);
-        cipher.clone().encrypt_block(&mut block_arr);
+        cipher.encrypt_block(&mut block_arr);
         state = block_arr.into();
     }
 
@@ -642,7 +642,7 @@ pub fn gost_gmac_tag(key: &[u8], iv: &[u8; 12], aad: &[u8], plaintext: &[u8]) ->
         }
         xor_blocks(&mut state, &block);
         let mut block_arr = cipher::Array::from(state);
-        cipher.clone().encrypt_block(&mut block_arr);
+        cipher.encrypt_block(&mut block_arr);
         state = block_arr.into();
     }
 
@@ -654,13 +654,13 @@ pub fn gost_gmac_tag(key: &[u8], iv: &[u8; 12], aad: &[u8], plaintext: &[u8]) ->
     len_block[8..16].copy_from_slice(&ct_bit_len.to_be_bytes());
     xor_blocks(&mut state, &len_block);
     let mut block_arr = cipher::Array::from(state);
-    cipher.clone().encrypt_block(&mut block_arr);
+    cipher.encrypt_block(&mut block_arr);
     state = block_arr.into();
 
     // Final: tag = GHASH(H, AAD, ciphertext) ⊕ E(K, IV || 0^32)
     // For GMAC, we use the IV directly as the counter block
     let mut enc_block = cipher::Array::from(build_gmac_counter(iv));
-    cipher.clone().encrypt_block(&mut enc_block);
+    cipher.encrypt_block(&mut enc_block);
     let enc_bytes: [u8; 16] = enc_block.into();
     xor_blocks(&mut state, &enc_bytes);
 
@@ -685,7 +685,7 @@ pub fn gost_gmac_encrypt(key: &[u8], iv: &[u8; 12], plaintext: &[u8]) -> Result<
 
     for chunk in ciphertext.chunks_mut(16) {
         let mut keystream = cipher::Array::from(counter);
-        cipher.clone().encrypt_block(&mut keystream);
+        cipher.encrypt_block(&mut keystream);
         let ks: [u8; 16] = keystream.into();
         for (i, byte) in chunk.iter_mut().enumerate() {
             *byte ^= ks[i];
@@ -1039,7 +1039,7 @@ mod tests {
         let apdu = protect(&c, glo::GET_REQUEST, &plaintext).unwrap();
         // Plaintext (after tag|len|SC|IC = 7 octets) is carried in the clear.
         assert_eq!(&apdu[7..7 + plaintext.len()], plaintext.as_slice());
-        let (_, recovered) = unprotect(&mut c.clone(), &apdu).unwrap();
+        let (_, recovered) = unprotect(&mut c, &apdu).unwrap();
         assert_eq!(recovered, plaintext);
     }
 

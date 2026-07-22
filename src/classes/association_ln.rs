@@ -395,7 +395,7 @@ impl AssociationLn {
     /// Method 3: `add_object` — adds an `object_list_element` to `object_list`.
     /// If an object with the same (class_id, logical_name) already exists, it is updated.
     fn add_object(&mut self, data: CosemDataType) -> Result<CosemDataType, String> {
-        let elem = ObjectListElement::try_from(&data).map_err(|e| e.to_string())?;
+        let elem = ObjectListElement::try_from(&data)?;
         let key = (elem.class_id, elem.logical_name.to_bytes());
         if let Some(existing) = self.object_list.iter_mut().find(|e| (e.class_id, e.logical_name.to_bytes()) == key) {
             *existing = elem;
@@ -407,7 +407,7 @@ impl AssociationLn {
 
     /// Method 4: `remove_object` — removes an `object_list_element` from `object_list`.
     fn remove_object(&mut self, data: CosemDataType) -> Result<CosemDataType, String> {
-        let elem = ObjectListElement::try_from(&data).map_err(|e| e.to_string())?;
+        let elem = ObjectListElement::try_from(&data)?;
         let key = (elem.class_id, elem.logical_name.to_bytes());
         let before = self.object_list.len();
         self.object_list.retain(|e| (e.class_id, e.logical_name.to_bytes()) != key);
@@ -421,7 +421,7 @@ impl AssociationLn {
     /// `user_list`. If an entry with the same user id already exists, it is
     /// updated (IEC 62056-6-2 §5.3.7.3.5).
     fn add_user(&mut self, data: CosemDataType) -> Result<CosemDataType, String> {
-        let user = User::try_from(&data).map_err(|e| e.to_string())?;
+        let user = User::try_from(&data)?;
         let id = user.user_id;
         if let Some(existing) = self.user_list.iter_mut().find(|e| e.user_id == id) {
             *existing = user;
@@ -434,7 +434,7 @@ impl AssociationLn {
     /// Method 6 (version 2): `remove_user` — removes the `user` entry with the
     /// given id from `user_list` (IEC 62056-6-2 §5.3.7.3.6).
     fn remove_user(&mut self, data: CosemDataType) -> Result<CosemDataType, String> {
-        let user = User::try_from(&data).map_err(|e| e.to_string())?;
+        let user = User::try_from(&data)?;
         let id = user.user_id;
         let before = self.user_list.len();
         self.user_list.retain(|e| e.user_id != id);
@@ -1069,8 +1069,8 @@ mod tests {
         ctx.client_system_title = st_c.clone();
         ctx.server_system_title = st_s.clone();
         ctx.security_control_byte = 0x31; // suite 1 in the low nibble
-        ctx.signing_key = d_server.clone();
-        ctx.peer_public_key = pk_client.clone();
+        ctx.signing_key = d_server;
+        ctx.peer_public_key = pk_client;
         obj.set_hls_context(ctx);
 
         // Client's f(StoC) = SIGN(d_C, ST_C ‖ ST_S ‖ StoC ‖ CtoS).
