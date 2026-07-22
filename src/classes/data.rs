@@ -95,6 +95,15 @@ impl InterfaceClass for Data {
         Err(BerError::InvalidTag)
     }
 
+    fn set_attribute(&mut self, attribute_id: u8, value: CosemDataType) -> Result<(), String> {
+        if attribute_id == 2 {
+            self.value = value;
+            Ok(())
+        } else {
+            Err(format!("Attribute {} not writable for Data", attribute_id))
+        }
+    }
+
     fn invoke_method(&mut self, method_id: u8, _params: Option<CosemDataType>) -> Result<CosemDataType, String> {
         match method_id {
             // Method 1: `reset` — sets the value to its default (null-data),

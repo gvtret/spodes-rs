@@ -304,6 +304,61 @@ impl InterfaceClass for PushSetup {
         Ok(())
     }
 
+    fn set_attribute(&mut self, attribute_id: u8, value: CosemDataType) -> Result<(), String> {
+        match attribute_id {
+            2 => match value {
+                CosemDataType::Array(list) => {
+                    self.push_object_list = list
+                        .iter()
+                        .map(CaptureObjectDefinition::try_from)
+                        .collect::<Result<Vec<_>, _>>()?;
+                    Ok(())
+                }
+                _ => Err("push_object_list must be array".to_string()),
+            },
+            3 => {
+                self.send_destination_and_method = SendDestinationAndMethod::try_from(&value)?;
+                Ok(())
+            }
+            4 => match value {
+                CosemDataType::Array(list) => {
+                    self.communication_window = list
+                        .iter()
+                        .map(CommunicationWindow::try_from)
+                        .collect::<Result<Vec<_>, _>>()?;
+                    Ok(())
+                }
+                _ => Err("communication_window must be array".to_string()),
+            },
+            5 => match value {
+                CosemDataType::LongUnsigned(v) => {
+                    self.randomisation_start_interval = v;
+                    Ok(())
+                }
+                _ => Err("randomisation_start_interval must be long-unsigned".to_string()),
+            },
+            6 => match value {
+                CosemDataType::Unsigned(v) => {
+                    self.number_of_retries = v;
+                    Ok(())
+                }
+                _ => Err("number_of_retries must be unsigned".to_string()),
+            },
+            7 => {
+                self.repetition_delay = value;
+                Ok(())
+            }
+            8 if self.version >= 1 => match value {
+                CosemDataType::OctetString(v) => {
+                    self.port_reference = v;
+                    Ok(())
+                }
+                _ => Err("port_reference must be octet-string".to_string()),
+            },
+            _ => Err(format!("Attribute {} not writable for PushSetup", attribute_id)),
+        }
+    }
+
     fn invoke_method(&mut self, method_id: u8, _params: Option<CosemDataType>) -> Result<CosemDataType, String> {
         match method_id {
             1 => self.push(),

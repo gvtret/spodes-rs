@@ -767,6 +767,10 @@ impl<T: PhysicalTransport> DataLinkLayer for HdlcLayer<T> {
         let mut information = Vec::new();
         loop {
             let frame = self.read_decoded_frame()?;
+            // Server: ignore frames not addressed to this station (C++ parity).
+            if !self.is_client && frame.destination.value != self.own.value {
+                continue;
+            }
             match frame.control {
                 Control::Information { send_seq, .. } => {
                     // Acknowledge the received frame in the next transmission.
@@ -792,6 +796,7 @@ impl<T: PhysicalTransport> DataLinkLayer for HdlcLayer<T> {
                 // negotiated values, and reset the sequence numbers for the
                 // fresh association.
                 Control::Snrm { .. } if !self.is_client => {
+                    self.peer = frame.source;
                     self.xid = self.xid_configured;
                     if !frame.information.is_empty() {
                         self.xid.negotiate(XidParams::decode(&frame.information));
@@ -833,6 +838,14 @@ impl<T: PhysicalTransport> DataLinkLayer for HdlcLayer<T> {
         #[cfg(feature = "tracing")]
         trace!(send_seq = self.send_seq, recv_seq = self.recv_seq, apdu_len = apdu.len(), "hdlc receive");
         Ok(apdu)
+    }
+
+    fn client_sap(&self) -> Option<u8> {
+        if !self.is_client && self.peer.length == 1 {
+            Some(self.peer.value as u8)
+        } else {
+            None
+        }
     }
 }
 
@@ -970,6 +983,30 @@ mod tests {
         client.transport_mut().feed(&ua.encode());
         client.connect().unwrap();
         assert!(client.is_connected());
+    }
+
+    #[test]
+    fn server_learns_client_address_from_snrm() {
+        let mut server = server_layer();
+        let snrm = HdlcFrame::new(
+            HdlcAddress::one_byte(0x03),
+            HdlcAddress::one_byte(0x61),
+            Control::Snrm { poll: true },
+            Vec::new(),
+        )
+        .encode();
+        server.transport_mut().feed(&snrm);
+        let info = Control::Information { send_seq: 0, recv_seq: 0, poll: true };
+        server.transport_mut().feed(&HdlcFrame::new(
+            HdlcAddress::one_byte(0x03),
+            HdlcAddress::one_byte(0x61),
+            info,
+            vec![0xE6, 0xE6, 0x00, 0xC0, 0x01, 0xC1],
+        ).encode());
+        let _ = server.receive_apdu().unwrap();
+        let ua_raw = server.read_frame().unwrap();
+        let ua = HdlcFrame::decode(&ua_raw).unwrap();
+        assert_eq!(ua.destination, HdlcAddress::one_byte(0x61));
     }
 
     #[test]

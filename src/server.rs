@@ -142,6 +142,11 @@ impl RequestDispatcher {
         self.association.as_ref()
     }
 
+    /// Returns a mutable reference to the current association, if any.
+    pub fn association_mut(&mut self) -> Option<&mut AssociationLn> {
+        self.association.as_mut()
+    }
+
     /// Assembles a [`PushDeliveryRequest`] for `push_setup`'s ACTION method 1
     /// (`push`): reads each object in `push_object_list` from this
     /// dispatcher's registry, wraps the values in a DataNotification
@@ -315,6 +320,20 @@ impl RequestDispatcher {
             );
             return (data_access_result::READ_WRITE_DENIED, None);
         }
+        // HLS reply_to_authentication and other Association LN methods must hit
+        // the live association state, not a cloned registry object.
+        let routed_to_assoc = d.class_id == 15
+            && self.association.is_some()
+            && (d.instance_id == ObisCode::new(0, 0, 40, 0, 0, 255)
+                || self.association.as_ref().is_some_and(|assoc| assoc.logical_name() == &d.instance_id));
+        if routed_to_assoc {
+            return match self.association.as_mut().expect("association routing").invoke_method(d.method_id as u8, params)
+            {
+                Ok(crate::types::CosemDataType::Null) => (data_access_result::SUCCESS, None),
+                Ok(value) => (data_access_result::SUCCESS, Some(GetDataResult::Data(value))),
+                Err(_) => (data_access_result::OTHER_REASON, None),
+            };
+        }
         self.find(d.class_id, &d.instance_id).map_or_else(
             || {
                 #[cfg(feature = "tracing")]
@@ -445,7 +464,7 @@ impl RequestDispatcher {
             let Some(mech) = aarq.mechanism_name.and_then(AuthMechanism::from_id) else {
                 return reject_aare(echo_context, diag::AUTHENTICATION_MECHANISM_NAME_NOT_RECOGNISED, None);
             };
-            if mech != required {
+            if !Self::aarq_mechanism_matches_assoc(mech, required) {
                 return reject_aare(echo_context, diag::AUTHENTICATION_FAILURE, None);
             }
         }
@@ -499,19 +518,32 @@ impl RequestDispatcher {
                     return reject_aare(echo_context, diag::AUTHENTICATION_FAILURE, None);
                 };
                 assoc.set_ctos(ctos);
+                if let Some(title) = aarq.calling_ap_title {
+                    assoc.set_client_system_title(title);
+                }
+                assoc.set_hls_handshake_mechanism(mechanism);
                 let stoc = assoc.generate_stoc(16);
                 assoc.set_association_status(association_status::ASSOCIATION_PENDING);
+                let responding_ap_title = assoc.responding_ap_title_for_hls();
                 AssociationResponse {
                     application_context: echo_context,
                     result: acse::result::ACCEPTED,
                     diagnostic: diag::NULL,
-                    responding_ap_title: None,
+                    responding_ap_title,
                     responding_authentication_value: Some(stoc),
                     user_information,
                 }
                 .encode()
             }
         }
+    }
+
+    /// Gurux HIGH authentication advertises mechanism 2 (`HlsManufacturer`);
+    /// СПОДЭС Configurator associations are configured as HLS-GMAC (5). Accept
+    /// that pairing for AARQ, then finish the handshake with GMAC.
+    fn aarq_mechanism_matches_assoc(requested: AuthMechanism, required: AuthMechanism) -> bool {
+        requested == required
+            || (requested == AuthMechanism::HlsManufacturer && required == AuthMechanism::HlsGmac)
     }
 
     /// Answers an RLRQ with RLRE (IEC 62056-5-3 §7.3.6) and clears any
@@ -803,7 +835,6 @@ fn not_possible() -> Vec<u8> {
 mod tests {
     use super::*;
     use crate::classes::data::Data;
-    use crate::service::acse::ReleaseRequest;
     use crate::types::CosemDataType;
 
     fn dispatcher_with_data() -> RequestDispatcher {
@@ -1199,8 +1230,7 @@ mod tests {
     }
 
     #[test]
-    fn set_on_read_only_attribute_is_denied() {
-        // Data class does not override set_attribute → read-write-denied.
+    fn set_on_data_value_attribute_succeeds() {
         let mut d = dispatcher_with_data();
         let req = SetRequest::Normal {
             invoke_id_and_priority: 0xC1,
@@ -1209,9 +1239,19 @@ mod tests {
             value: CosemDataType::LongUnsigned(0x9999),
         };
         let resp = SetResponse::decode(&d.dispatch(&req.encode().unwrap()).unwrap()).unwrap();
+        assert_eq!(resp, SetResponse::Normal { invoke_id_and_priority: 0xC1, result: data_access_result::SUCCESS });
+        let get = GetRequest::Normal {
+            invoke_id_and_priority: 0xC1,
+            attribute: AttributeDescriptor::new(1, ObisCode::new(0, 0, 0x80, 0, 0, 0xFF), 2),
+            access_selection: None,
+        };
+        let get_resp = GetResponse::decode(&d.dispatch(&get.encode().unwrap()).unwrap()).unwrap();
         assert_eq!(
-            resp,
-            SetResponse::Normal { invoke_id_and_priority: 0xC1, result: data_access_result::READ_WRITE_DENIED }
+            get_resp,
+            GetResponse::Normal {
+                invoke_id_and_priority: 0xC1,
+                result: GetDataResult::Data(CosemDataType::LongUnsigned(0x9999)),
+            }
         );
     }
 
@@ -1237,18 +1277,22 @@ mod tests {
     }
 
     #[test]
+    fn rlrq_is_answered_with_rlre() {
+        let mut d = dispatcher_with_data();
+        let rlrq = crate::service::acse::ReleaseRequest {
+            reason: Some(acse::release_reason::NORMAL),
+            user_information: None,
+        }
+        .encode_rlrq();
+        let resp = d.dispatch(&rlrq).unwrap();
+        assert_eq!(resp.first(), Some(&acse::RLRE_TAG));
+    }
+
+    #[test]
     fn unsupported_tag_yields_exception_response() {
         let mut d = dispatcher_with_data();
         let resp = d.dispatch(&[tag::DATA_NOTIFICATION, 0x00]).unwrap();
         assert_eq!(resp[0], tag::EXCEPTION_RESPONSE);
-    }
-
-    #[test]
-    fn rlrq_is_answered_with_rlre() {
-        let mut d = dispatcher_with_data();
-        let rlrq = ReleaseRequest { reason: Some(acse::release_reason::NORMAL), user_information: None }.encode_rlrq();
-        let resp = d.dispatch(&rlrq).unwrap();
-        assert_eq!(resp.first(), Some(&acse::RLRE_TAG));
     }
 
     fn push_setup_config() -> crate::classes::push_setup::PushSetupConfig {
