@@ -114,7 +114,7 @@ impl ScalerUnit {
 
     /// Converts a raw value to the scaled value.
     pub fn apply(&self, raw: i64) -> f64 {
-        raw as f64 * 10f64.powi(self.scaler as i32)
+        raw as f64 * 10f64.powi(i32::from(self.scaler))
     }
 }
 
@@ -1270,7 +1270,7 @@ impl TryFrom<&CosemDataType> for AssociatedPartnersId {
                 };
                 let server_sap = match &fields[1] {
                     CosemDataType::LongUnsigned(v) => *v,
-                    CosemDataType::Unsigned(v) => *v as u16,
+                    CosemDataType::Unsigned(v) => u16::from(*v),
                     _ => return Err("server_SAP must be long-unsigned".to_string()),
                 };
                 Ok(AssociatedPartnersId { client_sap, server_sap })
@@ -1535,7 +1535,7 @@ impl TryFrom<&CosemDataType> for ActionItem {
                 };
                 let script_selector = match &fields[1] {
                     CosemDataType::LongUnsigned(v) => *v,
-                    CosemDataType::Unsigned(v) => *v as u16,
+                    CosemDataType::Unsigned(v) => u16::from(*v),
                     _ => return Err("script_selector must be long-unsigned".to_string()),
                 };
                 Ok(ActionItem { script_logical_name, script_selector })
@@ -2383,7 +2383,7 @@ impl TryFrom<&CosemDataType> for SapAssignmentEntry {
             CosemDataType::Structure(fields) if fields.len() >= 2 => {
                 let sap = match &fields[0] {
                     CosemDataType::LongUnsigned(v) => *v,
-                    CosemDataType::Unsigned(v) => *v as u16,
+                    CosemDataType::Unsigned(v) => u16::from(*v),
                     _ => return Err("SAP must be long-unsigned".to_string()),
                 };
                 let logical_device_name = match &fields[1] {

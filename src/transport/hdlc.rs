@@ -35,7 +35,7 @@ pub const FLAG: u8 = 0x7E;
 pub fn fcs16(data: &[u8]) -> u16 {
     let mut fcs: u16 = 0xFFFF;
     for &byte in data {
-        fcs ^= byte as u16;
+        fcs ^= u16::from(byte);
         for _ in 0..8 {
             if fcs & 1 != 0 {
                 fcs = (fcs >> 1) ^ 0x8408;
@@ -100,14 +100,14 @@ impl HdlcAddress {
 
     /// Creates a single-octet address (typical for a client address).
     pub fn one_byte(value: u8) -> Self {
-        HdlcAddress { value: value as u32, length: 1 }
+        HdlcAddress { value: u32::from(value), length: 1 }
     }
 
     fn encode(&self, out: &mut Vec<u8>) {
         for i in (0..self.length).rev() {
             let group = ((self.value >> (7 * i)) & 0x7F) as u8;
             let last = i == 0;
-            out.push((group << 1) | last as u8);
+            out.push((group << 1) | u8::from(last));
         }
     }
 
@@ -117,7 +117,7 @@ impl HdlcAddress {
         loop {
             let idx = offset + consumed;
             let byte = *bytes.get(idx).ok_or(HdlcError::Truncated)?;
-            value = (value << 7) | ((byte >> 1) as u32);
+            value = (value << 7) | u32::from(byte >> 1);
             consumed += 1;
             if byte & 1 == 1 {
                 break;
@@ -276,10 +276,10 @@ impl XidParams {
         params.extend_from_slice(&self.max_info_rx.to_be_bytes());
         params.push(0x07);
         params.push(0x04);
-        params.extend_from_slice(&(self.window_tx as u32).to_be_bytes());
+        params.extend_from_slice(&u32::from(self.window_tx).to_be_bytes());
         params.push(0x08);
         params.push(0x04);
-        params.extend_from_slice(&(self.window_rx as u32).to_be_bytes());
+        params.extend_from_slice(&u32::from(self.window_rx).to_be_bytes());
 
         let mut out = vec![0x81, 0x80, params.len() as u8];
         out.extend_from_slice(&params);
@@ -500,7 +500,7 @@ impl<T: PhysicalTransport> HdlcLayer<T> {
             send_seq: 0,
             recv_seq: 0,
             connected: false,
-            inter_octet_timeout: Duration::from_millis(INTER_OCTET_DEFAULT_MS as u64),
+            inter_octet_timeout: Duration::from_millis(u64::from(INTER_OCTET_DEFAULT_MS)),
             inactivity_timeout: None,
             xid_configured: XidParams::client_default(),
             xid: XidParams::client_default(),
@@ -517,7 +517,7 @@ impl<T: PhysicalTransport> HdlcLayer<T> {
             send_seq: 0,
             recv_seq: 0,
             connected: false,
-            inter_octet_timeout: Duration::from_millis(INTER_OCTET_DEFAULT_MS as u64),
+            inter_octet_timeout: Duration::from_millis(u64::from(INTER_OCTET_DEFAULT_MS)),
             inactivity_timeout: None,
             xid_configured: XidParams::server_default(),
             xid: XidParams::server_default(),
@@ -532,7 +532,7 @@ impl<T: PhysicalTransport> HdlcLayer<T> {
     /// Has an effect only if the underlying [`PhysicalTransport`] honours
     /// [`PhysicalTransport::set_read_timeout`].
     pub fn set_inter_octet_timeout_ms(&mut self, ms: u16) {
-        self.inter_octet_timeout = Duration::from_millis(ms.clamp(INTER_OCTET_MIN_MS, INTER_OCTET_MAX_MS) as u64);
+        self.inter_octet_timeout = Duration::from_millis(u64::from(ms.clamp(INTER_OCTET_MIN_MS, INTER_OCTET_MAX_MS)));
     }
 
     /// Sets the inactivity timeout (IEC 62056-46 "межкадровый"): the maximum
@@ -546,7 +546,7 @@ impl<T: PhysicalTransport> HdlcLayer<T> {
     /// [`PhysicalTransport::set_read_timeout`].
     pub fn set_inactivity_timeout_s(&mut self, seconds: u16) {
         let seconds = seconds.min(INACTIVITY_MAX_S);
-        self.inactivity_timeout = if seconds == 0 { None } else { Some(Duration::from_secs(seconds as u64)) };
+        self.inactivity_timeout = if seconds == 0 { None } else { Some(Duration::from_secs(u64::from(seconds))) };
     }
 
     /// Sets this station's XID ceiling — the ceiling is what SNRM proposes

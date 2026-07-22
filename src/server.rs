@@ -790,8 +790,8 @@ fn apply_selective_access(
 fn selective_index(value: &CosemDataType) -> Option<u32> {
     match value {
         CosemDataType::DoubleLongUnsigned(v) => Some(*v),
-        CosemDataType::LongUnsigned(v) => Some(*v as u32),
-        CosemDataType::Unsigned(v) => Some(*v as u32),
+        CosemDataType::LongUnsigned(v) => Some(u32::from(*v)),
+        CosemDataType::Unsigned(v) => Some(u32::from(*v)),
         _ => None,
     }
 }

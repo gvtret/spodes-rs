@@ -228,7 +228,7 @@ fn take_conformance(bytes: &[u8]) -> Result<(u32, usize), ServiceError> {
     let value = bytes.get(3..3 + len).ok_or(ServiceError::Truncated)?;
     let mut conformance = 0u32;
     for &b in &value[1..] {
-        conformance = (conformance << 8) | b as u32;
+        conformance = (conformance << 8) | u32::from(b);
     }
     Ok((conformance, 3 + len))
 }

@@ -197,7 +197,7 @@ fn take_long_unsigned(value: &CosemDataType) -> Result<u16, BerError> {
 fn take_u16(value: &CosemDataType) -> Result<u16, BerError> {
     match value {
         CosemDataType::LongUnsigned(v) => Ok(*v),
-        CosemDataType::Unsigned(v) => Ok(*v as u16),
+        CosemDataType::Unsigned(v) => Ok(u16::from(*v)),
         _ => Err(BerError::InvalidTag),
     }
 }

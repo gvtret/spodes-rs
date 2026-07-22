@@ -225,7 +225,7 @@ impl GetResponse {
             GetResponse::WithDataBlock { invoke_id_and_priority, last_block, block_number, raw_data } => {
                 buf.push(response_type::WITH_DATABLOCK);
                 buf.push(*invoke_id_and_priority);
-                buf.push(*last_block as u8);
+                buf.push(u8::from(*last_block));
                 buf.extend_from_slice(&block_number.to_be_bytes());
                 match raw_data {
                     Ok(data) => {

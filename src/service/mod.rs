@@ -270,7 +270,7 @@ impl RawApdu {
 impl DataBlockSa {
     /// Appends the block encoding to `buf`.
     pub fn encode(&self, buf: &mut Vec<u8>) {
-        buf.push(self.last_block as u8);
+        buf.push(u8::from(self.last_block));
         buf.extend_from_slice(&self.block_number.to_be_bytes());
         push_length(self.raw_data.len(), buf);
         buf.extend_from_slice(&self.raw_data);

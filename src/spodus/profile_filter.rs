@@ -141,12 +141,12 @@ fn compare(a: &CosemDataType, b: &CosemDataType) -> Option<Ordering> {
 /// The integer value of a numeric COSEM type, if it is one.
 fn as_int(v: &CosemDataType) -> Option<i128> {
     Some(match v {
-        CosemDataType::Integer(i) => *i as i128,
-        CosemDataType::Long(i) => *i as i128,
-        CosemDataType::DoubleLong(i) => *i as i128,
-        CosemDataType::Unsigned(u) | CosemDataType::Enum(u) => *u as i128,
-        CosemDataType::LongUnsigned(u) => *u as i128,
-        CosemDataType::DoubleLongUnsigned(u) => *u as i128,
+        CosemDataType::Integer(i) => i128::from(*i),
+        CosemDataType::Long(i) => i128::from(*i),
+        CosemDataType::DoubleLong(i) => i128::from(*i),
+        CosemDataType::Unsigned(u) | CosemDataType::Enum(u) => i128::from(*u),
+        CosemDataType::LongUnsigned(u) => i128::from(*u),
+        CosemDataType::DoubleLongUnsigned(u) => i128::from(*u),
         _ => return None,
     })
 }
