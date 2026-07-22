@@ -1104,10 +1104,9 @@ pub struct AttributeAccessItem {
 
 impl From<AttributeAccessItem> for CosemDataType {
     fn from(item: AttributeAccessItem) -> Self {
-        let access_selectors = match item.access_selectors {
-            Some(ids) => CosemDataType::Array(ids.into_iter().map(CosemDataType::Integer).collect()),
-            None => CosemDataType::Null,
-        };
+        let access_selectors = item.access_selectors.map_or(CosemDataType::Null, |ids| {
+            CosemDataType::Array(ids.into_iter().map(CosemDataType::Integer).collect())
+        });
         CosemDataType::Structure(vec![
             CosemDataType::Integer(item.attribute_id),
             CosemDataType::Enum(item.access_mode),

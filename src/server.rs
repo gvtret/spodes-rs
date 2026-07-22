@@ -196,28 +196,22 @@ impl RequestDispatcher {
     /// Checks whether a read is allowed for the given object and attribute.
     /// Returns true if no association is set (unrestricted access).
     fn check_read(&self, class_id: u16, instance: &ObisCode, attribute_id: i8) -> bool {
-        match &self.association {
-            None => true, // No association — unrestricted
-            Some(assoc) => assoc.can_read(class_id, instance, attribute_id),
-        }
+        // No association — unrestricted.
+        self.association.as_ref().is_none_or(|assoc| assoc.can_read(class_id, instance, attribute_id))
     }
 
     /// Checks whether a write is allowed for the given object and attribute.
     /// Returns true if no association is set (unrestricted access).
     fn check_write(&self, class_id: u16, instance: &ObisCode, attribute_id: i8) -> bool {
-        match &self.association {
-            None => true, // No association — unrestricted
-            Some(assoc) => assoc.can_write(class_id, instance, attribute_id),
-        }
+        // No association — unrestricted.
+        self.association.as_ref().is_none_or(|assoc| assoc.can_write(class_id, instance, attribute_id))
     }
 
     /// Checks whether a method invocation is allowed.
     /// Returns true if no association is set (unrestricted access).
     fn check_invoke(&self, class_id: u16, instance: &ObisCode, method_id: i8) -> bool {
-        match &self.association {
-            None => true, // No association — unrestricted
-            Some(assoc) => assoc.can_invoke(class_id, instance, method_id),
-        }
+        // No association — unrestricted.
+        self.association.as_ref().is_none_or(|assoc| assoc.can_invoke(class_id, instance, method_id))
     }
 
     /// Reads one attribute, returning its value or a data-access-result code.
@@ -235,8 +229,8 @@ impl RequestDispatcher {
             );
             return GetDataResult::AccessResult(data_access_result::READ_WRITE_DENIED);
         }
-        match self.find(d.class_id, &d.instance_id) {
-            None => {
+        self.find(d.class_id, &d.instance_id).map_or_else(
+            || {
                 #[cfg(feature = "tracing")]
                 debug!(
                     class_id = d.class_id,
@@ -245,8 +239,8 @@ impl RequestDispatcher {
                     "GET: object undefined"
                 );
                 GetDataResult::AccessResult(data_access_result::OBJECT_UNDEFINED)
-            }
-            Some(obj) => match obj.attributes().into_iter().find(|(id, _)| *id as i8 == attr_id) {
+            },
+            |obj| match obj.attributes().into_iter().find(|(id, _)| *id as i8 == attr_id) {
                 Some((_, value)) => {
                     #[cfg(feature = "tracing")]
                     debug!(
@@ -259,7 +253,7 @@ impl RequestDispatcher {
                 }
                 None => GetDataResult::AccessResult(data_access_result::OBJECT_UNAVAILABLE),
             },
-        }
+        )
     }
 
     /// Writes one attribute, returning a data-access-result code.
@@ -276,8 +270,8 @@ impl RequestDispatcher {
             );
             return data_access_result::READ_WRITE_DENIED;
         }
-        match self.find(d.class_id, &d.instance_id) {
-            None => {
+        self.find(d.class_id, &d.instance_id).map_or_else(
+            || {
                 #[cfg(feature = "tracing")]
                 debug!(
                     class_id = d.class_id,
@@ -286,8 +280,8 @@ impl RequestDispatcher {
                     "SET: object undefined"
                 );
                 data_access_result::OBJECT_UNDEFINED
-            }
-            Some(obj) => match obj.set_attribute(d.attribute_id as u8, value) {
+            },
+            |obj| match obj.set_attribute(d.attribute_id as u8, value) {
                 Ok(()) => {
                     #[cfg(feature = "tracing")]
                     debug!(
@@ -300,7 +294,7 @@ impl RequestDispatcher {
                 }
                 Err(_) => data_access_result::READ_WRITE_DENIED,
             },
-        }
+        )
     }
 
     /// Invokes one method, returning the action-result and optional return data.
@@ -321,8 +315,8 @@ impl RequestDispatcher {
             );
             return (data_access_result::READ_WRITE_DENIED, None);
         }
-        match self.find(d.class_id, &d.instance_id) {
-            None => {
+        self.find(d.class_id, &d.instance_id).map_or_else(
+            || {
                 #[cfg(feature = "tracing")]
                 debug!(
                     class_id = d.class_id,
@@ -331,8 +325,8 @@ impl RequestDispatcher {
                     "ACTION: object undefined"
                 );
                 (data_access_result::OBJECT_UNDEFINED, None)
-            }
-            Some(obj) => match obj.invoke_method(d.method_id as u8, params) {
+            },
+            |obj| match obj.invoke_method(d.method_id as u8, params) {
                 Ok(crate::types::CosemDataType::Null) => {
                     #[cfg(feature = "tracing")]
                     debug!(
@@ -364,7 +358,7 @@ impl RequestDispatcher {
                     (data_access_result::OTHER_REASON, None)
                 }
             },
-        }
+        )
     }
 
     /// Dispatches one request APDU to the addressed object and returns the
@@ -529,12 +523,10 @@ impl RequestDispatcher {
         if let Some(assoc) = self.association.as_mut() {
             assoc.set_association_status(association_status::NON_ASSOCIATED);
         }
-        match ReleaseRequest::decode_rlrq(request) {
-            Ok(release) => release.encode_rlre(),
-            Err(_) => {
-                ReleaseRequest { reason: Some(acse::release_reason::NORMAL), user_information: None }.encode_rlre()
-            }
-        }
+        ReleaseRequest::decode_rlrq(request).map_or_else(
+            |_| ReleaseRequest { reason: Some(acse::release_reason::NORMAL), user_information: None }.encode_rlre(),
+            |release| release.encode_rlre(),
+        )
     }
 
     /// Builds the negotiated InitiateResponse: the conformance is ANDed with
@@ -773,15 +765,14 @@ fn selective_index(value: &CosemDataType) -> Option<u32> {
 /// diagnostic; `initiate_err` adds an `initiateError` ConfirmedServiceError to
 /// the user-information.
 fn reject_aare(application_context: u8, diagnostic: u8, initiate_err: Option<u8>) -> Vec<u8> {
-    let user_information = match initiate_err {
-        Some(value) => ConfirmedServiceError {
+    let user_information = initiate_err.map_or_else(Vec::new, |value| {
+        ConfirmedServiceError {
             service: crate::service::error::service::INITIATE_ERROR,
             category: crate::service::error::category::INITIATE,
             value,
         }
-        .encode(),
-        None => Vec::new(),
-    };
+        .encode()
+    });
     AssociationResponse {
         application_context,
         result: acse::result::REJECTED_PERMANENT,
