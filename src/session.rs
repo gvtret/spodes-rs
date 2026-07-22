@@ -758,13 +758,11 @@ impl<L: DataLinkLayer> ClientSession<L> {
                     #[cfg(feature = "tracing")]
                     warn!(attempt, error = %e, "transient I/O error, will retry");
                     last_error = Some(SessionError::Io(e));
-                    continue;
                 }
                 Err(SessionError::UnexpectedApdu(t)) if attempt + 1 < max_attempts => {
                     #[cfg(feature = "tracing")]
                     warn!(attempt, tag = format_args!("0x{t:02X}"), "unexpected APDU tag, will retry");
                     last_error = Some(SessionError::UnexpectedApdu(t));
-                    continue;
                 }
                 Err(e) => return Err(e),
             }

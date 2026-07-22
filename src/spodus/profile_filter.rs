@@ -114,10 +114,10 @@ impl ProfileDataFilter {
         let mut filters = Vec::new();
         if let Some(CosemDataType::Structure(fields)) = params {
             if let Some(CosemDataType::Array(s)) = fields.get(1) {
-                selected = s.clone();
+                selected.clone_from(s);
             }
             if let Some(CosemDataType::Array(f)) = fields.get(2) {
-                filters = f.clone();
+                filters.clone_from(f);
             }
         }
         (selected, filters)

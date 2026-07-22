@@ -293,7 +293,7 @@ impl InterfaceClass for ProfileGeneric {
                     return Err(BerError::InvalidTag);
                 }
                 if let CosemDataType::Array(buffer) = &seq[2] {
-                    self.buffer = buffer.clone();
+                    self.buffer.clone_from(buffer);
                 } else {
                     return Err(BerError::InvalidTag);
                 }

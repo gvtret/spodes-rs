@@ -172,7 +172,7 @@ impl InterfaceClass for RegisterActivation {
                     return Err(BerError::InvalidTag);
                 }
                 if let CosemDataType::OctetString(bytes) = &seq[4] {
-                    self.active_mask = bytes.clone();
+                    self.active_mask.clone_from(bytes);
                 } else {
                     return Err(BerError::InvalidTag);
                 }
