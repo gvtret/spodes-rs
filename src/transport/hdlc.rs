@@ -894,12 +894,8 @@ impl<T: PhysicalTransport> DataLinkLayer for HdlcLayer<T> {
                         }
                         // Wrong N(S): RR with current N(R), do not advance.
                         if send_seq != self.recv_seq {
-                            let rr = Control::ReceiveReady {
-                                recv_seq: self.recv_seq,
-                                poll_final: true,
-                            };
-                            self.transport
-                                .send(&HdlcFrame::new(self.peer, self.own, rr, Vec::new()).encode())?;
+                            let rr = Control::ReceiveReady { recv_seq: self.recv_seq, poll_final: true };
+                            self.transport.send(&HdlcFrame::new(self.peer, self.own, rr, Vec::new()).encode())?;
                             continue;
                         }
                     }
@@ -1191,13 +1187,8 @@ mod tests {
             Control::Information { send_seq: 0, recv_seq: 0, poll: true },
             vec![0xE6, 0xE6, 0x00, 0x60, 0x36],
         ));
-        server
-            .transport_mut()
-            .feed(&client_frame(Control::Ui { poll: true }, vec![0xAA]));
-        server.transport_mut().feed(&client_frame(
-            Control::ReceiveReady { recv_seq: 3, poll_final: true },
-            Vec::new(),
-        ));
+        server.transport_mut().feed(&client_frame(Control::Ui { poll: true }, vec![0xAA]));
+        server.transport_mut().feed(&client_frame(Control::ReceiveReady { recv_seq: 3, poll_final: true }, Vec::new()));
         // Then SNRM → UA → NRM and a normal I-frame.
         server.transport_mut().feed(&client_frame(Control::Snrm { poll: true }, Vec::new()));
         server.transport_mut().feed(&client_frame(
@@ -1262,10 +1253,9 @@ mod tests {
         let big = vec![0xAAu8; 64];
         let info = Control::Information { send_seq: 0, recv_seq: 0, poll: true };
         server.transport_mut().feed(&client_frame(info, big));
-        server.transport_mut().feed(&client_frame(
-            Control::Information { send_seq: 0, recv_seq: 0, poll: true },
-            vec![0xC0, 0x01],
-        ));
+        server
+            .transport_mut()
+            .feed(&client_frame(Control::Information { send_seq: 0, recv_seq: 0, poll: true }, vec![0xC0, 0x01]));
         let apdu = server.receive_apdu().unwrap();
         assert_eq!(apdu, vec![0xC0, 0x01]);
         let frmr = HdlcFrame::decode(&server.read_frame().unwrap()).unwrap();
@@ -1279,10 +1269,9 @@ mod tests {
         server.send_seq = 0;
         let rr = Control::ReceiveReady { recv_seq: 1, poll_final: true };
         server.transport_mut().feed(&client_frame(rr, Vec::new()));
-        server.transport_mut().feed(&client_frame(
-            Control::Information { send_seq: 0, recv_seq: 0, poll: true },
-            vec![0xBB],
-        ));
+        server
+            .transport_mut()
+            .feed(&client_frame(Control::Information { send_seq: 0, recv_seq: 0, poll: true }, vec![0xBB]));
         let apdu = server.receive_apdu().unwrap();
         assert_eq!(apdu, vec![0xBB]);
         let frmr = HdlcFrame::decode(&server.read_frame().unwrap()).unwrap();
@@ -1297,20 +1286,13 @@ mod tests {
         // N(S)=1 while V(R)=0
         let info = Control::Information { send_seq: 1, recv_seq: 0, poll: true };
         server.transport_mut().feed(&client_frame(info, vec![0xE6, 0xE6, 0x00, 0x60]));
-        server.transport_mut().feed(&client_frame(
-            Control::Information { send_seq: 0, recv_seq: 0, poll: true },
-            vec![0xC0],
-        ));
+        server
+            .transport_mut()
+            .feed(&client_frame(Control::Information { send_seq: 0, recv_seq: 0, poll: true }, vec![0xC0]));
         let apdu = server.receive_apdu().unwrap();
         assert_eq!(apdu, vec![0xC0]);
         let rr = HdlcFrame::decode(&server.read_frame().unwrap()).unwrap();
-        assert!(matches!(
-            rr.control,
-            Control::ReceiveReady {
-                recv_seq: 0,
-                poll_final: true
-            }
-        ));
+        assert!(matches!(rr.control, Control::ReceiveReady { recv_seq: 0, poll_final: true }));
     }
 
     // ------------------------------------------------------------------
@@ -1322,10 +1304,9 @@ mod tests {
         let mut server = server_layer();
         assert!(!server.is_connected(), "starts in NDM");
         server.transport_mut().feed(&client_frame(Control::Snrm { poll: true }, Vec::new()));
-        server.transport_mut().feed(&client_frame(
-            Control::Information { send_seq: 0, recv_seq: 0, poll: true },
-            vec![0x01],
-        ));
+        server
+            .transport_mut()
+            .feed(&client_frame(Control::Information { send_seq: 0, recv_seq: 0, poll: true }, vec![0x01]));
         assert_eq!(server.receive_apdu().unwrap(), vec![0x01]);
         assert!(server.is_connected(), "NDM --SNRM/UA--> NRM");
         let ua = HdlcFrame::decode(&server.read_frame().unwrap()).unwrap();
@@ -1351,10 +1332,9 @@ mod tests {
         server.transport_mut().feed(&client_frame(Control::Disc { poll: true }, Vec::new()));
         // Unblock receive_apdu after DM handling with SNRM + I.
         server.transport_mut().feed(&client_frame(Control::Snrm { poll: true }, Vec::new()));
-        server.transport_mut().feed(&client_frame(
-            Control::Information { send_seq: 0, recv_seq: 0, poll: true },
-            vec![0x01],
-        ));
+        server
+            .transport_mut()
+            .feed(&client_frame(Control::Information { send_seq: 0, recv_seq: 0, poll: true }, vec![0x01]));
         let _ = server.receive_apdu().unwrap();
         let dm = HdlcFrame::decode(&server.read_frame().unwrap()).unwrap();
         assert!(matches!(dm.control, Control::Dm { final_bit: true }), "NDM --DISC/DM--> NDM");
@@ -1370,45 +1350,28 @@ mod tests {
 
         // 1) NDM → SNRM → UA → NRM
         server.transport_mut().feed(&client_frame(Control::Snrm { poll: true }, Vec::new()));
-        server.transport_mut().feed(&client_frame(
-            Control::Information { send_seq: 0, recv_seq: 0, poll: true },
-            vec![0xAA],
-        ));
+        server
+            .transport_mut()
+            .feed(&client_frame(Control::Information { send_seq: 0, recv_seq: 0, poll: true }, vec![0xAA]));
         assert_eq!(server.receive_apdu().unwrap(), vec![0xAA]);
         assert!(server.is_connected());
-        assert!(matches!(
-            HdlcFrame::decode(&server.read_frame().unwrap()).unwrap().control,
-            Control::Ua { .. }
-        ));
+        assert!(matches!(HdlcFrame::decode(&server.read_frame().unwrap()).unwrap().control, Control::Ua { .. }));
 
         // 2) NRM → DISC → UA → NDM
         server.transport_mut().feed(&client_frame(Control::Disc { poll: true }, Vec::new()));
-        assert_eq!(
-            server.receive_apdu().unwrap_err().kind(),
-            io::ErrorKind::ConnectionAborted
-        );
+        assert_eq!(server.receive_apdu().unwrap_err().kind(), io::ErrorKind::ConnectionAborted);
         assert!(!server.is_connected());
-        assert!(matches!(
-            HdlcFrame::decode(&server.read_frame().unwrap()).unwrap().control,
-            Control::Ua { .. }
-        ));
+        assert!(matches!(HdlcFrame::decode(&server.read_frame().unwrap()).unwrap().control, Control::Ua { .. }));
 
         // 3) NDM → DISC → DM → NDM
         server.transport_mut().feed(&client_frame(Control::Disc { poll: true }, Vec::new()));
         server.transport_mut().feed(&client_frame(Control::Snrm { poll: true }, Vec::new()));
-        server.transport_mut().feed(&client_frame(
-            Control::Information { send_seq: 0, recv_seq: 0, poll: true },
-            vec![0xBB],
-        ));
+        server
+            .transport_mut()
+            .feed(&client_frame(Control::Information { send_seq: 0, recv_seq: 0, poll: true }, vec![0xBB]));
         assert_eq!(server.receive_apdu().unwrap(), vec![0xBB]);
-        assert!(matches!(
-            HdlcFrame::decode(&server.read_frame().unwrap()).unwrap().control,
-            Control::Dm { .. }
-        ));
-        assert!(matches!(
-            HdlcFrame::decode(&server.read_frame().unwrap()).unwrap().control,
-            Control::Ua { .. }
-        ));
+        assert!(matches!(HdlcFrame::decode(&server.read_frame().unwrap()).unwrap().control, Control::Dm { .. }));
+        assert!(matches!(HdlcFrame::decode(&server.read_frame().unwrap()).unwrap().control, Control::Ua { .. }));
         assert!(server.is_connected());
     }
 
@@ -1447,10 +1410,9 @@ mod tests {
             .transport_mut()
             .feed(&client_frame(Control::Information { send_seq: 1, recv_seq: 0, poll: true }, vec![0xBB]));
         // After bad frame, N(S)=1 is wrong for V(R)=0 → RR, so also feed correct N(S)=0.
-        server.transport_mut().feed(&client_frame(
-            Control::Information { send_seq: 0, recv_seq: 0, poll: true },
-            vec![0xBB],
-        ));
+        server
+            .transport_mut()
+            .feed(&client_frame(Control::Information { send_seq: 0, recv_seq: 0, poll: true }, vec![0xBB]));
         let apdu = server.receive_apdu().unwrap();
         assert_eq!(apdu, vec![0xBB]);
     }
@@ -1581,11 +1543,7 @@ mod tests {
         assert!(err.to_string().contains("inactivity"), "unexpected message: {err}");
         assert!(!layer.is_connected(), "inactivity after inter-octet discard drops to NDM");
         assert!(
-            layer
-                .transport
-                .set_timeout_log
-                .iter()
-                .any(|t| *t == Some(Duration::from_millis(30))),
+            layer.transport.set_timeout_log.iter().any(|t| *t == Some(Duration::from_millis(30))),
             "inter-octet timeout must have been armed for the incomplete frame"
         );
     }
@@ -1645,11 +1603,7 @@ mod tests {
         )
         .encode();
         let mut layer = HdlcLayer::new_server(
-            RecoverTransport {
-                phase: 0,
-                frame,
-                set_timeout_log: Vec::new(),
-            },
+            RecoverTransport { phase: 0, frame, set_timeout_log: Vec::new() },
             HdlcAddress::one_byte(0x03),
             HdlcAddress::one_byte(0x10),
         );
