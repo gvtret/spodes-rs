@@ -126,6 +126,11 @@ pub struct AssociationLn {
     /// Not needed for the plain-hash mechanisms 3/4.
     #[serde(skip)]
     hls_context: Option<HlsContext>,
+    /// Mechanism used for the in-flight four-pass HLS handshake (may differ
+    /// from [`Self::authentication_mechanism`] when the client proposes the
+    /// generic mechanism 2 against a GMAC-configured association).
+    #[serde(skip)]
+    hls_handshake_mechanism: Option<AuthMechanism>,
     /// Consecutive failed `reply_to_HLS_authentication` attempts, for rate
     /// limiting (see [`Self::reply_to_hls_authentication_checked`]).
     #[serde(skip)]
@@ -157,6 +162,7 @@ impl AssociationLn {
             ctos: None,
             stoc: None,
             hls_context: None,
+            hls_handshake_mechanism: None,
             hls_failures: 0,
         }
     }
@@ -185,6 +191,27 @@ impl AssociationLn {
         self.hls_context = Some(ctx);
     }
 
+    /// Updates the client system title used by title-bound HLS mechanisms.
+    pub fn set_client_system_title(&mut self, title: Vec<u8>) {
+        if let Some(ctx) = self.hls_context.as_mut() {
+            ctx.client_system_title = title;
+        }
+    }
+
+    /// Records the mechanism proposed in the AARQ for the four-pass handshake.
+    pub fn set_hls_handshake_mechanism(&mut self, mechanism: AuthMechanism) {
+        self.hls_handshake_mechanism = Some(mechanism);
+    }
+
+    fn hls_mechanism(&self) -> AuthMechanism {
+        self.hls_handshake_mechanism.unwrap_or(self.authentication_mechanism)
+    }
+
+    /// Server system title for the AARE responding-AP-title on HLS pass 1/2.
+    pub fn responding_ap_title_for_hls(&self) -> Option<Vec<u8>> {
+        self.hls_context.as_ref().map(|ctx| ctx.server_system_title.clone()).filter(|title| title.len() == 8)
+    }
+
     /// Returns the authentication mechanism of this association (attribute 6).
     pub fn authentication_mechanism(&self) -> AuthenticationMechanism {
         self.authentication_mechanism
@@ -199,6 +226,11 @@ impl AssociationLn {
     /// 1 = association-pending, 2 = associated.
     pub fn set_association_status(&mut self, status: u8) {
         self.association_status = status;
+    }
+
+    /// Current association status (attribute 8): 0 non-associated, 1 pending, 2 associated.
+    pub fn association_status(&self) -> u8 {
+        self.association_status
     }
 
     /// Method 2: `change_HLS_secret` — replaces the secret (password/key).
@@ -230,7 +262,7 @@ impl AssociationLn {
         let CosemDataType::OctetString(f_stoc) = data else {
             return Err("Expected octet-string for f(StoC)".to_string());
         };
-        let mechanism = self.authentication_mechanism;
+        let mechanism = self.hls_mechanism();
 
         // LLS does not use the four-pass reply_to_HLS: the secret is compared
         // directly (compatible with the LLS password carried in the AARQ).

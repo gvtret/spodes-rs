@@ -140,7 +140,7 @@ fn test_set_writable_data_attribute() {
 }
 
 #[test]
-fn test_set_data_attribute_returns_not_writable() {
+fn test_set_data_attribute_updates_value() {
     let mut server = RequestDispatcher::new();
     server.add(Box::new(Data::new(
         ObisCode::new(0, 0, 96, 1, 0, 0xFF),
@@ -150,17 +150,15 @@ fn test_set_data_attribute_returns_not_writable() {
     let link = LoopbackLink::new(server);
     let mut session = ClientSession::new(link);
 
-    // Data objects don't support SET by default — should return not-writable.
     let obis = ObisCode::new(0, 0, 96, 1, 0, 0xFF);
     let result = session.set(1, obis.clone(), 2, CosemDataType::OctetString(b"new_value".to_vec()));
     assert!(result.is_ok());
 
-    // Value should remain unchanged.
     let value = match session.get(1, obis, 2) {
         Ok(GetResponse::Normal { result: GetDataResult::Data(v), .. }) => v,
         other => panic!("unexpected: {other:?}"),
     };
-    assert_eq!(value, CosemDataType::OctetString(b"old_value".to_vec()));
+    assert_eq!(value, CosemDataType::OctetString(b"new_value".to_vec()));
 }
 
 #[test]
@@ -271,9 +269,7 @@ fn test_get_block_transfer() {
 // ===========================================================================
 
 #[test]
-fn test_set_block_transfer_data_not_writable() {
-    // SET with block transfer on a Data object (not writable) should succeed
-    // at the transport level but the value remains unchanged.
+fn test_set_block_transfer_data_updates_value() {
     let mut server = RequestDispatcher::new();
     server.set_max_pdu(32);
     server.add(Box::new(Data::new(ObisCode::new(1, 0, 99, 1, 0, 0xFF), CosemDataType::Null)));
@@ -283,15 +279,18 @@ fn test_set_block_transfer_data_not_writable() {
 
     let large_value = CosemDataType::Array((0..50).map(CosemDataType::Unsigned).collect());
     let obis = ObisCode::new(1, 0, 99, 1, 0, 0xFF);
-    let result = session.set(1, obis.clone(), 2, large_value);
-    assert!(result.is_ok());
+    assert!(session.set(1, obis.clone(), 2, large_value).is_ok());
 
-    // Value remains Null because Data doesn't support SET.
-    let read_back = match session.get(1, obis, 2) {
-        Ok(GetResponse::Normal { result: GetDataResult::Data(v), .. }) => v,
+    // Large GET returns the first data-block of the written array (tag 0x01).
+    match session.get(1, obis, 2) {
+        Ok(GetResponse::WithDataBlock { raw_data: Ok(bytes), .. }) => {
+            assert_eq!(bytes.first(), Some(&0x01));
+        }
+        Ok(GetResponse::Normal { result: GetDataResult::Data(CosemDataType::Array(items)), .. }) => {
+            assert_eq!(items.len(), 50);
+        }
         other => panic!("unexpected: {other:?}"),
-    };
-    assert_eq!(read_back, CosemDataType::Null);
+    }
 }
 
 // ===========================================================================

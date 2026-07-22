@@ -70,6 +70,11 @@ pub trait DataLinkLayer {
 
     /// Receives and de-frames one APDU.
     fn receive_apdu(&mut self) -> io::Result<Vec<u8>>;
+
+    /// Client SAP learned from the data-link peer address, when known.
+    fn client_sap(&self) -> Option<u8> {
+        None
+    }
 }
 
 /// An in-memory loopback transport, primarily for tests: bytes written with
