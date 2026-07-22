@@ -29,7 +29,7 @@ fn main() {
     // Выводим начальные атрибуты
     println!("Initial attributes:");
     for (id, value) in register_activation.attributes() {
-        println!("Attribute {}: {:?}", id, value);
+        println!("Attribute {id}: {value:?}");
     }
 
     // Добавляем новую маску
@@ -38,27 +38,27 @@ fn main() {
         CosemDataType::Array(vec![CosemDataType::Unsigned(2)]),                     // register_indices
     ]);
     match register_activation.invoke_method(1, Some(new_mask.clone())) {
-        Ok(result) => println!("Add mask result: {:?}", result),
-        Err(e) => println!("Add mask failed: {}", e),
+        Ok(result) => println!("Add mask result: {result:?}"),
+        Err(e) => println!("Add mask failed: {e}"),
     }
 
     // Выводим атрибуты после добавления маски
     println!("\nAttributes after adding mask:");
     for (id, value) in register_activation.attributes() {
-        println!("Attribute {}: {:?}", id, value);
+        println!("Attribute {id}: {value:?}");
     }
 
     // Удаляем маску "TARIFF1"
     let mask_name = CosemDataType::OctetString(vec![0x54, 0x41, 0x52, 0x49, 0x46, 0x46, 0x31]);
     match register_activation.invoke_method(2, Some(mask_name)) {
-        Ok(result) => println!("Delete mask result: {:?}", result),
-        Err(e) => println!("Delete mask failed: {}", e),
+        Ok(result) => println!("Delete mask result: {result:?}"),
+        Err(e) => println!("Delete mask failed: {e}"),
     }
 
     // Выводим атрибуты после удаления маски
     println!("\nAttributes after deleting mask:");
     for (id, value) in register_activation.attributes() {
-        println!("Attribute {}: {:?}", id, value);
+        println!("Attribute {id}: {value:?}");
     }
 
     // Сериализация и десериализация
@@ -75,6 +75,6 @@ fn main() {
     // Выводим атрибуты после десериализации
     println!("\nAttributes after deserialization:");
     for (id, value) in deserialized.attributes() {
-        println!("Attribute {}: {:?}", id, value);
+        println!("Attribute {id}: {value:?}");
     }
 }

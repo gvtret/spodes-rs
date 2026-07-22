@@ -28,7 +28,7 @@ fn main() {
 
     // Сериализуем объект
     let serialized = serialize_object(&special_days_table).expect("Serialization failed");
-    println!("Serialized data: {:?}", serialized);
+    println!("Serialized data: {serialized:?}");
 
     // Создаём новый объект для десериализации
     let config = SpecialDaysTableConfig { logical_name: obis.clone(), entries: vec![] };
@@ -48,7 +48,7 @@ fn main() {
         CosemDataType::Unsigned(2),                                                 // day_id
     ]);
     let result = special_days_table.invoke_method(1, Some(new_date.clone())).expect("Insert method failed");
-    println!("Insert result: {:?}", result);
+    println!("Insert result: {result:?}");
     if let CosemDataType::Array(items) = &special_days_table.attributes()[1].1 {
         println!("Entries after insert: {:?}", items.len());
         assert_eq!(items.len(), 2);
@@ -61,7 +61,7 @@ fn main() {
         CosemDataType::Unsigned(1),
     ]);
     let result = special_days_table.invoke_method(2, Some(delete_data)).expect("Delete method failed");
-    println!("Delete result: {:?}", result);
+    println!("Delete result: {result:?}");
     if let CosemDataType::Array(items) = &special_days_table.attributes()[1].1 {
         println!("Entries after delete: {:?}", items.len());
         assert_eq!(items.len(), 1);

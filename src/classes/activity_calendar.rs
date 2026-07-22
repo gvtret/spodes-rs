@@ -124,9 +124,8 @@ impl InterfaceClass for ActivityCalendar {
         if !rest.is_empty() {
             return Err(BerError::InvalidTag);
         }
-        let seq = match tlv {
-            CosemDataType::Structure(seq) => seq,
-            _ => return Err(BerError::InvalidTag),
+        let CosemDataType::Structure(seq) = tlv else {
+            return Err(BerError::InvalidTag);
         };
         // class_id + 10 attributes.
         if seq.len() != 11 {
@@ -163,7 +162,7 @@ impl InterfaceClass for ActivityCalendar {
     fn invoke_method(&mut self, method_id: u8, _params: Option<CosemDataType>) -> Result<CosemDataType, String> {
         match method_id {
             1 => self.activate_passive_calendar(),
-            _ => Err(format!("Method {} not supported for Activity calendar", method_id)),
+            _ => Err(format!("Method {method_id} not supported for Activity calendar")),
         }
     }
 

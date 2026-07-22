@@ -240,7 +240,7 @@ impl InterfaceClass for DemandRegister {
         match method_id {
             1 => self.reset(),
             2 => self.next_period(),
-            _ => Err(format!("Method {} not supported for DemandRegister class", method_id)),
+            _ => Err(format!("Method {method_id} not supported for DemandRegister class")),
         }
     }
 

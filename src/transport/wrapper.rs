@@ -57,9 +57,9 @@ impl std::fmt::Display for WrapperError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
             WrapperError::TooShort => write!(f, "wrapper header is shorter than 8 octets"),
-            WrapperError::UnsupportedVersion(v) => write!(f, "unsupported wrapper version {:#06x}", v),
+            WrapperError::UnsupportedVersion(v) => write!(f, "unsupported wrapper version {v:#06x}"),
             WrapperError::LengthMismatch { declared, actual } => {
-                write!(f, "wrapper length mismatch: declared {}, actual {}", declared, actual)
+                write!(f, "wrapper length mismatch: declared {declared}, actual {actual}")
             }
         }
     }

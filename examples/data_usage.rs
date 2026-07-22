@@ -9,15 +9,15 @@ fn main() {
     let value = CosemDataType::Integer(42);
     let data = Data::new(obis.clone(), value);
 
-    println!("Data object: {:?}", data);
+    println!("Data object: {data:?}");
     println!("Logical name: {}", data.logical_name());
     println!("Class ID: {}", data.class_id());
     println!("Version: {}", data.version());
 
     let serialized = serialize_object(&data).expect("Serialization failed");
-    println!("Serialized data: {:?}", serialized);
+    println!("Serialized data: {serialized:?}");
 
     let mut deserialized = Data::new(obis, CosemDataType::Null);
     deserialize_object(&mut deserialized, &serialized).expect("Deserialization failed");
-    println!("Deserialized data: {:?}", deserialized);
+    println!("Deserialized data: {deserialized:?}");
 }

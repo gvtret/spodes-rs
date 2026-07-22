@@ -11,19 +11,19 @@ fn main() {
     let scaler_unit = ScalerUnit::new(0, 0x1B);
     let mut register = Register::new(obis.clone(), value, scaler_unit);
 
-    println!("Register object: {:?}", register);
+    println!("Register object: {register:?}");
     println!("Logical name: {}", register.logical_name());
     println!("Class ID: {}", register.class_id());
     println!("Version: {}", register.version());
 
     let serialized = serialize_object(&register).expect("Serialization failed");
-    println!("Serialized register: {:?}", serialized);
+    println!("Serialized register: {serialized:?}");
 
     let mut deserialized = Register::new(obis, CosemDataType::Null, ScalerUnit::new(0, 0));
     deserialize_object(&mut deserialized, &serialized).expect("Deserialization failed");
-    println!("Deserialized register: {:?}", deserialized);
+    println!("Deserialized register: {deserialized:?}");
 
     let reset_result = register.invoke_method(1, None).expect("Reset method failed");
-    println!("Reset result: {:?}", reset_result);
-    println!("Register after reset: {:?}", register);
+    println!("Reset result: {reset_result:?}");
+    println!("Register after reset: {register:?}");
 }

@@ -220,9 +220,8 @@ impl InterfaceClass for PushSetup {
         if !rest.is_empty() {
             return Err(BerError::InvalidTag);
         }
-        let seq = match tlv {
-            CosemDataType::Structure(seq) => seq,
-            _ => return Err(BerError::InvalidTag),
+        let CosemDataType::Structure(seq) = tlv else {
+            return Err(BerError::InvalidTag);
         };
         // The element count (class_id + attributes) identifies the version:
         // 8 → v0, 11 → v1, 14 → v2.
@@ -370,8 +369,8 @@ mod tests {
             let obj = sample_versioned(version);
             assert_eq!(obj.class_id(), 40);
             assert_eq!(obj.version(), version);
-            assert_eq!(obj.attributes().len(), attr_count, "attrs for v{}", version);
-            assert_eq!(obj.methods().len(), method_count, "methods for v{}", version);
+            assert_eq!(obj.attributes().len(), attr_count, "attrs for v{version}");
+            assert_eq!(obj.methods().len(), method_count, "methods for v{version}");
         }
     }
 

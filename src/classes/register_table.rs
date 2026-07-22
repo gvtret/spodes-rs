@@ -95,9 +95,8 @@ impl InterfaceClass for RegisterTable {
         if !rest.is_empty() {
             return Err(BerError::InvalidTag);
         }
-        let seq = match tlv {
-            CosemDataType::Structure(seq) => seq,
-            _ => return Err(BerError::InvalidTag),
+        let CosemDataType::Structure(seq) = tlv else {
+            return Err(BerError::InvalidTag);
         };
         if seq.len() != 5 {
             return Err(BerError::InvalidLength);
@@ -133,7 +132,7 @@ impl InterfaceClass for RegisterTable {
             // Method 2 `capture` is host-driven: the values live outside the
             // object model, so capturing is delegated to the application.
             2 => Ok(CosemDataType::Null),
-            _ => Err(format!("Method {} not supported for Register table class", method_id)),
+            _ => Err(format!("Method {method_id} not supported for Register table class")),
         }
     }
 

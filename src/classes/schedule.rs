@@ -130,9 +130,8 @@ impl InterfaceClass for Schedule {
         if !rest.is_empty() {
             return Err(BerError::InvalidTag);
         }
-        let seq = match tlv {
-            CosemDataType::Structure(seq) => seq,
-            _ => return Err(BerError::InvalidTag),
+        let CosemDataType::Structure(seq) = tlv else {
+            return Err(BerError::InvalidTag);
         };
         if seq.len() == 4 {
             if let CosemDataType::LongUnsigned(class_id) = seq[0] {
@@ -176,7 +175,7 @@ impl InterfaceClass for Schedule {
             1 => self.enable_disable(params),
             2 => self.insert(params),
             3 => self.delete(params),
-            _ => Err(format!("Method {} not supported for Schedule class", method_id)),
+            _ => Err(format!("Method {method_id} not supported for Schedule class")),
         }
     }
 

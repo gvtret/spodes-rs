@@ -19,7 +19,7 @@ fn main() {
     let m = mac.finalize().into_bytes();
     print!("MAC: ");
     for b in m.iter() {
-        print!("{:02x}", b);
+        print!("{b:02x}");
     }
     println!();
     use streebog::Digest;
@@ -32,7 +32,7 @@ fn main() {
     let h = d.finalize();
     print!("STREEBOG: ");
     for b in h.iter() {
-        print!("{:02x}", b);
+        print!("{b:02x}");
     }
     println!();
 }

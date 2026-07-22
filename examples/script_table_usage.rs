@@ -32,7 +32,7 @@ fn main() {
 
     // Сериализуем объект
     let serialized = serialize_object(&script_table).expect("Serialization failed");
-    println!("Serialized data: {:?}", serialized);
+    println!("Serialized data: {serialized:?}");
 
     // Создаём новый объект для десериализации
     let config = ScriptTableConfig { logical_name: obis.clone(), scripts: vec![] };
@@ -48,13 +48,13 @@ fn main() {
     // Вызываем метод execute для скрипта с идентификатором 1
     let script_id = CosemDataType::LongUnsigned(1);
     let result = script_table.invoke_method(1, Some(script_id)).expect("Execute script failed");
-    println!("Execute script result: {:?}", result);
+    println!("Execute script result: {result:?}");
 
     // Проверяем выполнение несуществующего скрипта
     let invalid_script_id = CosemDataType::LongUnsigned(2);
     let result = script_table.invoke_method(1, Some(invalid_script_id));
     match result {
         Ok(_) => println!("Unexpected success for invalid script"),
-        Err(e) => println!("Expected error for invalid script: {}", e),
+        Err(e) => println!("Expected error for invalid script: {e}"),
     }
 }

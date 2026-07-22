@@ -564,16 +564,13 @@ impl RequestDispatcher {
         // A malformed GET from an associated client is answered with a
         // data-access-result instead of dropping the session (the invoke-id is
         // salvaged from the raw APDU when present).
-        let decoded = match GetRequest::decode(request) {
-            Ok(r) => r,
-            Err(_) => {
-                let invoke_id_and_priority = request.get(2).copied().unwrap_or(0);
-                return GetResponse::Normal {
-                    invoke_id_and_priority,
-                    result: GetDataResult::AccessResult(data_access_result::OTHER_REASON),
-                }
-                .encode();
+        let Ok(decoded) = GetRequest::decode(request) else {
+            let invoke_id_and_priority = request.get(2).copied().unwrap_or(0);
+            return GetResponse::Normal {
+                invoke_id_and_priority,
+                result: GetDataResult::AccessResult(data_access_result::OTHER_REASON),
             }
+            .encode();
         };
         match decoded {
             GetRequest::Normal { invoke_id_and_priority, attribute, access_selection } => {
@@ -649,14 +646,11 @@ impl RequestDispatcher {
     fn dispatch_set(&mut self, request: &[u8]) -> Result<Vec<u8>, ServiceError> {
         // A malformed SET is answered with a data-access-result instead of
         // dropping the session.
-        let decoded = match SetRequest::decode(request) {
-            Ok(r) => r,
-            Err(_) => {
-                let invoke_id_and_priority = request.get(2).copied().unwrap_or(0);
-                return Ok(
-                    SetResponse::Normal { invoke_id_and_priority, result: data_access_result::OTHER_REASON }.encode()
-                );
-            }
+        let Ok(decoded) = SetRequest::decode(request) else {
+            let invoke_id_and_priority = request.get(2).copied().unwrap_or(0);
+            return Ok(
+                SetResponse::Normal { invoke_id_and_priority, result: data_access_result::OTHER_REASON }.encode()
+            );
         };
         match decoded {
             SetRequest::Normal { invoke_id_and_priority, attribute, value, .. } => {

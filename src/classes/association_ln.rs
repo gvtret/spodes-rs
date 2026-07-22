@@ -227,9 +227,8 @@ impl AssociationLn {
     /// [`AssociationLn::set_ctos`]. For mechanism 5 (GMAC), also
     /// [`AssociationLn::set_hls_context`].
     fn reply_to_hls_authentication(&self, data: CosemDataType) -> Result<CosemDataType, String> {
-        let f_stoc = match data {
-            CosemDataType::OctetString(bytes) => bytes,
-            _ => return Err("Expected octet-string for f(StoC)".to_string()),
+        let CosemDataType::OctetString(f_stoc) = data else {
+            return Err("Expected octet-string for f(StoC)".to_string());
         };
         let mechanism = self.authentication_mechanism;
 
@@ -605,9 +604,8 @@ impl InterfaceClass for AssociationLn {
         if !rest.is_empty() {
             return Err(BerError::InvalidTag);
         }
-        let seq = match tlv {
-            CosemDataType::Structure(seq) => seq,
-            _ => return Err(BerError::InvalidTag),
+        let CosemDataType::Structure(seq) = tlv else {
+            return Err(BerError::InvalidTag);
         };
         // The element count (class_id + attributes) identifies the version:
         // 9 → v0 (8 attrs), 10 → v1 (+security_setup_reference),
@@ -1083,9 +1081,8 @@ mod tests {
             .expect("ECDSA authentication should succeed");
         // Server's f(CtoS) must verify against the server key over the swapped message.
         let msg_s = [&st_s[..], &st_c, &ctos, &stoc].concat();
-        let sig = match reply {
-            CosemDataType::OctetString(b) => b,
-            _ => panic!("expected octet-string reply"),
+        let CosemDataType::OctetString(sig) = reply else {
+            panic!("expected octet-string reply");
         };
         signature::ecdsa_verify(SecuritySuite::Suite1, &pk_server, &msg_s, &sig).unwrap();
 
@@ -1125,9 +1122,8 @@ mod tests {
             .invoke_method(1, Some(CosemDataType::OctetString(f_stoc.clone())))
             .expect("GOST 34.10 authentication should succeed");
         let msg_s = [&st_s[..], &st_c, &ctos, &stoc].concat();
-        let sig = match reply {
-            CosemDataType::OctetString(b) => b,
-            _ => panic!("expected octet-string reply"),
+        let CosemDataType::OctetString(sig) = reply else {
+            panic!("expected octet-string reply");
         };
         gost3410::gost_verify(&pk_server, &msg_s, &sig).unwrap();
 

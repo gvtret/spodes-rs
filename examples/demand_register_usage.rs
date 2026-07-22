@@ -26,31 +26,31 @@ fn main() {
     // Выводим начальные атрибуты
     println!("Initial attributes:");
     for (id, value) in demand_register.attributes() {
-        println!("Attribute {}: {:?}", id, value);
+        println!("Attribute {id}: {value:?}");
     }
 
     // Выполняем метод reset
     match demand_register.invoke_method(1, None) {
-        Ok(result) => println!("Reset result: {:?}", result),
-        Err(e) => println!("Reset failed: {}", e),
+        Ok(result) => println!("Reset result: {result:?}"),
+        Err(e) => println!("Reset failed: {e}"),
     }
 
     // Выводим атрибуты после reset
     println!("\nAttributes after reset:");
     for (id, value) in demand_register.attributes() {
-        println!("Attribute {}: {:?}", id, value);
+        println!("Attribute {id}: {value:?}");
     }
 
     // Выполняем метод next_period
     match demand_register.invoke_method(2, None) {
-        Ok(result) => println!("Next period result: {:?}", result),
-        Err(e) => println!("Next period failed: {}", e),
+        Ok(result) => println!("Next period result: {result:?}"),
+        Err(e) => println!("Next period failed: {e}"),
     }
 
     // Выводим атрибуты после next_period
     println!("\nAttributes after next_period:");
     for (id, value) in demand_register.attributes() {
-        println!("Attribute {}: {:?}", id, value);
+        println!("Attribute {id}: {value:?}");
     }
 
     // Сериализация и десериализация
@@ -72,6 +72,6 @@ fn main() {
     // Выводим атрибуты после десериализации
     println!("\nAttributes after deserialization:");
     for (id, value) in deserialized.attributes() {
-        println!("Attribute {}: {:?}", id, value);
+        println!("Attribute {id}: {value:?}");
     }
 }

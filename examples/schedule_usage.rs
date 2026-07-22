@@ -35,7 +35,7 @@ fn main() {
 
     // Сериализуем объект
     let serialized = serialize_object(&schedule).expect("Serialization failed");
-    println!("Serialized data: {:?}", serialized);
+    println!("Serialized data: {serialized:?}");
 
     // Создаём новый объект для десериализации
     let config = ScheduleConfig { logical_name: obis.clone(), entries: vec![], enabled: false };

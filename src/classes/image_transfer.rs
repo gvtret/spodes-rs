@@ -200,9 +200,8 @@ impl InterfaceClass for ImageTransfer {
         if !rest.is_empty() {
             return Err(BerError::InvalidTag);
         }
-        let seq = match tlv {
-            CosemDataType::Structure(seq) => seq,
-            _ => return Err(BerError::InvalidTag),
+        let CosemDataType::Structure(seq) = tlv else {
+            return Err(BerError::InvalidTag);
         };
         // class_id + 7 attributes.
         if seq.len() != 8 {
@@ -262,7 +261,7 @@ impl InterfaceClass for ImageTransfer {
             2 => self.image_block_transfer(params),
             3 => self.image_verify(params),
             4 => self.image_activate(params),
-            _ => Err(format!("Method {} not supported for Image transfer", method_id)),
+            _ => Err(format!("Method {method_id} not supported for Image transfer")),
         }
     }
 

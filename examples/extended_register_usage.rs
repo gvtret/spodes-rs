@@ -19,31 +19,31 @@ fn main() {
     // Выводим начальные атрибуты
     println!("Initial attributes:");
     for (id, value) in extended_register.attributes() {
-        println!("Attribute {}: {:?}", id, value);
+        println!("Attribute {id}: {value:?}");
     }
 
     // Выполняем метод reset
     match extended_register.invoke_method(1, None) {
-        Ok(result) => println!("Reset result: {:?}", result),
-        Err(e) => println!("Reset failed: {}", e),
+        Ok(result) => println!("Reset result: {result:?}"),
+        Err(e) => println!("Reset failed: {e}"),
     }
 
     // Выводим атрибуты после reset
     println!("\nAttributes after reset:");
     for (id, value) in extended_register.attributes() {
-        println!("Attribute {}: {:?}", id, value);
+        println!("Attribute {id}: {value:?}");
     }
 
     // Выполняем метод capture
     match extended_register.invoke_method(2, None) {
-        Ok(result) => println!("Capture result: {:?}", result),
-        Err(e) => println!("Capture failed: {}", e),
+        Ok(result) => println!("Capture result: {result:?}"),
+        Err(e) => println!("Capture failed: {e}"),
     }
 
     // Выводим атрибуты после capture
     println!("\nAttributes after capture:");
     for (id, value) in extended_register.attributes() {
-        println!("Attribute {}: {:?}", id, value);
+        println!("Attribute {id}: {value:?}");
     }
 
     // Сериализация и десериализация
@@ -60,6 +60,6 @@ fn main() {
     // Выводим атрибуты после десериализации
     println!("\nAttributes after deserialization:");
     for (id, value) in deserialized.attributes() {
-        println!("Attribute {}: {:?}", id, value);
+        println!("Attribute {id}: {value:?}");
     }
 }

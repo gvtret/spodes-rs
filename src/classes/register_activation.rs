@@ -55,7 +55,7 @@ impl RegisterActivation {
     /// * `Err(String)` - If the parameter is invalid or the mask already exists.
     fn add_mask(&mut self, params: Option<CosemDataType>) -> Result<CosemDataType, String> {
         let param = params.ok_or("Invalid mask parameter".to_string())?;
-        let mask = RegisterActMask::try_from(&param).map_err(|e| format!("Invalid mask parameter: {}", e))?;
+        let mask = RegisterActMask::try_from(&param).map_err(|e| format!("Invalid mask parameter: {e}"))?;
         if self.mask_list.iter().any(|m| m.mask_name == mask.mask_name) {
             return Err("Mask with this name already exists".to_string());
         }
@@ -72,9 +72,8 @@ impl RegisterActivation {
     /// * `Ok(CosemDataType::Null)` - If the mask was removed.
     /// * `Err(String)` - If the mask was not found or the parameter is invalid.
     fn delete_mask(&mut self, params: Option<CosemDataType>) -> Result<CosemDataType, String> {
-        let mask_name = match params {
-            Some(CosemDataType::OctetString(name)) => name,
-            _ => return Err("Invalid mask name parameter".to_string()),
+        let Some(CosemDataType::OctetString(mask_name)) = params else {
+            return Err("Invalid mask name parameter".to_string());
         };
         let initial_len = self.mask_list.len();
         self.mask_list.retain(|m| m.mask_name != mask_name);
@@ -188,7 +187,7 @@ impl InterfaceClass for RegisterActivation {
         match method_id {
             1 => self.add_mask(params),
             2 => self.delete_mask(params),
-            _ => Err(format!("Method {} not supported for RegisterActivation class", method_id)),
+            _ => Err(format!("Method {method_id} not supported for RegisterActivation class")),
         }
     }
 

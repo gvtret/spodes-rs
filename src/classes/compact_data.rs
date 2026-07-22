@@ -179,9 +179,8 @@ impl InterfaceClass for CompactData {
         if !rest.is_empty() {
             return Err(BerError::InvalidTag);
         }
-        let seq = match tlv {
-            CosemDataType::Structure(seq) => seq,
-            _ => return Err(BerError::InvalidTag),
+        let CosemDataType::Structure(seq) = tlv else {
+            return Err(BerError::InvalidTag);
         };
         if seq.len() != 6 {
             return Err(BerError::InvalidLength);
@@ -225,7 +224,7 @@ impl InterfaceClass for CompactData {
         match method_id {
             1 => self.reset(),
             2 => self.capture(),
-            _ => Err(format!("Method {} not supported for Compact data class", method_id)),
+            _ => Err(format!("Method {method_id} not supported for Compact data class")),
         }
     }
 

@@ -103,7 +103,7 @@ impl InterfaceClass for Data {
                 self.value = CosemDataType::Null;
                 Ok(CosemDataType::Null)
             }
-            _ => Err(format!("Method {} not supported for Data class", method_id)),
+            _ => Err(format!("Method {method_id} not supported for Data class")),
         }
     }
 

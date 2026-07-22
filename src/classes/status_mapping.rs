@@ -31,9 +31,8 @@ impl TryFrom<&CosemDataType> for StatusMappingEntry {
             CosemDataType::Structure(fields) if fields.len() == 2 => fields,
             _ => return Err("Expected structure { status_flag_id, status_reference }".to_string()),
         };
-        let status_flag_id = match fields[0] {
-            CosemDataType::Unsigned(v) => v,
-            _ => return Err("status_flag_id must be unsigned".to_string()),
+        let CosemDataType::Unsigned(status_flag_id) = fields[0] else {
+            return Err("status_flag_id must be unsigned".to_string());
         };
         let status_reference = match &fields[1] {
             CosemDataType::OctetString(v) if v.len() == 6 => ObisCode::new(v[0], v[1], v[2], v[3], v[4], v[5]),
@@ -117,9 +116,8 @@ impl InterfaceClass for StatusMapping {
         if !rest.is_empty() {
             return Err(BerError::InvalidTag);
         }
-        let seq = match tlv {
-            CosemDataType::Structure(seq) => seq,
-            _ => return Err(BerError::InvalidTag),
+        let CosemDataType::Structure(seq) = tlv else {
+            return Err(BerError::InvalidTag);
         };
         if seq.len() != 3 {
             return Err(BerError::InvalidLength);
@@ -152,7 +150,7 @@ impl InterfaceClass for StatusMapping {
     }
 
     fn invoke_method(&mut self, method_id: u8, _params: Option<CosemDataType>) -> Result<CosemDataType, String> {
-        Err(format!("Method {} not supported for Status mapping (no specific methods)", method_id))
+        Err(format!("Method {method_id} not supported for Status mapping (no specific methods)"))
     }
 
     fn as_any(&self) -> &dyn Any {

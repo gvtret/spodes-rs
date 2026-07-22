@@ -134,7 +134,7 @@ impl ProfileGeneric {
             if let Some((_, value)) = attributes.iter().find(|(id, _)| *id == *attr_id) {
                 captured_values.push(value.clone());
             } else {
-                return Err(format!("Attribute {} not found in object", attr_id));
+                return Err(format!("Attribute {attr_id} not found in object"));
             }
         }
 

@@ -90,9 +90,8 @@ impl SecuritySetup {
     /// policy (IEC 62056-6-2 §4.4.7.3.1). Strengthening is one-way: a value
     /// weaker than the current policy is rejected.
     fn security_activate(&mut self, data: CosemDataType) -> Result<CosemDataType, String> {
-        let new_policy = match data {
-            CosemDataType::Enum(v) => v,
-            _ => return Err("security_activate expects an enum".to_string()),
+        let CosemDataType::Enum(new_policy) = data else {
+            return Err("security_activate expects an enum".to_string());
         };
         if new_policy < self.security_policy {
             return Err("security policy cannot be weakened".to_string());
@@ -109,15 +108,13 @@ impl SecuritySetup {
     /// is not performed here, since the master key management belongs to the
     /// ciphering layer, which is out of scope for this data-model class.
     fn key_transfer(&mut self, data: CosemDataType) -> Result<CosemDataType, String> {
-        let entries = match data {
-            CosemDataType::Array(entries) => entries,
-            _ => return Err("key_transfer expects an array of key_transfer_data".to_string()),
+        let CosemDataType::Array(entries) = data else {
+            return Err("key_transfer expects an array of key_transfer_data".to_string());
         };
         let mut staged = BTreeMap::new();
         for entry in &entries {
-            let fields = match entry {
-                CosemDataType::Structure(fields) => fields,
-                _ => return Err("key_transfer_data must be a structure".to_string()),
+            let CosemDataType::Structure(fields) = entry else {
+                return Err("key_transfer_data must be a structure".to_string());
             };
             if fields.len() != 2 {
                 return Err("key_transfer_data must hold key_id and key_wrapped".to_string());
@@ -206,9 +203,8 @@ impl InterfaceClass for SecuritySetup {
         if !rest.is_empty() {
             return Err(BerError::InvalidTag);
         }
-        let seq = match tlv {
-            CosemDataType::Structure(seq) => seq,
-            _ => return Err(BerError::InvalidTag),
+        let CosemDataType::Structure(seq) = tlv else {
+            return Err(BerError::InvalidTag);
         };
         // The element count (class_id + attributes) identifies the version:
         // 6 → v0, 7 → v1.
@@ -267,10 +263,9 @@ impl InterfaceClass for SecuritySetup {
         match method_id {
             1 => self.security_activate(params),
             2 => self.key_transfer(params),
-            3..=8 if self.version >= 1 => Err(format!(
-                "Method {} requires security suite 1 or 2 (PKI/ECDH); not supported for suite 0",
-                method_id
-            )),
+            3..=8 if self.version >= 1 => {
+                Err(format!("Method {method_id} requires security suite 1 or 2 (PKI/ECDH); not supported for suite 0"))
+            }
             _ => Err(format!("Method {} not supported for Security setup version {}", method_id, self.version)),
         }
     }
@@ -321,8 +316,8 @@ mod tests {
             let obj = sample_versioned(version);
             assert_eq!(obj.class_id(), 64);
             assert_eq!(obj.version(), version);
-            assert_eq!(obj.attributes().len(), attr_count, "attrs for v{}", version);
-            assert_eq!(obj.methods().len(), method_count, "methods for v{}", version);
+            assert_eq!(obj.attributes().len(), attr_count, "attrs for v{version}");
+            assert_eq!(obj.methods().len(), method_count, "methods for v{version}");
         }
     }
 
