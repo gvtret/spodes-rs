@@ -126,7 +126,10 @@ impl HdlcAddress {
                 return Err(HdlcError::AddressTooLong);
             }
         }
-        Ok((HdlcAddress { value, length: consumed as u8 }, consumed))
+        // consumed is 1..=4: the loop above returns AddressTooLong before it can grow further.
+        #[allow(clippy::cast_possible_truncation)]
+        let length = consumed as u8;
+        Ok((HdlcAddress { value, length }, consumed))
     }
 }
 
@@ -281,6 +284,8 @@ impl XidParams {
         params.push(0x04);
         params.extend_from_slice(&u32::from(self.window_rx).to_be_bytes());
 
+        // Fixed-shape encoding (4 TLV fields of known width): always 20 bytes.
+        #[allow(clippy::cast_possible_truncation)]
         let mut out = vec![0x81, 0x80, params.len() as u8];
         out.extend_from_slice(&params);
         out
@@ -301,8 +306,17 @@ impl XidParams {
             match (param_id, value.len()) {
                 (0x05, 2) => p.max_info_tx = u16::from_be_bytes([value[0], value[1]]),
                 (0x06, 2) => p.max_info_rx = u16::from_be_bytes([value[0], value[1]]),
-                (0x07, 4) => p.window_tx = u32::from_be_bytes([value[0], value[1], value[2], value[3]]) as u8,
-                (0x08, 4) => p.window_rx = u32::from_be_bytes([value[0], value[1], value[2], value[3]]) as u8,
+                // Window sizes are conventionally 1..=7; a peer proposing an
+                // out-of-range value is clamped to u8::MAX rather than wrapped,
+                // so a bogus large value can't silently alias a small one.
+                (0x07, 4) => {
+                    p.window_tx =
+                        u8::try_from(u32::from_be_bytes([value[0], value[1], value[2], value[3]])).unwrap_or(u8::MAX);
+                }
+                (0x08, 4) => {
+                    p.window_rx =
+                        u8::try_from(u32::from_be_bytes([value[0], value[1], value[2], value[3]])).unwrap_or(u8::MAX);
+                }
                 _ => {}
             }
             idx += param_len;
@@ -364,7 +378,10 @@ impl HdlcFrame {
 
         let mut framed = Vec::with_capacity(length + 2);
         let seg = if self.segmented { 0x08 } else { 0x00 };
+        // Both operands are masked to 3 and 8 bits respectively, so each always fits u8.
+        #[allow(clippy::cast_possible_truncation)]
         let format_hi = 0xA0 | seg | ((length >> 8) & 0x07) as u8;
+        #[allow(clippy::cast_possible_truncation)]
         let format_lo = (length & 0xFF) as u8;
 
         // Everything the FCS is computed over (format .. end of info).
@@ -842,7 +859,10 @@ impl<T: PhysicalTransport> DataLinkLayer for HdlcLayer<T> {
 
     fn client_sap(&self) -> Option<u8> {
         if !self.is_client && self.peer.length == 1 {
-            Some(self.peer.value as u8)
+            // length == 1 means a single 7-bit address group, always < 128.
+            #[allow(clippy::cast_possible_truncation)]
+            let sap = self.peer.value as u8;
+            Some(sap)
         } else {
             None
         }
@@ -1229,6 +1249,15 @@ mod tests {
         let peer = XidParams { max_info_tx: 0, max_info_rx: 0, window_tx: 0, window_rx: 0 };
         mine.negotiate(peer);
         assert_eq!(mine, XidParams::client_default(), "an all-zero (absent) proposal changes nothing");
+    }
+
+    #[test]
+    fn xid_decode_clamps_out_of_range_window_instead_of_wrapping() {
+        // window_tx param (tag 0x07, len 4) carrying 300 — out of u8 range.
+        let data = [0x81, 0x80, 0x06, 0x07, 0x04, 0x00, 0x00, 0x01, 0x2C];
+        let p = XidParams::decode(&data);
+        // 300 as u8 would wrap to 44; it must clamp to u8::MAX instead.
+        assert_eq!(p.window_tx, u8::MAX);
     }
 
     #[test]
