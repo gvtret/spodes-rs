@@ -8,6 +8,8 @@ While the crate is at `0.x`, minor releases may contain breaking changes.
 
 ## [Unreleased]
 
+## [0.6.0] - 2026-07-22
+
 ### Added (HDLC XID negotiation and outbound I-frame segmentation)
 
 - **XID parameter negotiation during SNRM/UA** (IEC 62056-46 §6.4.4.4.3.2,
@@ -337,8 +339,8 @@ Initial release: a full DLMS/COSEM stack for IEC 62056 and the Russian
 - **Tooling** — GitHub Actions CI (fmt, clippy, test, doc, package) and a
   tag-triggered release workflow; dual MIT / Apache-2.0 license.
 
-[Unreleased]: https://github.com/gvtret/spodes-rs/compare/v0.5.0...HEAD
-[0.5.0]: https://github.com/gvtret/spodes-rs/compare/v0.4.0...v0.5.0
+[Unreleased]: https://github.com/gvtret/spodes-rs/compare/v0.6.0...HEAD
+[0.6.0]: https://github.com/gvtret/spodes-rs/compare/v0.4.0...v0.6.0
 [0.4.0]: https://github.com/gvtret/spodes-rs/compare/v0.3.0...v0.4.0
 [0.3.0]: https://github.com/gvtret/spodes-rs/compare/v0.2.2...v0.3.0
 [0.2.2]: https://github.com/gvtret/spodes-rs/compare/v0.2.1...v0.2.2
