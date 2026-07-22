@@ -54,6 +54,18 @@ pub struct HlsContext {
     pub peer_public_key: Vec<u8>,
 }
 
+impl Drop for HlsContext {
+    /// Zeroizes the key material when the context is dropped, so secrets do
+    /// not linger in freed memory.
+    fn drop(&mut self) {
+        use zeroize::Zeroize;
+        self.encryption_key.zeroize();
+        self.authentication_key.zeroize();
+        self.gost_key.zeroize();
+        self.signing_key.zeroize();
+    }
+}
+
 /// Configuration structure used to build an `Association LN` object.
 #[derive(Clone, Serialize, Deserialize, Debug)]
 pub struct AssociationLnConfig {
@@ -163,10 +175,28 @@ impl AssociationLn {
         self.hls_context = Some(ctx);
     }
 
+    /// Returns the authentication mechanism of this association (attribute 6).
+    pub fn authentication_mechanism(&self) -> AuthenticationMechanism {
+        self.authentication_mechanism
+    }
+
+    /// Returns the LLS/HLS secret (attribute 7).
+    pub fn secret(&self) -> &[u8] {
+        &self.secret
+    }
+
+    /// Sets the association status (attribute 8): 0 = non-associated,
+    /// 1 = association-pending, 2 = associated.
+    pub fn set_association_status(&mut self, status: u8) {
+        self.association_status = status;
+    }
+
     /// Method 2: `change_HLS_secret` — replaces the secret (password/key).
     fn change_hls_secret(&mut self, data: CosemDataType) -> Result<CosemDataType, String> {
         match data {
             CosemDataType::OctetString(secret) => {
+                // Zeroize the replaced secret so it does not linger in memory.
+                zeroize::Zeroize::zeroize(&mut self.secret);
                 self.secret = secret;
                 Ok(CosemDataType::Null)
             }
@@ -837,15 +867,14 @@ mod tests {
         obj.authentication_mechanism = AuthenticationMechanism::HlsGmac;
         obj.set_stoc(stoc);
         obj.set_ctos(ctos);
-        obj.set_hls_context(HlsContext {
-            security_control_byte: 0x10,
-            encryption_key: ek,
-            authentication_key: ak,
-            server_system_title: server_st,
-            server_invocation_counter: 0x01234567,
-            client_system_title: client_st,
-            ..Default::default()
-        });
+        let mut ctx = HlsContext::default();
+        ctx.security_control_byte = 0x10;
+        ctx.encryption_key = ek;
+        ctx.authentication_key = ak;
+        ctx.server_system_title = server_st;
+        ctx.server_invocation_counter = 0x01234567;
+        ctx.client_system_title = client_st;
+        obj.set_hls_context(ctx);
 
         let reply = obj
             .invoke_method(1, Some(CosemDataType::OctetString(f_stoc.clone())))
@@ -873,11 +902,10 @@ mod tests {
             obj.secret = secret.clone();
             obj.set_stoc(stoc.clone());
             obj.set_ctos(ctos.clone());
-            obj.set_hls_context(HlsContext {
-                client_system_title: st_c.clone(),
-                server_system_title: st_s.clone(),
-                ..Default::default()
-            });
+            let mut ctx = HlsContext::default();
+            ctx.client_system_title = st_c.clone();
+            ctx.server_system_title = st_s.clone();
+            obj.set_hls_context(ctx);
             let f_stoc = hls::hash_with_titles(mech, &secret, &st_c, &st_s, &stoc, &ctos).unwrap();
             let expected = hls::hash_with_titles(mech, &secret, &st_s, &st_c, &ctos, &stoc).unwrap();
             let reply = obj
@@ -907,14 +935,13 @@ mod tests {
         obj.authentication_mechanism = AuthMechanism::HlsGostCmac;
         obj.set_stoc(stoc.clone());
         obj.set_ctos(ctos.clone());
-        obj.set_hls_context(HlsContext {
-            client_system_title: st_c.clone(),
-            server_system_title: st_s.clone(),
-            security_control_byte: sc,
-            server_invocation_counter: server_ic,
-            gost_key: k_em.clone(),
-            ..Default::default()
-        });
+        let mut ctx = HlsContext::default();
+        ctx.client_system_title = st_c.clone();
+        ctx.server_system_title = st_s.clone();
+        ctx.security_control_byte = sc;
+        ctx.server_invocation_counter = server_ic;
+        ctx.gost_key = k_em.clone();
+        obj.set_hls_context(ctx);
 
         // Client's f(StoC) = SC ‖ IC_C ‖ KUZN_CMAC(K_EM, IV_C ‖ SC ‖ StoC ‖ CtoS).
         let iv_c = [&st_c[..], &client_ic.to_be_bytes()].concat();
@@ -979,14 +1006,13 @@ mod tests {
         obj.authentication_mechanism = AuthMechanism::HlsEcdsa;
         obj.set_stoc(stoc.clone());
         obj.set_ctos(ctos.clone());
-        obj.set_hls_context(HlsContext {
-            client_system_title: st_c.clone(),
-            server_system_title: st_s.clone(),
-            security_control_byte: 0x31, // suite 1 in the low nibble
-            signing_key: d_server.clone(),
-            peer_public_key: pk_client.clone(),
-            ..Default::default()
-        });
+        let mut ctx = HlsContext::default();
+        ctx.client_system_title = st_c.clone();
+        ctx.server_system_title = st_s.clone();
+        ctx.security_control_byte = 0x31; // suite 1 in the low nibble
+        ctx.signing_key = d_server.clone();
+        ctx.peer_public_key = pk_client.clone();
+        obj.set_hls_context(ctx);
 
         // Client's f(StoC) = SIGN(d_C, ST_C ‖ ST_S ‖ StoC ‖ CtoS).
         let msg_c = [&st_c[..], &st_s, &stoc, &ctos].concat();
@@ -1024,13 +1050,12 @@ mod tests {
         obj.authentication_mechanism = AuthMechanism::HlsGostSignature;
         obj.set_stoc(stoc.clone());
         obj.set_ctos(ctos.clone());
-        obj.set_hls_context(HlsContext {
-            client_system_title: st_c.clone(),
-            server_system_title: st_s.clone(),
-            signing_key: d_server.to_vec(),
-            peer_public_key: pk_client.to_vec(),
-            ..Default::default()
-        });
+        let mut ctx = HlsContext::default();
+        ctx.client_system_title = st_c.clone();
+        ctx.server_system_title = st_s.clone();
+        ctx.signing_key = d_server.to_vec();
+        ctx.peer_public_key = pk_client.to_vec();
+        obj.set_hls_context(ctx);
 
         // Client's f(StoC) = SIGN(d_C, ST_C ‖ ST_S ‖ StoC ‖ CtoS).
         let msg_c = [&st_c[..], &st_s, &stoc, &ctos].concat();

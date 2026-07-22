@@ -68,6 +68,33 @@ pub mod mechanism {
     pub const HLS_SHA1: u8 = 4;
     /// Mechanism 5: High-Level Security using GMAC.
     pub const HLS_GMAC: u8 = 5;
+    /// Mechanism 6: High-Level Security using SHA-256.
+    pub const HLS_SHA256: u8 = 6;
+    /// Mechanism 7: High-Level Security using ECDSA.
+    pub const HLS_ECDSA: u8 = 7;
+    /// Mechanism 8: HLS CMAC — Kuznyechik CMAC (GOST, Р 1323565.1).
+    pub const HLS_GOST_CMAC: u8 = 8;
+    /// Mechanism 9: HLS GOST34112018-256 — Streebog-256 (GOST, Р 1323565.1).
+    pub const HLS_GOST_STREEBOG: u8 = 9;
+    /// Mechanism 10: HLS GOST34102018-256 — GOST 34.10 signature (Р 1323565.1).
+    pub const HLS_GOST_SIGNATURE: u8 = 10;
+}
+
+/// ACSE `result-source-diagnostic` values of the acse-service-user CHOICE
+/// (ISO 8650 / IEC 62056-5-3, Table 74), reported in a rejecting AARE.
+pub mod acse_diagnostic {
+    /// No reason given.
+    pub const NULL: u8 = 0;
+    /// The proposed application context is not supported.
+    pub const APPLICATION_CONTEXT_NAME_NOT_SUPPORTED: u8 = 2;
+    /// The calling-AP-title (client system title) was not recognized.
+    pub const CALLING_AP_TITLE_NOT_RECOGNIZED: u8 = 3;
+    /// The proposed authentication mechanism is not recognised.
+    pub const AUTHENTICATION_MECHANISM_NAME_NOT_RECOGNISED: u8 = 11;
+    /// Authentication failed (wrong secret / challenge).
+    pub const AUTHENTICATION_FAILURE: u8 = 13;
+    /// Authentication is required but the AARQ carried none.
+    pub const AUTHENTICATION_REQUIRED: u8 = 14;
 }
 
 const OID_PREFIX_APP_CONTEXT: [u8; 6] = [0x60, 0x85, 0x74, 0x05, 0x08, 0x01];

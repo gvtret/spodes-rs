@@ -14,10 +14,13 @@
 use crate::classes::association_ln::AssociationLn;
 use crate::interface::InterfaceClass;
 use crate::obis::ObisCode;
+use crate::security::AuthMechanism;
 
+use crate::service::acse::{self, AssociationResponse};
 use crate::service::action::{ActionRequest, ActionResponse};
-use crate::service::error::{service_error, state_error, ExceptionResponse};
+use crate::service::error::{service_error, state_error, ConfirmedServiceError, ExceptionResponse};
 use crate::service::get::{GetDataResult, GetRequest, GetResponse};
+use crate::service::initiate::{InitiateRequest, InitiateResponse};
 use crate::service::set::{SetRequest, SetResponse};
 use crate::service::{data_access_result, tag, AttributeDescriptor, DataBlockSa, MethodDescriptor, ServiceError};
 use crate::types::CosemDataType;
@@ -27,6 +30,38 @@ use tracing::{debug, warn};
 /// Default block-transfer payload size. A GET result larger than this is sent in
 /// GET-RESPONSE-WITH-DATABLOCK blocks of at most this many octets.
 const DEFAULT_MAX_PDU: usize = 256;
+
+/// The DLMS version number negotiated by [`RequestDispatcher::handle_aarq`].
+const DLMS_VERSION: u8 = 6;
+
+/// The smallest client-max-receive-pdu-size the server accepts.
+const MIN_CLIENT_PDU: u16 = 12;
+
+/// Server-max-receive-pdu-size offered in the negotiated InitiateResponse.
+const SERVER_MAX_PDU: u16 = 0x0800;
+
+/// The server's conformance block: GET, SET, ACTION, selective access,
+/// block transfer with GET/SET and multiple references.
+const SERVER_CONFORMANCE: u32 = 0x00_18_5F;
+
+/// `association_status` values (IEC 62056-6-2, Association LN attribute 8).
+mod association_status {
+    /// The HLS handshake is still in progress (pass 3/4 pending).
+    pub const ASSOCIATION_PENDING: u8 = 1;
+    /// The association is open.
+    pub const ASSOCIATED: u8 = 2;
+}
+
+/// `initiateError` values of the ConfirmedServiceError sent when the
+/// InitiateRequest is rejected (IEC 62056-5-3).
+mod initiate_error {
+    /// The proposed DLMS version is lower than 6.
+    pub const DLMS_VERSION_TOO_LOW: u8 = 1;
+    /// The proposed conformance has no supported service in common.
+    pub const INCOMPATIBLE_CONFORMANCE: u8 = 2;
+    /// The proposed client PDU size is too small.
+    pub const PDU_SIZE_TOO_SHORT: u8 = 3;
+}
 
 /// An outbound GET result being delivered in blocks.
 struct PendingGet {
@@ -284,15 +319,177 @@ impl RequestDispatcher {
 
     /// Dispatches one request APDU to the addressed object and returns the
     /// encoded response APDU. Malformed or unsupported requests yield an
-    /// EXCEPTION-RESPONSE.
+    /// EXCEPTION-RESPONSE. An AARQ is answered with an AARE via
+    /// [`Self::handle_aarq`].
     pub fn dispatch(&mut self, request: &[u8]) -> Result<Vec<u8>, ServiceError> {
         match request.first() {
             Some(&tag::GET_REQUEST) => self.dispatch_get(request),
             Some(&tag::SET_REQUEST) => self.dispatch_set(request),
             Some(&tag::ACTION_REQUEST) => self.dispatch_action(request),
+            Some(&acse::AARQ_TAG) => Ok(self.handle_aarq(request)),
             Some(&other) => Ok(unsupported(other)),
             None => Err(ServiceError::Truncated),
         }
+    }
+
+    /// Validates an AARQ against the configured association and answers with an
+    /// AARE carrying a structured ACSE diagnostic (IEC 62056-5-3 §7.3.5):
+    ///
+    /// * unsupported application context → `application-context-name-not-supported`;
+    /// * ciphering / title-bound HLS without an 8-octet calling-AP-title →
+    ///   `calling-AP-title-not-recognized`;
+    /// * bad InitiateRequest parameters → `initiateError` ConfirmedServiceError
+    ///   in the user-information (DLMS version / conformance / PDU size);
+    /// * missing, unknown, or mismatching authentication →
+    ///   `authentication-required` / `-mechanism-name-not-recognised` /
+    ///   `authentication-failure`;
+    /// * LLS: the calling-authentication-value is compared with the
+    ///   association's secret;
+    /// * HLS: the CtoS challenge is stored, a random StoC is generated and
+    ///   returned, and the association is left `association-pending` until the
+    ///   `reply_to_HLS_authentication` ACTION (pass 3/4) completes.
+    ///
+    /// Requires an association to be configured via [`Self::set_association`];
+    /// without one, only mechanism 0 (lowest) AARQs are accepted.
+    pub fn handle_aarq(&mut self, request: &[u8]) -> Vec<u8> {
+        use crate::service::acse::{acse_diagnostic as diag, application_context, AssociationRequest};
+
+        let Ok(aarq) = AssociationRequest::decode(request) else {
+            return reject_aare(application_context::LN, diag::NULL, None);
+        };
+        let echo_context = aarq.application_context;
+
+        // Application context: LN with or without ciphering.
+        if aarq.application_context != application_context::LN
+            && aarq.application_context != application_context::LN_CIPHERING
+        {
+            return reject_aare(application_context::LN, diag::APPLICATION_CONTEXT_NAME_NOT_SUPPORTED, None);
+        }
+
+        // Ciphering and title-bound HLS mechanisms require an 8-octet client
+        // system title in the calling-AP-title.
+        let mech_id = aarq.mechanism_name.unwrap_or(0);
+        let title_bound = aarq.application_context == application_context::LN_CIPHERING || mech_id >= 5;
+        if title_bound && aarq.calling_ap_title.as_ref().map(Vec::len) != Some(8) {
+            return reject_aare(echo_context, diag::CALLING_AP_TITLE_NOT_RECOGNIZED, None);
+        }
+
+        // Validate the xDLMS InitiateRequest, when present and well-formed.
+        let initiate = InitiateRequest::decode(&aarq.user_information).ok();
+        if let Some(ireq) = &initiate {
+            let err = if ireq.proposed_dlms_version != 0 && ireq.proposed_dlms_version < DLMS_VERSION {
+                Some(initiate_error::DLMS_VERSION_TOO_LOW)
+            } else if ireq.proposed_conformance == 0 {
+                Some(initiate_error::INCOMPATIBLE_CONFORMANCE)
+            } else if ireq.client_max_receive_pdu_size > 0 && ireq.client_max_receive_pdu_size < MIN_CLIENT_PDU {
+                Some(initiate_error::PDU_SIZE_TOO_SHORT)
+            } else {
+                None
+            };
+            if let Some(value) = err {
+                return reject_aare(echo_context, diag::NULL, Some(value));
+            }
+        }
+
+        // Authentication, against the configured association.
+        let required = self.association.as_ref().map(|a| a.authentication_mechanism()).unwrap_or(AuthMechanism::None);
+        if required != AuthMechanism::None {
+            if aarq.mechanism_name.is_none() && aarq.calling_authentication_value.is_none() {
+                return reject_aare(echo_context, diag::AUTHENTICATION_REQUIRED, None);
+            }
+            let Some(mech) = aarq.mechanism_name.and_then(AuthMechanism::from_id) else {
+                return reject_aare(echo_context, diag::AUTHENTICATION_MECHANISM_NAME_NOT_RECOGNISED, None);
+            };
+            if mech != required {
+                return reject_aare(echo_context, diag::AUTHENTICATION_FAILURE, None);
+            }
+        }
+
+        let mechanism = aarq.mechanism_name.and_then(AuthMechanism::from_id).unwrap_or(AuthMechanism::None);
+        let user_information = self.negotiate_initiate_response(initiate.as_ref());
+        match mechanism {
+            AuthMechanism::None => {
+                if let Some(assoc) = self.association.as_mut() {
+                    assoc.set_association_status(association_status::ASSOCIATED);
+                }
+                AssociationResponse {
+                    application_context: echo_context,
+                    result: acse::result::ACCEPTED,
+                    diagnostic: diag::NULL,
+                    responding_ap_title: None,
+                    responding_authentication_value: None,
+                    user_information,
+                }
+                .encode()
+            }
+            AuthMechanism::Lls => {
+                let secret_ok = match (&self.association, &aarq.calling_authentication_value) {
+                    (Some(assoc), Some(pw)) => !assoc.secret().is_empty() && assoc.secret() == pw.as_slice(),
+                    _ => false,
+                };
+                if !secret_ok {
+                    return reject_aare(echo_context, diag::AUTHENTICATION_FAILURE, None);
+                }
+                if let Some(assoc) = self.association.as_mut() {
+                    assoc.set_association_status(association_status::ASSOCIATED);
+                }
+                AssociationResponse {
+                    application_context: echo_context,
+                    result: acse::result::ACCEPTED,
+                    diagnostic: diag::NULL,
+                    responding_ap_title: None,
+                    responding_authentication_value: None,
+                    user_information,
+                }
+                .encode()
+            }
+            _ => {
+                // HLS pass 1/2: store CtoS, reply with a fresh StoC; the
+                // handshake completes with the reply_to_HLS_authentication
+                // ACTION (pass 3/4), served by the Association LN object.
+                let Some(ctos) = aarq.calling_authentication_value.clone() else {
+                    return reject_aare(echo_context, diag::AUTHENTICATION_FAILURE, None);
+                };
+                let Some(assoc) = self.association.as_mut() else {
+                    return reject_aare(echo_context, diag::AUTHENTICATION_FAILURE, None);
+                };
+                assoc.set_ctos(ctos);
+                let stoc = assoc.generate_stoc(16);
+                assoc.set_association_status(association_status::ASSOCIATION_PENDING);
+                AssociationResponse {
+                    application_context: echo_context,
+                    result: acse::result::ACCEPTED,
+                    diagnostic: diag::NULL,
+                    responding_ap_title: None,
+                    responding_authentication_value: Some(stoc),
+                    user_information,
+                }
+                .encode()
+            }
+        }
+    }
+
+    /// Builds the negotiated InitiateResponse: the conformance is ANDed with
+    /// the client's proposal and the PDU size capped by the client's maximum.
+    fn negotiate_initiate_response(&self, ireq: Option<&InitiateRequest>) -> Vec<u8> {
+        let mut conformance = SERVER_CONFORMANCE;
+        let mut pdu = SERVER_MAX_PDU;
+        if let Some(ireq) = ireq {
+            if ireq.proposed_conformance != 0 {
+                conformance &= ireq.proposed_conformance;
+            }
+            if ireq.client_max_receive_pdu_size > 0 && ireq.client_max_receive_pdu_size < pdu {
+                pdu = ireq.client_max_receive_pdu_size;
+            }
+        }
+        InitiateResponse {
+            negotiated_quality_of_service: None,
+            negotiated_dlms_version: DLMS_VERSION,
+            negotiated_conformance: conformance,
+            server_max_receive_pdu_size: pdu,
+            vaa_name: 0x0007,
+        }
+        .encode()
     }
 
     fn dispatch_get(&mut self, request: &[u8]) -> Result<Vec<u8>, ServiceError> {
@@ -510,6 +707,30 @@ fn selective_index(value: &CosemDataType) -> Option<u32> {
     }
 }
 
+/// Builds a permanently-rejecting AARE with the given acse-service-user
+/// diagnostic; `initiate_err` adds an `initiateError` ConfirmedServiceError to
+/// the user-information.
+fn reject_aare(application_context: u8, diagnostic: u8, initiate_err: Option<u8>) -> Vec<u8> {
+    let user_information = match initiate_err {
+        Some(value) => ConfirmedServiceError {
+            service: crate::service::error::service::INITIATE_ERROR,
+            category: crate::service::error::category::INITIATE,
+            value,
+        }
+        .encode(),
+        None => Vec::new(),
+    };
+    AssociationResponse {
+        application_context,
+        result: acse::result::REJECTED_PERMANENT,
+        diagnostic,
+        responding_ap_title: None,
+        responding_authentication_value: None,
+        user_information,
+    }
+    .encode()
+}
+
 /// EXCEPTION-RESPONSE for an unsupported service tag.
 fn unsupported(_tag: u8) -> Vec<u8> {
     ExceptionResponse { state_error: state_error::SERVICE_UNKNOWN, service_error: service_error::SERVICE_NOT_SUPPORTED }
@@ -536,6 +757,146 @@ mod tests {
         let data = Data::new(ObisCode::new(0, 0, 0x80, 0, 0, 0xFF), CosemDataType::LongUnsigned(0x1234));
         d.add(Box::new(data));
         d
+    }
+
+    /// An AssociationLn requiring the given mechanism, with an LLS secret.
+    fn association(mechanism: AuthMechanism) -> AssociationLn {
+        use crate::classes::association_ln::{AssociationLnConfig, AssociationLnVersion};
+        use crate::types::attrs::{AssociatedPartnersId, ContextName, XDLMSContextInfo};
+        AssociationLn::new(AssociationLnConfig {
+            logical_name: ObisCode::new(0, 0, 40, 0, 0, 255),
+            version: AssociationLnVersion::Version1,
+            object_list: vec![],
+            associated_partners_id: AssociatedPartnersId { client_sap: 0, server_sap: 1 },
+            application_context_name: ContextName::OctetString(vec![
+                0x09, 0x07, 0x60, 0x85, 0x74, 0x05, 0x08, 0x01, 0x01,
+            ]),
+            xdlms_context_info: XDLMSContextInfo {
+                conformance: vec![0x00; 18],
+                max_receive_pdu_size: 1024,
+                max_send_pdu_size: 1024,
+                dlms_version_number: 6,
+                quality_of_service: -1,
+                cyphering_info: vec![],
+            },
+            authentication_mechanism: mechanism,
+            secret: b"password".to_vec(),
+            association_status: 0,
+            security_setup_reference: ObisCode::new(0, 0, 43, 0, 0, 255),
+            user_list: vec![],
+            current_user: None,
+        })
+    }
+
+    fn aarq(context: u8, mechanism: Option<u8>, auth: Option<&[u8]>) -> Vec<u8> {
+        crate::service::acse::AssociationRequest {
+            application_context: context,
+            calling_ap_title: None,
+            mechanism_name: mechanism,
+            calling_authentication_value: auth.map(<[u8]>::to_vec),
+            user_information: InitiateRequest {
+                dedicated_key: None,
+                response_allowed: true,
+                proposed_quality_of_service: None,
+                proposed_dlms_version: 6,
+                proposed_conformance: 0x00_18_5F,
+                client_max_receive_pdu_size: 0x0400,
+            }
+            .encode(),
+        }
+        .encode()
+    }
+
+    #[test]
+    fn aarq_lowest_is_accepted_without_association() {
+        let mut d = dispatcher_with_data();
+        let resp = d.dispatch(&aarq(1, None, None)).unwrap();
+        let aare = AssociationResponse::decode(&resp).unwrap();
+        assert_eq!(aare.result, acse::result::ACCEPTED);
+        // Negotiated InitiateResponse: version 6, PDU capped by the client.
+        let iresp = InitiateResponse::decode(&aare.user_information).unwrap();
+        assert_eq!(iresp.negotiated_dlms_version, 6);
+        assert_eq!(iresp.server_max_receive_pdu_size, 0x0400);
+    }
+
+    #[test]
+    fn aarq_unsupported_context_is_rejected() {
+        let mut d = dispatcher_with_data();
+        // Short-name referencing (context 2) is not supported.
+        let resp = d.handle_aarq(&aarq(2, None, None));
+        let aare = AssociationResponse::decode(&resp).unwrap();
+        assert_eq!(aare.result, acse::result::REJECTED_PERMANENT);
+        assert_eq!(aare.diagnostic, acse::acse_diagnostic::APPLICATION_CONTEXT_NAME_NOT_SUPPORTED);
+    }
+
+    #[test]
+    fn aarq_without_auth_when_required_is_rejected() {
+        let mut d = dispatcher_with_data();
+        d.set_association(association(AuthMechanism::Lls));
+        let resp = d.handle_aarq(&aarq(1, None, None));
+        let aare = AssociationResponse::decode(&resp).unwrap();
+        assert_eq!(aare.result, acse::result::REJECTED_PERMANENT);
+        assert_eq!(aare.diagnostic, acse::acse_diagnostic::AUTHENTICATION_REQUIRED);
+    }
+
+    #[test]
+    fn aarq_lls_secret_is_checked() {
+        let mut d = dispatcher_with_data();
+        d.set_association(association(AuthMechanism::Lls));
+        // Wrong password.
+        let aare = AssociationResponse::decode(&d.handle_aarq(&aarq(1, Some(1), Some(b"wrong")))).unwrap();
+        assert_eq!(aare.result, acse::result::REJECTED_PERMANENT);
+        assert_eq!(aare.diagnostic, acse::acse_diagnostic::AUTHENTICATION_FAILURE);
+        // Right password.
+        let aare = AssociationResponse::decode(&d.handle_aarq(&aarq(1, Some(1), Some(b"password")))).unwrap();
+        assert_eq!(aare.result, acse::result::ACCEPTED);
+    }
+
+    #[test]
+    fn aarq_mechanism_mismatch_is_rejected() {
+        let mut d = dispatcher_with_data();
+        d.set_association(association(AuthMechanism::HlsSha256));
+        let resp = d.handle_aarq(&aarq(1, Some(1), Some(b"password")));
+        let aare = AssociationResponse::decode(&resp).unwrap();
+        assert_eq!(aare.result, acse::result::REJECTED_PERMANENT);
+        assert_eq!(aare.diagnostic, acse::acse_diagnostic::AUTHENTICATION_FAILURE);
+    }
+
+    #[test]
+    fn aarq_hls_pass1_returns_stoc_and_leaves_pending() {
+        let mut d = dispatcher_with_data();
+        d.set_association(association(AuthMechanism::HlsSha256));
+        // Title-bound HLS without a calling-AP-title is rejected.
+        let aare = AssociationResponse::decode(&d.handle_aarq(&aarq(1, Some(6), Some(b"CTOS0123CTOS0123")))).unwrap();
+        assert_eq!(aare.diagnostic, acse::acse_diagnostic::CALLING_AP_TITLE_NOT_RECOGNIZED);
+
+        // With an 8-octet title: accepted, StoC returned, pass 3/4 pending.
+        let mut req =
+            crate::service::acse::AssociationRequest::decode(&aarq(1, Some(6), Some(b"CTOS0123CTOS0123"))).unwrap();
+        req.calling_ap_title = Some(b"CLIENT01".to_vec());
+        let aare = AssociationResponse::decode(&d.handle_aarq(&req.encode())).unwrap();
+        assert_eq!(aare.result, acse::result::ACCEPTED);
+        let stoc = aare.responding_authentication_value.expect("StoC missing");
+        assert_eq!(stoc.len(), 16);
+    }
+
+    #[test]
+    fn aarq_bad_initiate_yields_confirmed_service_error() {
+        let mut d = dispatcher_with_data();
+        let mut req = crate::service::acse::AssociationRequest::decode(&aarq(1, None, None)).unwrap();
+        req.user_information = InitiateRequest {
+            dedicated_key: None,
+            response_allowed: true,
+            proposed_quality_of_service: None,
+            proposed_dlms_version: 5, // too low
+            proposed_conformance: 0x00_18_5F,
+            client_max_receive_pdu_size: 0x0400,
+        }
+        .encode();
+        let aare = AssociationResponse::decode(&d.handle_aarq(&req.encode())).unwrap();
+        assert_eq!(aare.result, acse::result::REJECTED_PERMANENT);
+        let cse = ConfirmedServiceError::decode(&aare.user_information).unwrap();
+        assert_eq!(cse.value, initiate_error::DLMS_VERSION_TOO_LOW);
     }
 
     /// A registered object whose attribute 2 is writable, for SET reassembly.

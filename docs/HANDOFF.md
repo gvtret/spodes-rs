@@ -89,3 +89,28 @@ follows immediately after). Version still 0.5.0 unreleased.
   spodus/push.rs — not compared in depth.
 - C parameter_monitor/mbus_slave attribute sets follow the C project (which
   deviates from the Blue Book for class 65); ported as-is per user request.
+
+## 2026-07-22 — C-port round 2: server AARQ, HDLC hardening, zeroize
+
+**Done:**
+- Server-side AARQ/AARE: `RequestDispatcher::handle_aarq` (src/server.rs) with
+  full validation chain and ACSE diagnostics per C aarq_validate; new
+  `acse_diagnostic` module + mechanisms 6..10 constants in service/acse.rs;
+  `AssociationLn` gained `authentication_mechanism()`, `secret()`,
+  `set_association_status()` getters. 7 new tests.
+- HDLC hardening (src/transport/hdlc.rs): `connect()`/`disconnect()`
+  (SNRM/UA, DISC/UA-DM), server lifecycle in `receive_apdu` (SNRM→UA+reset,
+  DISC→UA/DM, FRMR, RR/RNR), segmented I-frame reassembly with RR acks,
+  bad-FCS frames dropped (MAX_BAD_FRAMES=8). 5 new tests.
+- Zeroize: new dep `zeroize = "1.8"`; Drop impls for `HlsContext` and
+  `SecurityContext`; old secret zeroized in `change_hls_secret`. Test FRU
+  (`..Default::default()`) sites rewritten (Drop types forbid FRU).
+
+**State:** branch `main`, all quality gates green (351 lib+unit tests total,
+7 suites; fmt/clippy/doc -D warnings). Committed after this entry.
+
+**Next:** Remaining from the C comparison, still not ported: HDLC inter-octet
+and inactivity timeouts (needs deadline support in PhysicalTransport), XID
+parameter negotiation, outbound I-frame segmentation, push_delivery deep
+comparison vs spodus/push.rs. Then release (0.5.0 or 0.6.0 given the new
+public API).

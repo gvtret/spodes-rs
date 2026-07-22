@@ -133,6 +133,16 @@ pub struct SecurityContext {
     pub invocation_counter: u32,
 }
 
+impl Drop for SecurityContext {
+    /// Zeroizes the key material when the context is dropped, so secrets do
+    /// not linger in freed memory.
+    fn drop(&mut self) {
+        use zeroize::Zeroize;
+        self.encryption_key.zeroize();
+        self.authentication_key.zeroize();
+    }
+}
+
 impl SecurityContext {
     /// Builds a context for a given protection level and security suite,
     /// validating that the encryption key length matches the suite

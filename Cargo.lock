@@ -1046,6 +1046,7 @@ dependencies = [
  "streebog",
  "subtle",
  "tracing",
+ "zeroize",
 ]
 
 [[package]]

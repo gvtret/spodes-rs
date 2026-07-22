@@ -8,6 +8,42 @@ While the crate is at `0.x`, minor releases may contain breaking changes.
 
 ## [Unreleased]
 
+### Added (server-side association, ported from openspodes 2.2.0)
+
+- **Server-side AARQ handling** (`RequestDispatcher::handle_aarq`, also wired
+  into `dispatch`): validates the application context, the calling-AP-title
+  (8 octets required for ciphering and title-bound HLS), the InitiateRequest
+  (DLMS version / conformance / client PDU size — rejected with an
+  `initiateError` ConfirmedServiceError in the user-information), and the
+  authentication against the configured Association LN. Structured ACSE
+  diagnostics are returned in the AARE (`application-context-name-not-supported`,
+  `calling-AP-title-not-recognized`, `authentication-required`,
+  `authentication-mechanism-name-not-recognised`, `authentication-failure`).
+  LLS checks the secret; HLS pass 1/2 stores CtoS, returns a random 16-octet
+  StoC and leaves the association pending until the
+  `reply_to_HLS_authentication` ACTION. The negotiated InitiateResponse ANDs
+  the conformance and caps the PDU size by the client's maximum.
+- New `acse_diagnostic` constants module and the missing mechanism-id
+  constants (6..10) in `service::acse`.
+
+### Added (HDLC session hardening, ported from openspodes 2.2.0)
+
+- `HdlcLayer::connect`/`disconnect`: SNRM/UA establishment (with sequence
+  reset) and DISC/UA-DM release for the client side.
+- Server-side data-link lifecycle in `receive_apdu`: SNRM → UA with sequence
+  reset (fresh association), DISC → UA in NRM / DM in NDM, FRMR on invalid
+  frames, RR/RNR handling.
+- I-frame segmentation reassembly: frames with the segmentation bit set are
+  accumulated and acknowledged with RR until the final segment arrives.
+- Frames with a bad FCS/HCS are silently dropped (up to 8 in a row) instead
+  of aborting the exchange.
+
+### Security
+
+- Key material is now zeroized on drop (`zeroize`): `HlsContext` keys
+  (EK/AK/GOST/signing), `SecurityContext` keys, and the old Association LN
+  secret replaced by `change_HLS_secret`.
+
 ### Added (ported from the openspodes C implementation)
 
 - **Six new interface classes** (IEC 62056-6-2): Compact data (62) with
