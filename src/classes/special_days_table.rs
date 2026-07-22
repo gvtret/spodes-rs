@@ -85,9 +85,8 @@ impl InterfaceClass for SpecialDaysTable {
         if !rest.is_empty() {
             return Err(BerError::InvalidTag);
         }
-        let seq = match tlv {
-            CosemDataType::Structure(seq) => seq,
-            _ => return Err(BerError::InvalidTag),
+        let CosemDataType::Structure(seq) = tlv else {
+            return Err(BerError::InvalidTag);
         };
         if seq.len() == 3 {
             if let CosemDataType::LongUnsigned(class_id) = seq[0] {
@@ -129,7 +128,7 @@ impl InterfaceClass for SpecialDaysTable {
         match method_id {
             1 => self.insert(params.ok_or("Missing parameter for insert method")?),
             2 => self.delete(params.ok_or("Missing parameter for delete method")?),
-            _ => Err(format!("Method {} not supported for SpecialDaysTable", method_id)),
+            _ => Err(format!("Method {method_id} not supported for SpecialDaysTable")),
         }
     }
 

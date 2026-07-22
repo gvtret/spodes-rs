@@ -28,15 +28,15 @@ fn main() {
     let status_value = status.value().clone();
 
     println!("Values to push:");
-    println!("  total_energy = {:?}", energy_value);
-    println!("  status       = {:?}", status_value);
+    println!("  total_energy = {energy_value:?}");
+    println!("  status       = {status_value:?}");
 
     // 3. Build the push data structure.
     //    The push data is a structure with one element per entry in push_object_list.
     let push_data = CosemDataType::Structure(vec![energy_value, status_value]);
 
     println!("\nPush data payload:");
-    println!("  {:?}", push_data);
+    println!("  {push_data:?}");
 
     // 4. Serialize the push data for transmission.
     let mut buf = Vec::new();
@@ -50,5 +50,5 @@ fn main() {
 }
 
 fn hex_string(bytes: &[u8]) -> String {
-    bytes.iter().map(|b| format!("{:02x}", b)).collect::<Vec<_>>().join(" ")
+    bytes.iter().map(|b| format!("{b:02x}")).collect::<Vec<_>>().join(" ")
 }

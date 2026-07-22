@@ -10,7 +10,7 @@ use std::sync::Arc;
 fn main() {
     let profile_obis = ObisCode::new(1, 0, 99, 1, 0, 255);
     let data_obis = ObisCode::new(0, 0, 96, 1, 0, 255);
-    let data = Data::new(data_obis.clone(), CosemDataType::Integer(42));
+    let data = Data::new(data_obis, CosemDataType::Integer(42));
     let capture_objects = vec![(Arc::new(data) as Arc<dyn InterfaceClass + Send + Sync>, 2)];
     let config = ProfileGenericConfig {
         logical_name: profile_obis.clone(),
@@ -25,13 +25,13 @@ fn main() {
     };
     let mut profile = ProfileGeneric::new(config);
 
-    println!("ProfileGeneric object: {:?}", profile);
+    println!("ProfileGeneric object: {profile:?}");
     println!("Logical name: {}", profile.logical_name());
     println!("Class ID: {}", profile.class_id());
     println!("Version: {}", profile.version());
 
     let serialized = serialize_object(&profile).expect("Serialization failed");
-    println!("Serialized profile: {:?}", serialized);
+    println!("Serialized profile: {serialized:?}");
 
     let config = ProfileGenericConfig {
         logical_name: profile_obis,
@@ -46,9 +46,9 @@ fn main() {
     };
     let mut deserialized = ProfileGeneric::new(config);
     deserialize_object(&mut deserialized, &serialized).expect("Deserialization failed");
-    println!("Deserialized profile: {:?}", deserialized);
+    println!("Deserialized profile: {deserialized:?}");
 
     let capture_result = profile.invoke_method(2, None).expect("Capture method failed");
-    println!("Capture result: {:?}", capture_result);
-    println!("Profile after capture: {:?}", profile);
+    println!("Capture result: {capture_result:?}");
+    println!("Profile after capture: {profile:?}");
 }

@@ -70,7 +70,7 @@ pub enum HdlcError {
 
 impl std::fmt::Display for HdlcError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{:?}", self)
+        write!(f, "{self:?}")
     }
 }
 
@@ -614,9 +614,8 @@ impl<T: PhysicalTransport> HdlcLayer<T> {
     fn read_decoded_frame(&mut self) -> io::Result<HdlcFrame> {
         for _ in 0..MAX_BAD_FRAMES {
             let raw = self.read_frame()?;
-            match HdlcFrame::decode(&raw) {
-                Ok(frame) => return Ok(frame),
-                Err(_) => continue,
+            if let Ok(frame) = HdlcFrame::decode(&raw) {
+                return Ok(frame);
             }
         }
         Err(io::Error::new(io::ErrorKind::InvalidData, "too many undecodable HDLC frames"))
@@ -801,7 +800,6 @@ impl<T: PhysicalTransport> DataLinkLayer for HdlcLayer<T> {
                     self.recv_seq = 0;
                     self.connected = true;
                     self.send_unnumbered_with_info(Control::Ua { final_bit: true }, self.xid.encode())?;
-                    continue;
                 }
                 // Server: DISC in NRM → UA and back to NDM; DISC in NDM → DM
                 // (IEC 62056-46 §6.4.4.5).
@@ -815,7 +813,6 @@ impl<T: PhysicalTransport> DataLinkLayer for HdlcLayer<T> {
                 // RR acknowledges our frames; keep waiting for information.
                 Control::ReceiveReady { recv_seq, .. } | Control::ReceiveNotReady { recv_seq, .. } => {
                     let _ = recv_seq;
-                    continue;
                 }
                 // Anything else is not valid in this state: reject it with FRMR
                 // (ISO 13239) and keep listening.
@@ -823,7 +820,6 @@ impl<T: PhysicalTransport> DataLinkLayer for HdlcLayer<T> {
                     if !self.is_client {
                         self.send_unnumbered(Control::Frmr { final_bit: true })?;
                     }
-                    continue;
                 }
             }
         }

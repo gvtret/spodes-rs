@@ -16,40 +16,40 @@ fn main() {
         DateTime::new([0x07, 0xE5, 0x05, 0x01, 0x02, 0x10, 0x30, 0x00, 0x00, 0x00, 0x00, 0x00]),
     );
 
-    // Выводим начальные атрибуты
+    // Print the initial attributes
     println!("Initial attributes:");
     for (id, value) in extended_register.attributes() {
-        println!("Attribute {}: {:?}", id, value);
+        println!("Attribute {id}: {value:?}");
     }
 
-    // Выполняем метод reset
+    // Invoke the reset method
     match extended_register.invoke_method(1, None) {
-        Ok(result) => println!("Reset result: {:?}", result),
-        Err(e) => println!("Reset failed: {}", e),
+        Ok(result) => println!("Reset result: {result:?}"),
+        Err(e) => println!("Reset failed: {e}"),
     }
 
-    // Выводим атрибуты после reset
+    // Print the attributes after reset
     println!("\nAttributes after reset:");
     for (id, value) in extended_register.attributes() {
-        println!("Attribute {}: {:?}", id, value);
+        println!("Attribute {id}: {value:?}");
     }
 
-    // Выполняем метод capture
+    // Invoke the capture method
     match extended_register.invoke_method(2, None) {
-        Ok(result) => println!("Capture result: {:?}", result),
-        Err(e) => println!("Capture failed: {}", e),
+        Ok(result) => println!("Capture result: {result:?}"),
+        Err(e) => println!("Capture failed: {e}"),
     }
 
-    // Выводим атрибуты после capture
+    // Print the attributes after capture
     println!("\nAttributes after capture:");
     for (id, value) in extended_register.attributes() {
-        println!("Attribute {}: {:?}", id, value);
+        println!("Attribute {id}: {value:?}");
     }
 
-    // Сериализация и десериализация
+    // Serialize and deserialize
     let serialized = serialize_object(&extended_register).expect("Serialization failed");
     let mut deserialized = ExtendedRegister::new(
-        obis.clone(),
+        obis,
         CosemDataType::Null,
         ScalerUnit::new(0, 0),
         CosemDataType::Null,
@@ -57,9 +57,9 @@ fn main() {
     );
     deserialize_object(&mut deserialized, &serialized).expect("Deserialization failed");
 
-    // Выводим атрибуты после десериализации
+    // Print the attributes after deserialization
     println!("\nAttributes after deserialization:");
     for (id, value) in deserialized.attributes() {
-        println!("Attribute {}: {:?}", id, value);
+        println!("Attribute {id}: {value:?}");
     }
 }

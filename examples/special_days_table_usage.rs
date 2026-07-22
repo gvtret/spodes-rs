@@ -6,62 +6,62 @@ use spodes_rs::types::attrs::SpecialDayEntry;
 use spodes_rs::types::CosemDataType;
 
 fn main() {
-    // Создаём OBIS-код для объекта SpecialDaysTable
+    // Build the OBIS code for the SpecialDaysTable object
     let obis = ObisCode::new(0, 0, 11, 102, 0, 255);
 
-    // Создаём список особых дней
+    // Build the list of special days
     let entries = vec![SpecialDayEntry {
         index: 1,
-        specialday_date: vec![0x07, 0xE5, 0x01, 0x01, 0xFF, 0xFF, 0xFF], // 1 января 2025
+        specialday_date: vec![0x07, 0xE5, 0x01, 0x01, 0xFF, 0xFF, 0xFF], // 1 January 2025
         day_id: 1,
     }];
 
-    // Создаём конфигурацию SpecialDaysTable
-    let config = SpecialDaysTableConfig { logical_name: obis.clone(), entries: entries.clone() };
+    // Build the SpecialDaysTable configuration
+    let config = SpecialDaysTableConfig { logical_name: obis.clone(), entries };
 
-    // Создаём объект SpecialDaysTable
+    // Build the SpecialDaysTable object
     let mut special_days_table = SpecialDaysTable::new(config);
 
-    // Проверяем атрибуты
+    // Check the attributes
     println!("Logical Name: {:?}", special_days_table.logical_name().to_bytes());
     println!("Entries: {:?}", special_days_table.attributes()[1].1);
 
-    // Сериализуем объект
+    // Serialize the object
     let serialized = serialize_object(&special_days_table).expect("Serialization failed");
-    println!("Serialized data: {:?}", serialized);
+    println!("Serialized data: {serialized:?}");
 
-    // Создаём новый объект для десериализации
-    let config = SpecialDaysTableConfig { logical_name: obis.clone(), entries: vec![] };
+    // Build a new object for deserialization
+    let config = SpecialDaysTableConfig { logical_name: obis, entries: vec![] };
     let mut deserialized = SpecialDaysTable::new(config);
 
-    // Десериализуем данные
+    // Deserialize the data
     deserialize_object(&mut deserialized, &serialized).expect("Deserialization failed");
 
-    // Проверяем десериализованный объект
+    // Check the deserialized object
     println!("Deserialized Logical Name: {:?}", deserialized.logical_name().to_bytes());
     println!("Deserialized Entries: {:?}", deserialized.attributes()[1].1);
 
-    // Добавляем новую дату (25 декабря 2025)
+    // Add a new date (25 December 2025)
     let new_date = CosemDataType::Structure(vec![
         CosemDataType::LongUnsigned(2),                                             // index
-        CosemDataType::OctetString(vec![0x07, 0xE5, 0x12, 0x25, 0xFF, 0xFF, 0xFF]), // 25 декабря 2025
+        CosemDataType::OctetString(vec![0x07, 0xE5, 0x12, 0x25, 0xFF, 0xFF, 0xFF]), // 25 December 2025
         CosemDataType::Unsigned(2),                                                 // day_id
     ]);
-    let result = special_days_table.invoke_method(1, Some(new_date.clone())).expect("Insert method failed");
-    println!("Insert result: {:?}", result);
+    let result = special_days_table.invoke_method(1, Some(new_date)).expect("Insert method failed");
+    println!("Insert result: {result:?}");
     if let CosemDataType::Array(items) = &special_days_table.attributes()[1].1 {
         println!("Entries after insert: {:?}", items.len());
         assert_eq!(items.len(), 2);
     }
 
-    // Удаляем дату (1 января 2025)
+    // Delete a date (1 January 2025)
     let delete_data = CosemDataType::Structure(vec![
         CosemDataType::LongUnsigned(1),
         CosemDataType::OctetString(vec![0x07, 0xE5, 0x01, 0x01, 0xFF, 0xFF, 0xFF]),
         CosemDataType::Unsigned(1),
     ]);
     let result = special_days_table.invoke_method(2, Some(delete_data)).expect("Delete method failed");
-    println!("Delete result: {:?}", result);
+    println!("Delete result: {result:?}");
     if let CosemDataType::Array(items) = &special_days_table.attributes()[1].1 {
         println!("Entries after delete: {:?}", items.len());
         assert_eq!(items.len(), 1);

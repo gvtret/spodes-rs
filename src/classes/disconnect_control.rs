@@ -124,9 +124,8 @@ impl InterfaceClass for DisconnectControl {
         if !rest.is_empty() {
             return Err(BerError::InvalidTag);
         }
-        let seq = match tlv {
-            CosemDataType::Structure(seq) => seq,
-            _ => return Err(BerError::InvalidTag),
+        let CosemDataType::Structure(seq) = tlv else {
+            return Err(BerError::InvalidTag);
         };
         // class_id + 4 attributes.
         if seq.len() != 5 {
@@ -167,7 +166,7 @@ impl InterfaceClass for DisconnectControl {
         match method_id {
             1 => self.remote_disconnect(),
             2 => self.remote_reconnect(),
-            _ => Err(format!("Method {} not supported for Disconnect control", method_id)),
+            _ => Err(format!("Method {method_id} not supported for Disconnect control")),
         }
     }
 

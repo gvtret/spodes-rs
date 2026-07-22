@@ -21,16 +21,16 @@ fn main() {
     };
     let mut clock = Clock::new(config);
 
-    println!("Clock object: {:?}", clock);
+    println!("Clock object: {clock:?}");
     println!("Logical name: {}", clock.logical_name());
     println!("Class ID: {}", clock.class_id());
     println!("Version: {}", clock.version());
 
     let serialized = serialize_object(&clock).expect("Serialization failed");
-    println!("Serialized clock: {:?}", serialized);
+    println!("Serialized clock: {serialized:?}");
 
     let config = ClockConfig {
-        logical_name: obis.clone(),
+        logical_name: obis,
         time: DateTime([0u8; 12]),
         time_zone: 0,
         status: 0,
@@ -42,20 +42,20 @@ fn main() {
     };
     let mut deserialized = Clock::new(config);
     deserialize_object(&mut deserialized, &serialized).expect("Deserialization failed");
-    println!("Deserialized clock: {:?}", deserialized);
+    println!("Deserialized clock: {deserialized:?}");
 
     let result = clock.invoke_method(1, None).expect("Adjust to quarter failed");
-    println!("Adjust to quarter result: {:?}", result);
-    println!("Clock after adjust to quarter: {:?}", clock);
+    println!("Adjust to quarter result: {result:?}");
+    println!("Clock after adjust to quarter: {clock:?}");
 
     let new_time = CosemDataType::DateTime(vec![
-        0x07, 0xE5, 0x05, 0x02, // Год: 2025, Месяц: 5, День: 2
-        0x03, // День недели: среда
-        0x12, 0x00, 0x00, // Час: 18, Минуты: 0, Секунды: 0
-        0x00, // Сотые доли секунды: 0
-        0x00, 0x00, 0x00, // Отклонение от UTC: 0
+        0x07, 0xE5, 0x05, 0x02, // Year: 2025, Month: 5, Day: 2
+        0x03, // Day of week: Wednesday
+        0x12, 0x00, 0x00, // Hour: 18, Minutes: 0, Seconds: 0
+        0x00, // Hundredths of a second: 0
+        0x00, 0x00, 0x00, // Deviation from UTC: 0
     ]);
     let result = clock.invoke_method(3, Some(new_time)).expect("Adjust to preset time failed");
-    println!("Adjust to preset time result: {:?}", result);
-    println!("Clock after adjust to preset time: {:?}", clock);
+    println!("Adjust to preset time result: {result:?}");
+    println!("Clock after adjust to preset time: {clock:?}");
 }

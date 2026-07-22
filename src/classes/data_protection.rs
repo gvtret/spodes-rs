@@ -138,9 +138,8 @@ impl InterfaceClass for DataProtection {
         if !rest.is_empty() {
             return Err(BerError::InvalidTag);
         }
-        let seq = match tlv {
-            CosemDataType::Structure(seq) => seq,
-            _ => return Err(BerError::InvalidTag),
+        let CosemDataType::Structure(seq) = tlv else {
+            return Err(BerError::InvalidTag);
         };
         // class_id + 6 attributes.
         if seq.len() != 7 {
@@ -182,7 +181,7 @@ impl InterfaceClass for DataProtection {
             1 => self.get_protected_attributes(params),
             2 => self.set_protected_attributes(params),
             3 => self.invoke_protected_method(params),
-            _ => Err(format!("Method {} not supported for Data protection", method_id)),
+            _ => Err(format!("Method {method_id} not supported for Data protection")),
         }
     }
 

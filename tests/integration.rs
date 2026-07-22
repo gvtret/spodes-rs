@@ -41,7 +41,7 @@ fn test_register_serialization_deserialization() {
     let obis = ObisCode::new(1, 0, 1, 8, 0, 255);
     let value = CosemDataType::DoubleLong(1000);
     let scaler_unit = ScalerUnit::new(0, 0x1B);
-    let register = Register::new(obis.clone(), value.clone(), scaler_unit.clone());
+    let register = Register::new(obis.clone(), value.clone(), scaler_unit);
 
     let serialized = serialize_object(&register).expect("Serialization failed");
     let mut deserialized = Register::new(obis, CosemDataType::Null, ScalerUnit::new(0, 0));
@@ -61,11 +61,11 @@ fn test_profile_generic_serialization_deserialization() {
     let buffer = vec![CosemDataType::Structure(vec![
         CosemDataType::DoubleLong(1000),
         CosemDataType::DateTime(vec![
-            0x07, 0xE5, 0x05, 0x01, // Год: 2025, Месяц: 5, День: 1
-            0x02, // День недели: вторник
-            0x00, 0x00, 0x00, // Час: 0, Минуты: 0, Секунды: 0
-            0x00, // Сотые доли секунды: 0
-            0x00, 0x00, 0x00, // Отклонение от UTC: 0
+            0x07, 0xE5, 0x05, 0x01, // Year: 2025, Month: 5, Day: 1
+            0x02, // Day of week: Tuesday
+            0x00, 0x00, 0x00, // Hour: 0, Minutes: 0, Seconds: 0
+            0x00, // Hundredths of a second: 0
+            0x00, 0x00, 0x00, // Deviation from UTC: 0
         ]),
     ])];
     let capture_objects = vec![];
@@ -82,7 +82,7 @@ fn test_profile_generic_serialization_deserialization() {
         capture_objects,
         capture_period,
         sort_method,
-        sort_object: sort_object.clone(),
+        sort_object,
         entries_in_use,
         profile_entries,
     };
@@ -128,7 +128,7 @@ fn test_register_reset_method() {
 fn test_profile_generic_capture_method() {
     let obis = ObisCode::new(1, 0, 99, 1, 0, 255);
     let data_obis = ObisCode::new(0, 0, 96, 1, 0, 255);
-    let data = Data::new(data_obis.clone(), CosemDataType::Integer(42));
+    let data = Data::new(data_obis, CosemDataType::Integer(42));
     let capture_objects = vec![(Arc::new(data) as Arc<dyn InterfaceClass + Send + Sync>, 2)];
     let config = ProfileGenericConfig {
         logical_name: obis,
@@ -170,7 +170,7 @@ fn test_clock_serialization_deserialization() {
 
     let serialized = serialize_object(&clock).expect("Serialization failed");
     let config = ClockConfig {
-        logical_name: obis.clone(),
+        logical_name: obis,
         time: DateTime([0u8; 12]),
         time_zone: 0,
         status: 0,
@@ -242,9 +242,9 @@ fn test_clock_adjust_to_minute() {
     let result = clock.invoke_method(2, None).expect("Adjust to minute failed");
     assert_eq!(result, CosemDataType::Null);
     if let CosemDataType::DateTime(dt) = &clock.attributes()[1].1 {
-        assert_eq!(dt[6], 37); // Минуты: 37 (без изменений)
-        assert_eq!(dt[7], 0); // Секунды: 0
-        assert_eq!(dt[8], 0); // Сотые доли: 0
+        assert_eq!(dt[6], 37); // Minutes: 37 (unchanged)
+        assert_eq!(dt[7], 0); // Seconds: 0
+        assert_eq!(dt[8], 0); // Hundredths: 0
     } else {
         panic!("Expected DateTime");
     }
@@ -282,19 +282,19 @@ fn test_extended_register_serialization_deserialization() {
     let scaler_unit = ScalerUnit::new(0, 0x1B);
     let status = CosemDataType::Unsigned(1);
     let capture_time = DateTime::new([
-        0x07, 0xE5, 0x05, 0x01, // Год: 2025, Месяц: 5, День: 1
-        0x02, // День недели: вторник
-        0x10, 0x30, 0x00, // Час: 16, Минуты: 30, Секунды: 0
-        0x00, // Сотые доли секунды: 0
-        0x00, 0x00, 0x00, // Отклонение от UTC: 0
+        0x07, 0xE5, 0x05, 0x01, // Year: 2025, Month: 5, Day: 1
+        0x02, // Day of week: Tuesday
+        0x10, 0x30, 0x00, // Hour: 16, Minutes: 30, Seconds: 0
+        0x00, // Hundredths of a second: 0
+        0x00, 0x00, 0x00, // Deviation from UTC: 0
     ]);
 
     let extended_register =
-        ExtendedRegister::new(obis.clone(), value.clone(), scaler_unit.clone(), status.clone(), capture_time.clone());
+        ExtendedRegister::new(obis.clone(), value.clone(), scaler_unit, status.clone(), capture_time.clone());
 
     let serialized = serialize_object(&extended_register).expect("Serialization failed");
     let mut deserialized = ExtendedRegister::new(
-        obis.clone(),
+        obis,
         CosemDataType::Null,
         ScalerUnit::new(0, 0),
         CosemDataType::Null,
@@ -319,11 +319,11 @@ fn test_extended_register_reset_method() {
     let scaler_unit = ScalerUnit::new(0, 0x1B);
     let status = CosemDataType::Unsigned(1);
     let capture_time = DateTime::new([
-        0x07, 0xE5, 0x05, 0x01, // Год: 2025, Месяц: 5, День: 1
-        0x02, // День недели: вторник
-        0x10, 0x30, 0x00, // Час: 16, Минуты: 30, Секунды: 0
-        0x00, // Сотые доли секунды: 0
-        0x00, 0x00, 0x00, // Отклонение от UTC: 0
+        0x07, 0xE5, 0x05, 0x01, // Year: 2025, Month: 5, Day: 1
+        0x02, // Day of week: Tuesday
+        0x10, 0x30, 0x00, // Hour: 16, Minutes: 30, Seconds: 0
+        0x00, // Hundredths of a second: 0
+        0x00, 0x00, 0x00, // Deviation from UTC: 0
     ]);
     let mut extended_register = ExtendedRegister::new(obis, value, scaler_unit, status, capture_time);
 
@@ -361,18 +361,18 @@ fn test_demand_register_serialization_deserialization() {
     let scaler_unit = ScalerUnit::new(0, 0x1B);
     let status = CosemDataType::Unsigned(1);
     let capture_time = DateTime::new([
-        0x07, 0xE5, 0x05, 0x01, // Год: 2025, Месяц: 5, День: 1
-        0x02, // День недели: вторник
-        0x10, 0x30, 0x00, // Час: 16, Минуты: 30, Секунды: 0
-        0x00, // Сотые доли секунды: 0
-        0x00, 0x00, 0x00, // Отклонение от UTC: 0
+        0x07, 0xE5, 0x05, 0x01, // Year: 2025, Month: 5, Day: 1
+        0x02, // Day of week: Tuesday
+        0x10, 0x30, 0x00, // Hour: 16, Minutes: 30, Seconds: 0
+        0x00, // Hundredths of a second: 0
+        0x00, 0x00, 0x00, // Deviation from UTC: 0
     ]);
     let start_time_current = DateTime::new([
-        0x07, 0xE5, 0x05, 0x01, // Год: 2025, Месяц: 5, День: 1
-        0x02, // День недели: вторник
-        0x10, 0x00, 0x00, // Час: 16, Минуты: 0, Секунды: 0
-        0x00, // Сотые доли секунды: 0
-        0x00, 0x00, 0x00, // Отклонение от UTC: 0
+        0x07, 0xE5, 0x05, 0x01, // Year: 2025, Month: 5, Day: 1
+        0x02, // Day of week: Tuesday
+        0x10, 0x00, 0x00, // Hour: 16, Minutes: 0, Seconds: 0
+        0x00, // Hundredths of a second: 0
+        0x00, 0x00, 0x00, // Deviation from UTC: 0
     ]);
     let period = 3600u32;
     let number_of_periods = 24u16;
@@ -381,7 +381,7 @@ fn test_demand_register_serialization_deserialization() {
         logical_name: obis.clone(),
         current_average_value: current_average_value.clone(),
         last_average_value: last_average_value.clone(),
-        scaler_unit: scaler_unit.clone(),
+        scaler_unit,
         status: status.clone(),
         capture_time: capture_time.clone(),
         start_time_current: start_time_current.clone(),
@@ -392,7 +392,7 @@ fn test_demand_register_serialization_deserialization() {
 
     let serialized = serialize_object(&demand_register).expect("Serialization failed");
     let config = DemandRegisterConfig {
-        logical_name: obis.clone(),
+        logical_name: obis,
         current_average_value: CosemDataType::Null,
         last_average_value: CosemDataType::Null,
         scaler_unit: ScalerUnit::new(0, 0),
@@ -427,18 +427,18 @@ fn test_demand_register_reset_method() {
     let scaler_unit = ScalerUnit::new(0, 0x1B);
     let status = CosemDataType::Unsigned(1);
     let capture_time = DateTime::new([
-        0x07, 0xE5, 0x05, 0x01, // Год: 2025, Месяц: 5, День: 1
-        0x02, // День недели: вторник
-        0x10, 0x30, 0x00, // Час: 16, Минуты: 30, Секунды: 0
-        0x00, // Сотые доли секунды: 0
-        0x00, 0x00, 0x00, // Отклонение от UTC: 0
+        0x07, 0xE5, 0x05, 0x01, // Year: 2025, Month: 5, Day: 1
+        0x02, // Day of week: Tuesday
+        0x10, 0x30, 0x00, // Hour: 16, Minutes: 30, Seconds: 0
+        0x00, // Hundredths of a second: 0
+        0x00, 0x00, 0x00, // Deviation from UTC: 0
     ]);
     let start_time_current = DateTime::new([
-        0x07, 0xE5, 0x05, 0x01, // Год: 2025, Месяц: 5, День: 1
-        0x02, // День недели: вторник
-        0x10, 0x00, 0x00, // Час: 16, Минуты: 0, Секунды: 0
-        0x00, // Сотые доли секунды: 0
-        0x00, 0x00, 0x00, // Отклонение от UTC: 0
+        0x07, 0xE5, 0x05, 0x01, // Year: 2025, Month: 5, Day: 1
+        0x02, // Day of week: Tuesday
+        0x10, 0x00, 0x00, // Hour: 16, Minutes: 0, Seconds: 0
+        0x00, // Hundredths of a second: 0
+        0x00, 0x00, 0x00, // Deviation from UTC: 0
     ]);
     let period = 3600u32;
     let number_of_periods = 24u16;
@@ -530,7 +530,7 @@ fn test_register_activation_serialization_deserialization() {
 
     let serialized = serialize_object(&register_activation).expect("Serialization failed");
     let config = RegisterActivationConfig {
-        logical_name: obis.clone(),
+        logical_name: obis,
         register_assignment: vec![],
         mask_list: vec![],
         active_mask: vec![],
@@ -622,7 +622,7 @@ fn test_script_table_serialization_deserialization() {
     let script_table = ScriptTable::new(config);
 
     let serialized = serialize_object(&script_table).expect("Serialization failed");
-    let config = ScriptTableConfig { logical_name: obis.clone(), scripts: vec![] };
+    let config = ScriptTableConfig { logical_name: obis, scripts: vec![] };
     let mut deserialized = ScriptTable::new(config);
     deserialize_object(&mut deserialized, &serialized).expect("Deserialization failed");
 
@@ -678,7 +678,7 @@ fn test_schedule_serialization_deserialization() {
     let schedule = Schedule::new(config);
 
     let serialized = serialize_object(&schedule).expect("Serialization failed");
-    let config = ScheduleConfig { logical_name: obis.clone(), entries: vec![], enabled: false };
+    let config = ScheduleConfig { logical_name: obis, entries: vec![], enabled: false };
     let mut deserialized = Schedule::new(config);
     deserialize_object(&mut deserialized, &serialized).expect("Deserialization failed");
 
@@ -750,7 +750,7 @@ fn test_special_days_table_serialization_deserialization() {
     let special_days_table = SpecialDaysTable::new(config);
 
     let serialized = serialize_object(&special_days_table).expect("Serialization failed");
-    let config = SpecialDaysTableConfig { logical_name: obis.clone(), entries: vec![] };
+    let config = SpecialDaysTableConfig { logical_name: obis, entries: vec![] };
     let mut deserialized = SpecialDaysTable::new(config);
     deserialize_object(&mut deserialized, &serialized).expect("Deserialization failed");
 
@@ -762,7 +762,7 @@ fn test_special_days_table_serialization_deserialization() {
 #[test]
 fn test_special_days_table_insert_method() {
     let obis = ObisCode::new(0, 0, 11, 102, 0, 255);
-    let config = SpecialDaysTableConfig { logical_name: obis.clone(), entries: vec![] };
+    let config = SpecialDaysTableConfig { logical_name: obis, entries: vec![] };
     let mut special_days_table = SpecialDaysTable::new(config);
 
     let new_date = CosemDataType::Structure(vec![
@@ -798,12 +798,12 @@ fn test_special_days_table_delete_method() {
     let obis = ObisCode::new(0, 0, 11, 102, 0, 255);
     let date = vec![0x07, 0xE5, 0x01, 0x01, 0x02, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00];
     let entry = SpecialDayEntry { index: 1, specialday_date: date.clone(), day_id: 1 };
-    let config = SpecialDaysTableConfig { logical_name: obis.clone(), entries: vec![entry] };
+    let config = SpecialDaysTableConfig { logical_name: obis, entries: vec![entry] };
     let mut special_days_table = SpecialDaysTable::new(config);
 
     let delete_param = CosemDataType::Structure(vec![
         CosemDataType::LongUnsigned(1),
-        CosemDataType::OctetString(date.clone()),
+        CosemDataType::OctetString(date),
         CosemDataType::Unsigned(1),
     ]);
     let result = special_days_table.invoke_method(2, Some(delete_param.clone())).expect("Delete method failed");
@@ -851,7 +851,7 @@ fn test_association_ln_serialization_deserialization_version0() {
     let config = AssociationLnConfig {
         logical_name: obis.clone(),
         version: AssociationLnVersion::Version0,
-        object_list: object_list.clone(),
+        object_list,
         associated_partners_id: associated_partners_id.clone(),
         application_context_name: application_context_name.clone(),
         xdlms_context_info: xdlms_context_info.clone(),
@@ -866,7 +866,7 @@ fn test_association_ln_serialization_deserialization_version0() {
 
     let serialized = serialize_object(&association_ln).expect("Serialization failed");
     let config = AssociationLnConfig {
-        logical_name: obis.clone(),
+        logical_name: obis,
         version: AssociationLnVersion::Version0,
         object_list: vec![],
         associated_partners_id: AssociatedPartnersId { client_sap: 0, server_sap: 0 },
@@ -925,7 +925,7 @@ fn test_association_ln_serialization_deserialization_version1() {
     let config = AssociationLnConfig {
         logical_name: obis.clone(),
         version: AssociationLnVersion::Version1,
-        object_list: object_list.clone(),
+        object_list,
         associated_partners_id: associated_partners_id.clone(),
         application_context_name: application_context_name.clone(),
         xdlms_context_info: xdlms_context_info.clone(),
@@ -940,7 +940,7 @@ fn test_association_ln_serialization_deserialization_version1() {
 
     let serialized = serialize_object(&association_ln).expect("Serialization failed");
     let config = AssociationLnConfig {
-        logical_name: obis.clone(),
+        logical_name: obis,
         version: AssociationLnVersion::Version1,
         object_list: vec![],
         associated_partners_id: AssociatedPartnersId { client_sap: 0, server_sap: 0 },
@@ -1007,9 +1007,8 @@ fn test_association_ln_lls_authentication() {
     };
     let mut association_ln = AssociationLn::new(config);
 
-    let result = association_ln
-        .invoke_method(1, Some(CosemDataType::OctetString(secret.clone())))
-        .expect("LLS authentication failed");
+    let result =
+        association_ln.invoke_method(1, Some(CosemDataType::OctetString(secret))).expect("LLS authentication failed");
     assert_eq!(result, CosemDataType::Null);
 
     let wrong_secret = vec![0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF];
@@ -1022,7 +1021,7 @@ fn test_association_ln_lls_authentication() {
 fn test_association_ln_hls4_sha1_authentication() {
     let obis = ObisCode::new(0, 0, 40, 0, 0, 255);
     let secret = vec![0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08, 0x09, 0x0A, 0x0B, 0x0C, 0x0D, 0x0E, 0x0F, 0x10];
-    // Pass 1: клиент прислал CtoS; Pass 2: сервер отправил StoC.
+    // Pass 1: client sent CtoS; Pass 2: server sent StoC.
     let ctos = vec![0x11, 0x22, 0x33, 0x44];
     let stoc = vec![0xAA, 0xBB, 0xCC, 0xDD];
     let config = AssociationLnConfig {
@@ -1053,13 +1052,13 @@ fn test_association_ln_hls4_sha1_authentication() {
     association_ln.set_ctos(ctos.clone());
     association_ln.set_stoc(stoc.clone());
 
-    // Pass 3: клиент присылает f(StoC) = SHA-1(StoC ‖ secret).
+    // Pass 3: client sends f(StoC) = SHA-1(StoC ‖ secret).
     let mut hasher = Sha1::new();
     hasher.update(&stoc);
     hasher.update(&secret);
     let f_stoc = hasher.finalize().to_vec();
 
-    // Pass 4: сервер возвращает f(CtoS) = SHA-1(CtoS ‖ secret).
+    // Pass 4: server returns f(CtoS) = SHA-1(CtoS ‖ secret).
     let mut hasher = Sha1::new();
     hasher.update(&ctos);
     hasher.update(&secret);
@@ -1070,7 +1069,7 @@ fn test_association_ln_hls4_sha1_authentication() {
         .expect("HLS4 SHA1 authentication failed");
     assert_eq!(result, CosemDataType::OctetString(expected_f_ctos));
 
-    // Неверное f(StoC) отклоняется.
+    // An incorrect f(StoC) is rejected.
     let mut wrong = f_stoc;
     wrong[0] ^= 0xFF;
     assert!(association_ln.invoke_method(1, Some(CosemDataType::OctetString(wrong))).is_err());
@@ -1098,7 +1097,7 @@ fn test_association_ln_change_hls_secret() {
             cyphering_info: vec![],
         },
         authentication_mechanism: AuthenticationMechanism::Lls,
-        secret: secret.clone(),
+        secret,
         association_status: 1,
         security_setup_reference: ObisCode::new(0, 0, 43, 0, 0, 255),
         user_list: vec![],
@@ -1208,7 +1207,7 @@ fn test_association_ln_remove_object() {
         panic!("Expected Array for object_list");
     }
 
-    // Повторное удаление отсутствующего объекта — ошибка.
+    // Deleting a missing object again is an error.
     let missing = CosemDataType::Structure(vec![
         CosemDataType::LongUnsigned(1),
         CosemDataType::Unsigned(0),

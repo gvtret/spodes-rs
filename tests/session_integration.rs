@@ -109,7 +109,7 @@ fn test_suite0_lls_authentication() {
             cyphering_info: vec![],
         },
         authentication_mechanism: AuthenticationMechanism::Lls,
-        secret: secret.clone(),
+        secret,
         association_status: 0,
         security_setup_reference: ObisCode::new(0, 0, 43, 0, 0, 255),
         user_list: vec![],

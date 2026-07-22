@@ -158,9 +158,8 @@ impl InterfaceClass for Ipv6Setup {
         if !rest.is_empty() {
             return Err(BerError::InvalidTag);
         }
-        let seq = match tlv {
-            CosemDataType::Structure(seq) => seq,
-            _ => return Err(BerError::InvalidTag),
+        let CosemDataType::Structure(seq) = tlv else {
+            return Err(BerError::InvalidTag);
         };
         // class_id + 10 attributes.
         if seq.len() != 11 {
@@ -204,7 +203,7 @@ impl InterfaceClass for Ipv6Setup {
         match method_id {
             1 => self.add_ipv6_address(params.ok_or("Missing method parameter")?),
             2 => self.remove_ipv6_address(params.ok_or("Missing method parameter")?),
-            _ => Err(format!("Method {} not supported for IPv6 setup", method_id)),
+            _ => Err(format!("Method {method_id} not supported for IPv6 setup")),
         }
     }
 

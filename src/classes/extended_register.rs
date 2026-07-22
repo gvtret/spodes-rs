@@ -192,7 +192,7 @@ impl InterfaceClass for ExtendedRegister {
         match method_id {
             1 => self.reset(),
             2 => self.capture(),
-            _ => Err(format!("Method {} not supported for ExtendedRegister class", method_id)),
+            _ => Err(format!("Method {method_id} not supported for ExtendedRegister class")),
         }
     }
 

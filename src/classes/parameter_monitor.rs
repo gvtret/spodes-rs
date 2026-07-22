@@ -102,9 +102,8 @@ impl InterfaceClass for ParameterMonitor {
         if !rest.is_empty() {
             return Err(BerError::InvalidTag);
         }
-        let seq = match tlv {
-            CosemDataType::Structure(seq) => seq,
-            _ => return Err(BerError::InvalidTag),
+        let CosemDataType::Structure(seq) = tlv else {
+            return Err(BerError::InvalidTag);
         };
         if seq.len() != 6 {
             return Err(BerError::InvalidLength);
@@ -139,7 +138,7 @@ impl InterfaceClass for ParameterMonitor {
     }
 
     fn invoke_method(&mut self, method_id: u8, _params: Option<CosemDataType>) -> Result<CosemDataType, String> {
-        Err(format!("Method {} not supported for Parameter monitor (no specific methods)", method_id))
+        Err(format!("Method {method_id} not supported for Parameter monitor (no specific methods)"))
     }
 
     fn as_any(&self) -> &dyn Any {

@@ -90,9 +90,8 @@ impl InterfaceClass for SapAssignment {
         if !rest.is_empty() {
             return Err(BerError::InvalidTag);
         }
-        let seq = match tlv {
-            CosemDataType::Structure(seq) => seq,
-            _ => return Err(BerError::InvalidTag),
+        let CosemDataType::Structure(seq) = tlv else {
+            return Err(BerError::InvalidTag);
         };
         // class_id + 2 attributes.
         if seq.len() != 3 {
@@ -128,7 +127,7 @@ impl InterfaceClass for SapAssignment {
     fn invoke_method(&mut self, method_id: u8, params: Option<CosemDataType>) -> Result<CosemDataType, String> {
         match method_id {
             1 => self.connect_logical_device(params.ok_or("Missing method parameter")?),
-            _ => Err(format!("Method {} not supported for SAP assignment", method_id)),
+            _ => Err(format!("Method {method_id} not supported for SAP assignment")),
         }
     }
 

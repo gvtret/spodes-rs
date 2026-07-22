@@ -227,9 +227,8 @@ impl AssociationLn {
     /// [`AssociationLn::set_ctos`]. For mechanism 5 (GMAC), also
     /// [`AssociationLn::set_hls_context`].
     fn reply_to_hls_authentication(&self, data: CosemDataType) -> Result<CosemDataType, String> {
-        let f_stoc = match data {
-            CosemDataType::OctetString(bytes) => bytes,
-            _ => return Err("Expected octet-string for f(StoC)".to_string()),
+        let CosemDataType::OctetString(f_stoc) = data else {
+            return Err("Expected octet-string for f(StoC)".to_string());
         };
         let mechanism = self.authentication_mechanism;
 
@@ -396,7 +395,7 @@ impl AssociationLn {
     /// Method 3: `add_object` — adds an `object_list_element` to `object_list`.
     /// If an object with the same (class_id, logical_name) already exists, it is updated.
     fn add_object(&mut self, data: CosemDataType) -> Result<CosemDataType, String> {
-        let elem = ObjectListElement::try_from(&data).map_err(|e| e.to_string())?;
+        let elem = ObjectListElement::try_from(&data)?;
         let key = (elem.class_id, elem.logical_name.to_bytes());
         if let Some(existing) = self.object_list.iter_mut().find(|e| (e.class_id, e.logical_name.to_bytes()) == key) {
             *existing = elem;
@@ -408,7 +407,7 @@ impl AssociationLn {
 
     /// Method 4: `remove_object` — removes an `object_list_element` from `object_list`.
     fn remove_object(&mut self, data: CosemDataType) -> Result<CosemDataType, String> {
-        let elem = ObjectListElement::try_from(&data).map_err(|e| e.to_string())?;
+        let elem = ObjectListElement::try_from(&data)?;
         let key = (elem.class_id, elem.logical_name.to_bytes());
         let before = self.object_list.len();
         self.object_list.retain(|e| (e.class_id, e.logical_name.to_bytes()) != key);
@@ -422,7 +421,7 @@ impl AssociationLn {
     /// `user_list`. If an entry with the same user id already exists, it is
     /// updated (IEC 62056-6-2 §5.3.7.3.5).
     fn add_user(&mut self, data: CosemDataType) -> Result<CosemDataType, String> {
-        let user = User::try_from(&data).map_err(|e| e.to_string())?;
+        let user = User::try_from(&data)?;
         let id = user.user_id;
         if let Some(existing) = self.user_list.iter_mut().find(|e| e.user_id == id) {
             *existing = user;
@@ -435,7 +434,7 @@ impl AssociationLn {
     /// Method 6 (version 2): `remove_user` — removes the `user` entry with the
     /// given id from `user_list` (IEC 62056-6-2 §5.3.7.3.6).
     fn remove_user(&mut self, data: CosemDataType) -> Result<CosemDataType, String> {
-        let user = User::try_from(&data).map_err(|e| e.to_string())?;
+        let user = User::try_from(&data)?;
         let id = user.user_id;
         let before = self.user_list.len();
         self.user_list.retain(|e| e.user_id != id);
@@ -605,9 +604,8 @@ impl InterfaceClass for AssociationLn {
         if !rest.is_empty() {
             return Err(BerError::InvalidTag);
         }
-        let seq = match tlv {
-            CosemDataType::Structure(seq) => seq,
-            _ => return Err(BerError::InvalidTag),
+        let CosemDataType::Structure(seq) = tlv else {
+            return Err(BerError::InvalidTag);
         };
         // The element count (class_id + attributes) identifies the version:
         // 9 → v0 (8 attrs), 10 → v1 (+security_setup_reference),
@@ -653,8 +651,7 @@ impl InterfaceClass for AssociationLn {
             _ => return Err(BerError::InvalidTag),
         };
         self.association_status = match &seq[8] {
-            CosemDataType::Enum(v) => *v,
-            CosemDataType::Unsigned(v) => *v,
+            CosemDataType::Enum(v) | CosemDataType::Unsigned(v) => *v,
             _ => return Err(BerError::InvalidTag),
         };
         // Attribute 9 (security_setup_reference) is present in versions 1 and 2.
@@ -1071,8 +1068,8 @@ mod tests {
         ctx.client_system_title = st_c.clone();
         ctx.server_system_title = st_s.clone();
         ctx.security_control_byte = 0x31; // suite 1 in the low nibble
-        ctx.signing_key = d_server.clone();
-        ctx.peer_public_key = pk_client.clone();
+        ctx.signing_key = d_server;
+        ctx.peer_public_key = pk_client;
         obj.set_hls_context(ctx);
 
         // Client's f(StoC) = SIGN(d_C, ST_C ‖ ST_S ‖ StoC ‖ CtoS).
@@ -1083,9 +1080,8 @@ mod tests {
             .expect("ECDSA authentication should succeed");
         // Server's f(CtoS) must verify against the server key over the swapped message.
         let msg_s = [&st_s[..], &st_c, &ctos, &stoc].concat();
-        let sig = match reply {
-            CosemDataType::OctetString(b) => b,
-            _ => panic!("expected octet-string reply"),
+        let CosemDataType::OctetString(sig) = reply else {
+            panic!("expected octet-string reply");
         };
         signature::ecdsa_verify(SecuritySuite::Suite1, &pk_server, &msg_s, &sig).unwrap();
 
@@ -1125,9 +1121,8 @@ mod tests {
             .invoke_method(1, Some(CosemDataType::OctetString(f_stoc.clone())))
             .expect("GOST 34.10 authentication should succeed");
         let msg_s = [&st_s[..], &st_c, &ctos, &stoc].concat();
-        let sig = match reply {
-            CosemDataType::OctetString(b) => b,
-            _ => panic!("expected octet-string reply"),
+        let CosemDataType::OctetString(sig) = reply else {
+            panic!("expected octet-string reply");
         };
         gost3410::gost_verify(&pk_server, &msg_s, &sig).unwrap();
 

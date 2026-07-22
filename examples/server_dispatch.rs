@@ -15,7 +15,7 @@ fn main() {
     let mut server = RequestDispatcher::new();
     let serial = ObisCode::new(0, 0, 96, 1, 0, 0xFF); // device serial number
     let energy = ObisCode::new(1, 0, 1, 8, 0, 0xFF); // active energy import
-    server.add(Box::new(Data::new(serial.clone(), CosemDataType::OctetString(b"MTR-0001".to_vec()))));
+    server.add(Box::new(Data::new(serial, CosemDataType::OctetString(b"MTR-0001".to_vec()))));
     server.add(Box::new(Data::new(energy.clone(), CosemDataType::DoubleLongUnsigned(123_456))));
 
     // A GET-REQUEST-NORMAL for the energy value (class_id 1, attribute 2).

@@ -63,8 +63,8 @@ fn main() {
     let result = push.invoke_method(1, Some(CosemDataType::Integer(0)));
     match result {
         Ok(CosemDataType::Null) => println!("Push triggered successfully (transport not implemented yet)."),
-        Ok(other) => println!("Push returned unexpected: {:?}", other),
-        Err(e) => println!("Push failed: {}", e),
+        Ok(other) => println!("Push returned unexpected: {other:?}"),
+        Err(e) => println!("Push failed: {e}"),
     }
 
     // 6. Show the serialized representation.

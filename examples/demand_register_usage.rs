@@ -20,43 +20,43 @@ fn main() {
         number_of_periods: 24,
     };
 
-    // Создаём объект DemandRegister
+    // Build the DemandRegister object
     let mut demand_register = DemandRegister::new(config);
 
-    // Выводим начальные атрибуты
+    // Print the initial attributes
     println!("Initial attributes:");
     for (id, value) in demand_register.attributes() {
-        println!("Attribute {}: {:?}", id, value);
+        println!("Attribute {id}: {value:?}");
     }
 
-    // Выполняем метод reset
+    // Invoke the reset method
     match demand_register.invoke_method(1, None) {
-        Ok(result) => println!("Reset result: {:?}", result),
-        Err(e) => println!("Reset failed: {}", e),
+        Ok(result) => println!("Reset result: {result:?}"),
+        Err(e) => println!("Reset failed: {e}"),
     }
 
-    // Выводим атрибуты после reset
+    // Print the attributes after reset
     println!("\nAttributes after reset:");
     for (id, value) in demand_register.attributes() {
-        println!("Attribute {}: {:?}", id, value);
+        println!("Attribute {id}: {value:?}");
     }
 
-    // Выполняем метод next_period
+    // Invoke the next_period method
     match demand_register.invoke_method(2, None) {
-        Ok(result) => println!("Next period result: {:?}", result),
-        Err(e) => println!("Next period failed: {}", e),
+        Ok(result) => println!("Next period result: {result:?}"),
+        Err(e) => println!("Next period failed: {e}"),
     }
 
-    // Выводим атрибуты после next_period
+    // Print the attributes after next_period
     println!("\nAttributes after next_period:");
     for (id, value) in demand_register.attributes() {
-        println!("Attribute {}: {:?}", id, value);
+        println!("Attribute {id}: {value:?}");
     }
 
-    // Сериализация и десериализация
+    // Serialize and deserialize
     let serialized = serialize_object(&demand_register).expect("Serialization failed");
     let config = DemandRegisterConfig {
-        logical_name: obis.clone(),
+        logical_name: obis,
         current_average_value: CosemDataType::Null,
         last_average_value: CosemDataType::Null,
         scaler_unit: ScalerUnit::new(0, 0),
@@ -69,9 +69,9 @@ fn main() {
     let mut deserialized = DemandRegister::new(config);
     deserialize_object(&mut deserialized, &serialized).expect("Deserialization failed");
 
-    // Выводим атрибуты после десериализации
+    // Print the attributes after deserialization
     println!("\nAttributes after deserialization:");
     for (id, value) in deserialized.attributes() {
-        println!("Attribute {}: {:?}", id, value);
+        println!("Attribute {id}: {value:?}");
     }
 }

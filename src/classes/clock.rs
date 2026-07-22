@@ -248,7 +248,7 @@ impl InterfaceClass for Clock {
             2 => self.adjust_to_minute(),
             3 => self.adjust_to_preset_time(params),
             4 => self.preset_adjusting_time(),
-            _ => Err(format!("Method {} not supported for Clock class", method_id)),
+            _ => Err(format!("Method {method_id} not supported for Clock class")),
         }
     }
 

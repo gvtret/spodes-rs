@@ -113,9 +113,8 @@ impl InterfaceClass for Arbitrator {
         if !rest.is_empty() {
             return Err(BerError::InvalidTag);
         }
-        let seq = match tlv {
-            CosemDataType::Structure(seq) => seq,
-            _ => return Err(BerError::InvalidTag),
+        let CosemDataType::Structure(seq) = tlv else {
+            return Err(BerError::InvalidTag);
         };
         // class_id + 6 attributes.
         if seq.len() != 7 {
@@ -155,7 +154,7 @@ impl InterfaceClass for Arbitrator {
         match method_id {
             1 => self.request_action(params.ok_or("Missing method parameter")?),
             2 => self.reset(),
-            _ => Err(format!("Method {} not supported for Arbitrator", method_id)),
+            _ => Err(format!("Method {method_id} not supported for Arbitrator")),
         }
     }
 

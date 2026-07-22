@@ -175,7 +175,7 @@ fn test_aes_gcm_encrypt_decrypt_round_trip() {
     assert_ne!(ciphered, plaintext);
 
     // Decrypt
-    let mut rx_ctx = ctx.clone();
+    let mut rx_ctx = ctx;
     rx_ctx.invocation_counter = 1;
     let (tag, decrypted) = ciphering::unprotect(&mut rx_ctx, &ciphered).unwrap();
     assert_eq!(tag, 0xC0);
@@ -232,7 +232,7 @@ fn test_aes_gcm_authentication_only() {
 
     let ciphered = ciphering::protect(&ctx, 0xC0, plaintext).unwrap();
 
-    let mut rx_ctx = ctx.clone();
+    let mut rx_ctx = ctx;
     rx_ctx.invocation_counter = 1;
     let (_, decrypted) = ciphering::unprotect(&mut rx_ctx, &ciphered).unwrap();
     assert_eq!(decrypted, plaintext);
@@ -255,7 +255,7 @@ fn test_aes_gcm_encryption_only() {
 
     let ciphered = ciphering::protect(&ctx, 0xC0, plaintext).unwrap();
 
-    let mut rx_ctx = ctx.clone();
+    let mut rx_ctx = ctx;
     rx_ctx.invocation_counter = 1;
     let (_, decrypted) = ciphering::unprotect(&mut rx_ctx, &ciphered).unwrap();
     assert_eq!(decrypted, plaintext);

@@ -308,7 +308,7 @@ impl fmt::Display for CosemDataType {
                     if i > 0 {
                         write!(f, ", ")?;
                     }
-                    write!(f, "{}", item)?;
+                    write!(f, "{item}")?;
                 }
                 write!(f, "])")
             }
@@ -318,21 +318,21 @@ impl fmt::Display for CosemDataType {
                     if i > 0 {
                         write!(f, ", ")?;
                     }
-                    write!(f, "{}", item)?;
+                    write!(f, "{item}")?;
                 }
                 write!(f, "])")
             }
-            CosemDataType::Boolean(b) => write!(f, "Boolean({})", b),
-            CosemDataType::Integer(i) => write!(f, "Integer({})", i),
-            CosemDataType::Long(i) => write!(f, "Long({})", i),
-            CosemDataType::Unsigned(u) => write!(f, "Unsigned({})", u),
-            CosemDataType::LongUnsigned(u) => write!(f, "LongUnsigned({})", u),
-            CosemDataType::DoubleLong(i) => write!(f, "DoubleLong({})", i),
-            CosemDataType::DoubleLongUnsigned(u) => write!(f, "DoubleLongUnsigned({})", u),
-            CosemDataType::OctetString(s) => write!(f, "OctetString({:?})", s),
-            CosemDataType::DateTime(dt) => write!(f, "DateTime({:?})", dt),
-            CosemDataType::BitString(s) => write!(f, "BitString({:?})", s),
-            CosemDataType::Enum(e) => write!(f, "Enum({})", e),
+            CosemDataType::Boolean(b) => write!(f, "Boolean({b})"),
+            CosemDataType::Integer(i) => write!(f, "Integer({i})"),
+            CosemDataType::Long(i) => write!(f, "Long({i})"),
+            CosemDataType::Unsigned(u) => write!(f, "Unsigned({u})"),
+            CosemDataType::LongUnsigned(u) => write!(f, "LongUnsigned({u})"),
+            CosemDataType::DoubleLong(i) => write!(f, "DoubleLong({i})"),
+            CosemDataType::DoubleLongUnsigned(u) => write!(f, "DoubleLongUnsigned({u})"),
+            CosemDataType::OctetString(s) => write!(f, "OctetString({s:?})"),
+            CosemDataType::DateTime(dt) => write!(f, "DateTime({dt:?})"),
+            CosemDataType::BitString(s) => write!(f, "BitString({s:?})"),
+            CosemDataType::Enum(e) => write!(f, "Enum({e})"),
         }
     }
 }
@@ -418,7 +418,7 @@ mod tests {
         for s in samples {
             let bytes = enc(&s);
             let (decoded, rest) = CosemDataType::deserialize_ber(&bytes).unwrap();
-            assert!(rest.is_empty(), "trailing bytes for {:?}", s);
+            assert!(rest.is_empty(), "trailing bytes for {s:?}");
             assert_eq!(decoded, s);
         }
     }

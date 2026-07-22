@@ -51,7 +51,7 @@ impl ScriptTable {
                     return Ok(CosemDataType::Null);
                 }
             }
-            return Err(format!("Script with ID {} not found", script_id));
+            return Err(format!("Script with ID {script_id} not found"));
         }
         Err("Invalid script ID parameter".to_string())
     }
@@ -135,7 +135,7 @@ impl InterfaceClass for ScriptTable {
     fn invoke_method(&mut self, method_id: u8, params: Option<CosemDataType>) -> Result<CosemDataType, String> {
         match method_id {
             1 => self.execute(params),
-            _ => Err(format!("Method {} not supported for ScriptTable class", method_id)),
+            _ => Err(format!("Method {method_id} not supported for ScriptTable class")),
         }
     }
 

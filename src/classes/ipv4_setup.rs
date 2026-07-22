@@ -154,9 +154,8 @@ impl InterfaceClass for Ipv4Setup {
         if !rest.is_empty() {
             return Err(BerError::InvalidTag);
         }
-        let seq = match tlv {
-            CosemDataType::Structure(seq) => seq,
-            _ => return Err(BerError::InvalidTag),
+        let CosemDataType::Structure(seq) = tlv else {
+            return Err(BerError::InvalidTag);
         };
         // class_id + 10 attributes.
         if seq.len() != 11 {
@@ -201,7 +200,7 @@ impl InterfaceClass for Ipv4Setup {
             1 => self.add_mc_ip_address(params.ok_or("Missing method parameter")?),
             2 => self.delete_mc_ip_address(params.ok_or("Missing method parameter")?),
             3 => self.get_nbof_mc_ip_addresses(),
-            _ => Err(format!("Method {} not supported for IPv4 setup", method_id)),
+            _ => Err(format!("Method {method_id} not supported for IPv4 setup")),
         }
     }
 

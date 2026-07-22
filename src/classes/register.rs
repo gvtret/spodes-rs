@@ -151,7 +151,7 @@ impl InterfaceClass for Register {
     fn invoke_method(&mut self, method_id: u8, _params: Option<CosemDataType>) -> Result<CosemDataType, String> {
         match method_id {
             1 => self.reset(),
-            _ => Err(format!("Method {} not supported for Register class", method_id)),
+            _ => Err(format!("Method {method_id} not supported for Register class")),
         }
     }
 

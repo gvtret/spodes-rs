@@ -197,7 +197,7 @@ pub fn gost_sign(d: &[u8], message: &[u8]) -> Result<[u8; 64], GostError> {
         match gost_sign_with_k(d, message, &vec256(&k)) {
             Ok(sig) => return Ok(sig),
             // A zero r or s is astronomically unlikely; just draw a fresh k.
-            Err(GostError::InvalidSignature) => continue,
+            Err(GostError::InvalidSignature) => (),
             Err(e) => return Err(e),
         }
     }
