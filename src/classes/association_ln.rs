@@ -126,7 +126,16 @@ pub struct AssociationLn {
     /// Not needed for the plain-hash mechanisms 3/4.
     #[serde(skip)]
     hls_context: Option<HlsContext>,
+    /// Consecutive failed `reply_to_HLS_authentication` attempts, for rate
+    /// limiting (see [`Self::reply_to_hls_authentication_checked`]).
+    #[serde(skip)]
+    hls_failures: u8,
 }
+
+/// Consecutive HLS-authentication failures allowed before the association
+/// locks out further attempts (a fresh AARQ Pass 1/2 is required to reset the
+/// counter), mitigating brute-force guessing of the challenge response.
+const MAX_HLS_FAILURES: u8 = 5;
 
 impl AssociationLn {
     /// Builds a new [`AssociationLn`] from its configuration.
@@ -148,6 +157,7 @@ impl AssociationLn {
             ctos: None,
             stoc: None,
             hls_context: None,
+            hls_failures: 0,
         }
     }
 
@@ -354,6 +364,27 @@ impl AssociationLn {
             }
             AuthMechanism::None => Err("mechanism 0 does not use HLS authentication".to_string()),
             AuthMechanism::Lls => unreachable!("LLS handled above"),
+        }
+    }
+
+    /// Rate-limited wrapper around [`Self::reply_to_hls_authentication`]
+    /// (method 1): after [`MAX_HLS_FAILURES`] consecutive failed attempts,
+    /// further attempts are rejected without even checking the response,
+    /// mitigating brute-force guessing of the challenge response. The
+    /// counter resets on a successful authentication.
+    fn reply_to_hls_authentication_checked(&mut self, data: CosemDataType) -> Result<CosemDataType, String> {
+        if self.hls_failures >= MAX_HLS_FAILURES {
+            return Err("HLS authentication locked out after too many failed attempts".to_string());
+        }
+        match self.reply_to_hls_authentication(data) {
+            Ok(reply) => {
+                self.hls_failures = 0;
+                Ok(reply)
+            }
+            Err(e) => {
+                self.hls_failures = self.hls_failures.saturating_add(1);
+                Err(e)
+            }
         }
     }
 
@@ -661,7 +692,7 @@ impl InterfaceClass for AssociationLn {
         let params = params.ok_or("Missing method parameter")?;
         let is_v2 = matches!(self.version, AssociationLnVersion::Version2);
         match method_id {
-            1 => self.reply_to_hls_authentication(params),
+            1 => self.reply_to_hls_authentication_checked(params),
             2 => self.change_hls_secret(params),
             3 => self.add_object(params),
             4 => self.remove_object(params),
@@ -849,6 +880,36 @@ mod tests {
         let mut wrong = f_stoc;
         wrong[0] ^= 0xFF;
         assert!(obj.invoke_method(1, Some(CosemDataType::OctetString(wrong))).is_err());
+    }
+
+    /// After [`MAX_HLS_FAILURES`] consecutive wrong `f(StoC)` values, further
+    /// attempts are rejected outright — even a correct one — mitigating
+    /// brute-force guessing of the challenge response.
+    #[test]
+    fn hls_authentication_locks_out_after_repeated_failures() {
+        let secret = vec![0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08];
+        let stoc = vec![0xAA, 0xBB, 0xCC, 0xDD];
+        let ctos = vec![0x11, 0x22, 0x33, 0x44];
+        let mut obj = sample(AssociationLnVersion::Version1);
+        obj.secret = secret.clone();
+        obj.set_stoc(stoc.clone());
+        obj.set_ctos(ctos);
+
+        let f_stoc = {
+            let mut h = Sha1::new();
+            h.update(&stoc);
+            h.update(&secret);
+            h.finalize().to_vec()
+        };
+        let mut wrong = f_stoc.clone();
+        wrong[0] ^= 0xFF;
+
+        for _ in 0..MAX_HLS_FAILURES {
+            assert!(obj.invoke_method(1, Some(CosemDataType::OctetString(wrong.clone()))).is_err());
+        }
+        // The correct response is now rejected too: the lockout persists.
+        let err = obj.invoke_method(1, Some(CosemDataType::OctetString(f_stoc))).unwrap_err();
+        assert!(err.contains("locked out"), "unexpected error: {err}");
     }
 
     /// HLS-5 (GMAC): reference test vector from IEC 62056-5-3, Table 33.

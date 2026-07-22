@@ -8,6 +8,28 @@ While the crate is at `0.x`, minor releases may contain breaking changes.
 
 ## [Unreleased]
 
+### Security (re-audit against openspodes security.c 1.10.0)
+
+- **Replay protection**: `SecurityContext` now tracks the last invocation
+  counter (IC) accepted from each peer. `unprotect`/`gost_unprotect`/
+  `gost_gmac_unprotect` reject a received IC that does not exceed the last
+  one accepted — a replayed or reordered-backward ciphered APDU — *before*
+  attempting decryption, and leave the context state unchanged on
+  rejection. This closes a gap where a captured ciphered APDU could
+  previously be replayed and would decrypt/process successfully. New
+  `CipherError::ReplayDetected`.
+- **Invocation-counter exhaustion guard**: `protect`/`gost_protect`/
+  `gost_gmac_protect` refuse to protect another APDU once the IC has
+  reached `u32::MAX` (re-keying is required), instead of wrapping the
+  counter back to a reusable value. New `CipherError::InvocationCounterExhausted`
+  and an advisory `SecurityContext::key_rotation_needed()` (true once the IC
+  is within 1000 of overflow).
+- **HLS authentication rate limiting**: `AssociationLn` now locks out the
+  `reply_to_HLS_authentication` ACTION after 5 consecutive failed attempts
+  (reset on a successful authentication), mitigating brute-force guessing
+  of the challenge response — previously every attempt was checked with no
+  limit.
+
 ### Added (Push delivery, ported from openspodes push_delivery.c)
 
 - **`RequestDispatcher::build_push_delivery_request`**: reads each object

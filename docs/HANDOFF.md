@@ -152,3 +152,76 @@ otherwise the C-parity port is functionally complete. Ready for release
 (0.5.0 or bump to 0.6.0 given the new public API surface: handle_aarq,
 build_push_delivery_request, HdlcLayer::connect/disconnect, 6 new IC
 classes).
+
+## 2026-07-22 — Re-audit round: found and fixed 2 real security gaps
+
+**User asked to re-verify sync with openspodes.** Did a deeper pass this
+time: compared C test suites (test_errors.c 37 tests, test_core.c 108 tests,
+test_gost_crypto.c 16, test_spodus_concentrator.c 8, GBT/general_ciphering
+headers) against Rust, not just source files. Found two real, previously
+unported security behaviors (both confirmed present in C via
+`test_glo_unprotect_replay_ic` and `ctx->hls_failures >= 5` in security.c)
+and fixed them:
+
+**Done:**
+1. **Replay protection (IC monotonicity)** — `SecurityContext` gained
+   `last_peer_ic`/`ic_valid` private fields (init in `for_suite`).
+   `unprotect`/`gost_unprotect`/`gost_gmac_unprotect` in
+   `src/service/ciphering.rs` now call `check_replay(ic)` before touching
+   ciphertext and `accept_peer_ic(ic)` only after successful decrypt. New
+   `CipherError::ReplayDetected`. 3 new tests (one per cipher family) proving
+   replay/reorder rejection and that acceptance still advances the baseline.
+   Verified this doesn't break `ClientSession`: the one call site that
+   matters (`session.rs:747`, `&mut c.rx` inside `send`/`get`/`set`/`action`)
+   uses a persistent context across the session's lifetime — correct. A
+   second call site (`send_raw`, line ~543) uses `c.rx.clone()` and so never
+   accumulates replay state — a pre-existing wart, left alone (not a
+   regression, just ineffective there; noted for later if `send_raw` gets
+   revisited).
+2. **IC-overflow guard** — `protect`/`gost_protect`/`gost_gmac_protect`
+   reject via `check_send_ic()` when `invocation_counter == u32::MAX`
+   (`CipherError::InvocationCounterExhausted`); added advisory
+   `SecurityContext::key_rotation_needed()` (IC within 1000 of overflow),
+   mirroring C's `osp_sec_key_rotation_needed`. 2 new tests.
+3. **HLS failure rate limiting** — `AssociationLn` gained a `hls_failures: u8`
+   transient field (`#[serde(skip)]`) and `MAX_HLS_FAILURES = 5` const.
+   `reply_to_hls_authentication_checked` (now the sole dispatch target for
+   method 1) rejects outright once `hls_failures >= 5`, increments on every
+   failure, resets to 0 on success — exactly mirrors C's per-mechanism
+   `ctx->hls_failures` bookkeeping. 1 new test (5 wrong attempts, then even
+   the correct response is rejected).
+
+Full quality gate green: 347 lib tests (was 341) + 87 across 6 integration
+suites, fmt/clippy/doc -D warnings clean.
+
+**Also checked, found already in sync (no action needed):**
+- GOST/Streebog/Kuznyechik/VKO/KDF reference vectors (test_gost_crypto.c,
+  16 tests) — already ported with byte-for-byte vectors in earlier sessions.
+- SPODUS concentrator tests (test_spodus_concentrator.c, 8 tests) — already
+  covered by the feature/spodus work (merged at 0.2.0).
+- General ciphering / general signing codec — comparable API surface.
+
+**Known, deliberately NOT ported (architecture-level, flagged before, still
+true — not touched this round):**
+- GBT (General Block Transfer): Rust has the codec (`service/gbt.rs`
+  encode/decode) but it is not wired into `session.rs`/`server.rs` — no
+  actual general-block-transfer flow uses it. C has transport-level
+  streaming helpers (`osp_gbt_transport_send_streaming*`). This is a bigger
+  integration task, not a bug — GET/SET already have their own block
+  transfer (WithDataBlock) which is wired and tested.
+- HDLC inter-octet/inactivity timeouts, XID negotiation, outbound I-frame
+  segmentation (needs a deadline/clock abstraction in `PhysicalTransport`).
+
+**State:** branch `main`, uncommitted at entry-write time (commit follows
+immediately). All changes are additive/hardening — no breaking API removal,
+though `SecurityContext` gained private fields (transparent to callers using
+`for_suite`) and `CipherError` gained two new variants (non-exhaustive
+matches would need updating — check any external `match CipherError {}` if
+this crate gets consumers outside the workspace).
+
+**Next:** GBT wiring and HDLC timeouts remain optional future work — ask
+before doing either, they're larger architectural changes. Otherwise ready
+for release; likely 0.6.0 given the accumulated public API additions across
+today's four rounds (handle_aarq, build_push_delivery_request,
+HdlcLayer::connect/disconnect, 6 new IC classes, CipherError variants,
+key_rotation_needed).

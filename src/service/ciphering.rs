@@ -108,6 +108,12 @@ pub enum CipherError {
     AuthenticationFailed,
     /// The AES-GCM engine reported an error.
     CryptoError,
+    /// The received invocation counter did not increase past the last one
+    /// accepted from this peer (a replayed or reordered-backward APDU).
+    ReplayDetected,
+    /// The invocation counter has reached its maximum value and cannot be
+    /// used to protect another APDU without re-keying.
+    InvocationCounterExhausted,
 }
 
 impl std::fmt::Display for CipherError {
@@ -131,6 +137,12 @@ pub struct SecurityContext {
     pub system_title: Vec<u8>,
     /// Invocation counter (IC).
     pub invocation_counter: u32,
+    /// The last invocation counter accepted from the peer, for replay
+    /// rejection. Set by `for_suite`; updated by the `*_unprotect` functions.
+    last_peer_ic: u32,
+    /// Whether `last_peer_ic` holds a value yet (false until the first
+    /// successful unprotect).
+    ic_valid: bool,
 }
 
 impl Drop for SecurityContext {
@@ -165,7 +177,45 @@ impl SecurityContext {
             authentication_key,
             system_title,
             invocation_counter,
+            last_peer_ic: 0,
+            ic_valid: false,
         })
+    }
+
+    /// Checks the received invocation counter against the last one accepted
+    /// from this peer, rejecting a replayed or reordered-backward APDU
+    /// *before* any decryption is attempted (IEC 62056-5-3: the IC must
+    /// increase monotonically per peer).
+    fn check_replay(&self, ic: u32) -> Result<(), CipherError> {
+        if self.ic_valid && ic <= self.last_peer_ic {
+            return Err(CipherError::ReplayDetected);
+        }
+        Ok(())
+    }
+
+    /// Records `ic` as the last invocation counter accepted from the peer,
+    /// after a successful unprotect.
+    fn accept_peer_ic(&mut self, ic: u32) {
+        self.last_peer_ic = ic;
+        self.ic_valid = true;
+    }
+
+    /// Rejects protecting an APDU once the invocation counter has reached
+    /// its maximum value: it must never wrap back to a smaller value, per
+    /// IEC 62056-5-3. Re-keying (a fresh IC) is required past this point.
+    fn check_send_ic(&self) -> Result<(), CipherError> {
+        if self.invocation_counter == u32::MAX {
+            return Err(CipherError::InvocationCounterExhausted);
+        }
+        Ok(())
+    }
+
+    /// Advisory check for the host: true once the invocation counter is
+    /// within 1000 of overflow, signalling that the keys should be rotated
+    /// (a fresh system-title/key pair resets the counter) before
+    /// [`CipherError::InvocationCounterExhausted`] starts rejecting sends.
+    pub fn key_rotation_needed(&self) -> bool {
+        self.invocation_counter >= u32::MAX - 1000
     }
 
     fn authentication(&self) -> bool {
@@ -190,6 +240,7 @@ impl SecurityContext {
 /// Protects `plaintext` (a plain xDLMS APDU) and returns the ciphered APDU with
 /// the given `ciphered_tag` (see [`glo`] / [`ded`]).
 pub fn protect(ctx: &SecurityContext, ciphered_tag: u8, plaintext: &[u8]) -> Result<Vec<u8>, CipherError> {
+    ctx.check_send_ic()?;
     let iv = ctx.iv()?;
     let sc = ctx.security_control;
 
@@ -235,7 +286,11 @@ pub fn protect(ctx: &SecurityContext, ciphered_tag: u8, plaintext: &[u8]) -> Res
 /// Removes protection from a ciphered APDU, returning `(ciphered_tag, plaintext)`.
 ///
 /// The invocation counter carried in the header is written into `ctx` so the
-/// same context can decipher a following APDU with the peer's counter.
+/// same context can decipher a following APDU with the peer's counter. Per
+/// IEC 62056-5-3 the IC must increase monotonically per peer; a received IC
+/// that does not exceed the last one accepted from this peer is rejected as
+/// a replay *before* any decryption is attempted, and `ctx` is left
+/// unchanged.
 pub fn unprotect(ctx: &mut SecurityContext, apdu: &[u8]) -> Result<(u8, Vec<u8>), CipherError> {
     let ciphered_tag = *apdu.first().ok_or(CipherError::Truncated)?;
     let (len, header) = read_length(&apdu[1..]).ok_or(CipherError::Truncated)?;
@@ -244,8 +299,10 @@ pub fn unprotect(ctx: &mut SecurityContext, apdu: &[u8]) -> Result<(u8, Vec<u8>)
         return Err(CipherError::Truncated);
     }
     let sc = body[0];
+    let ic = u32::from_be_bytes([body[1], body[2], body[3], body[4]]);
+    ctx.check_replay(ic)?;
     ctx.security_control = sc;
-    ctx.invocation_counter = u32::from_be_bytes([body[1], body[2], body[3], body[4]]);
+    ctx.invocation_counter = ic;
     let protected = &body[5..];
     let iv = ctx.iv()?;
 
@@ -279,6 +336,7 @@ pub fn unprotect(ctx: &mut SecurityContext, apdu: &[u8]) -> Result<(u8, Vec<u8>)
         }
         (false, false) => protected.to_vec(),
     };
+    ctx.accept_peer_ic(ic);
     Ok((ciphered_tag, plaintext))
 }
 
@@ -294,6 +352,7 @@ pub fn unprotect(ctx: &mut SecurityContext, apdu: &[u8]) -> Result<(u8, Vec<u8>)
 ///
 /// Returns the encrypted APDU with the GOST tag appended.
 pub fn gost_protect(ctx: &SecurityContext, ciphered_tag: u8, plaintext: &[u8]) -> Result<Vec<u8>, CipherError> {
+    ctx.check_send_ic()?;
     if ctx.encryption_key.len() != 32 {
         return Err(CipherError::InvalidKey);
     }
@@ -357,6 +416,8 @@ pub fn gost_protect(ctx: &SecurityContext, ciphered_tag: u8, plaintext: &[u8]) -
 }
 
 /// Removes GOST ciphering from an APDU, returning `(ciphered_tag, plaintext)`.
+/// Rejects a replayed or reordered-backward invocation counter before any
+/// decryption is attempted; see [`unprotect`].
 pub fn gost_unprotect(ctx: &mut SecurityContext, apdu: &[u8]) -> Result<(u8, Vec<u8>), CipherError> {
     let ciphered_tag = *apdu.first().ok_or(CipherError::Truncated)?;
     let (len, header) = read_length(&apdu[1..]).ok_or(CipherError::Truncated)?;
@@ -365,8 +426,10 @@ pub fn gost_unprotect(ctx: &mut SecurityContext, apdu: &[u8]) -> Result<(u8, Vec
         return Err(CipherError::Truncated);
     }
     let sc = body[0];
+    let ic = u32::from_be_bytes([body[1], body[2], body[3], body[4]]);
+    ctx.check_replay(ic)?;
     ctx.security_control = sc;
-    ctx.invocation_counter = u32::from_be_bytes([body[1], body[2], body[3], body[4]]);
+    ctx.invocation_counter = ic;
     let protected = &body[5..];
     let iv = ctx.iv()?;
     let nonce = build_gost_nonce(&iv);
@@ -399,6 +462,7 @@ pub fn gost_unprotect(ctx: &mut SecurityContext, apdu: &[u8]) -> Result<(u8, Vec
         (false, true) => gost_ctr_decrypt(&ctx.encryption_key, &nonce, protected)?,
         (false, false) => protected.to_vec(),
     };
+    ctx.accept_peer_ic(ic);
     Ok((ciphered_tag, plaintext))
 }
 
@@ -639,6 +703,7 @@ pub fn gost_gmac_decrypt(key: &[u8], iv: &[u8; 12], ciphertext: &[u8]) -> Result
 
 /// Protects an APDU using GOST GMAC (Kuznyechik GCM-like mode).
 pub fn gost_gmac_protect(ctx: &SecurityContext, ciphered_tag: u8, plaintext: &[u8]) -> Result<Vec<u8>, CipherError> {
+    ctx.check_send_ic()?;
     if ctx.encryption_key.len() != 32 {
         return Err(CipherError::InvalidKey);
     }
@@ -681,7 +746,9 @@ pub fn gost_gmac_protect(ctx: &SecurityContext, ciphered_tag: u8, plaintext: &[u
     Ok(apdu)
 }
 
-/// Removes GOST GMAC protection from an APDU.
+/// Removes GOST GMAC protection from an APDU. Rejects a replayed or
+/// reordered-backward invocation counter before any decryption is
+/// attempted; see [`unprotect`].
 pub fn gost_gmac_unprotect(ctx: &mut SecurityContext, apdu: &[u8]) -> Result<(u8, Vec<u8>), CipherError> {
     let ciphered_tag = *apdu.first().ok_or(CipherError::Truncated)?;
     let (len, header) = read_length(&apdu[1..]).ok_or(CipherError::Truncated)?;
@@ -690,8 +757,10 @@ pub fn gost_gmac_unprotect(ctx: &mut SecurityContext, apdu: &[u8]) -> Result<(u8
         return Err(CipherError::Truncated);
     }
     let sc = body[0];
+    let ic = u32::from_be_bytes([body[1], body[2], body[3], body[4]]);
+    ctx.check_replay(ic)?;
     ctx.security_control = sc;
-    ctx.invocation_counter = u32::from_be_bytes([body[1], body[2], body[3], body[4]]);
+    ctx.invocation_counter = ic;
     let protected = &body[5..];
     let iv = ctx.iv()?;
 
@@ -723,6 +792,7 @@ pub fn gost_gmac_unprotect(ctx: &mut SecurityContext, apdu: &[u8]) -> Result<(u8
         (false, true) => gost_gmac_decrypt(&ctx.encryption_key, &iv, protected)?,
         (false, false) => protected.to_vec(),
     };
+    ctx.accept_peer_ic(ic);
     Ok((ciphered_tag, plaintext))
 }
 
@@ -839,6 +909,8 @@ mod tests {
             authentication_key: hex(b"D0D1D2D3D4D5D6D7D8D9DADBDCDDDEDF"),
             system_title: hex(b"4D4D4D0000BC614E"),
             invocation_counter: 0x01234567,
+            last_peer_ic: 0,
+            ic_valid: false,
         }
     }
 
@@ -868,6 +940,55 @@ mod tests {
         let n = apdu.len();
         apdu[n - 1] ^= 0x01; // corrupt the tag
         assert_eq!(unprotect(&mut ctx(), &apdu), Err(CipherError::AuthenticationFailed));
+    }
+
+    #[test]
+    fn unprotect_rejects_replayed_or_reordered_ic() {
+        let mut tx = ctx();
+        let mut rx = ctx();
+        let plaintext = hex(b"C001C100080000010000FF0200");
+
+        // First: a valid APDU with IC=5 establishes the peer's baseline.
+        tx.invocation_counter = 5;
+        let apdu = protect(&tx, glo::GET_REQUEST, &plaintext).unwrap();
+        let (_, recovered) = unprotect(&mut rx, &apdu).unwrap();
+        assert_eq!(recovered, plaintext);
+        assert_eq!(rx.last_peer_ic, 5);
+
+        // Replaying the same APDU (IC=5 again) must be rejected.
+        assert_eq!(unprotect(&mut rx, &apdu), Err(CipherError::ReplayDetected));
+
+        // A lower IC (3) — an out-of-order or replayed older APDU — is
+        // rejected too, even though it is otherwise well-formed.
+        tx.invocation_counter = 3;
+        let older = protect(&tx, glo::GET_REQUEST, &plaintext).unwrap();
+        assert_eq!(unprotect(&mut rx, &older), Err(CipherError::ReplayDetected));
+        // Rejection must not disturb the recorded baseline.
+        assert_eq!(rx.last_peer_ic, 5);
+
+        // A higher IC (6) is accepted and advances the baseline.
+        tx.invocation_counter = 6;
+        let next = protect(&tx, glo::GET_REQUEST, &plaintext).unwrap();
+        assert!(unprotect(&mut rx, &next).is_ok());
+        assert_eq!(rx.last_peer_ic, 6);
+    }
+
+    #[test]
+    fn protect_rejects_exhausted_invocation_counter() {
+        let mut tx = ctx();
+        tx.invocation_counter = u32::MAX;
+        assert_eq!(protect(&tx, glo::GET_REQUEST, b"x"), Err(CipherError::InvocationCounterExhausted));
+    }
+
+    #[test]
+    fn key_rotation_needed_flags_approaching_overflow() {
+        let mut c = ctx();
+        c.invocation_counter = 0;
+        assert!(!c.key_rotation_needed());
+        c.invocation_counter = u32::MAX - 1000;
+        assert!(c.key_rotation_needed());
+        c.invocation_counter = u32::MAX;
+        assert!(c.key_rotation_needed());
     }
 
     #[test]
@@ -933,6 +1054,8 @@ mod tests {
             authentication_key: hex(b"bddc7e4ac4e164e40785d8c147b4a883bddc7e4ac4e164e40785d8c147b4a883"),
             system_title: hex(b"4D4D4D0000BC614E"),
             invocation_counter: 0x01234567,
+            last_peer_ic: 0,
+            ic_valid: false,
         }
     }
 
@@ -943,6 +1066,18 @@ mod tests {
         let (tag, recovered) = gost_unprotect(&mut gost_ctx(), &apdu).unwrap();
         assert_eq!(tag, glo::GET_REQUEST);
         assert_eq!(recovered, plaintext);
+    }
+
+    #[test]
+    fn gost_unprotect_rejects_replayed_ic() {
+        let mut tx = gost_ctx();
+        let mut rx = gost_ctx();
+        let plaintext = hex(b"C001C100080000010000FF0200");
+
+        tx.invocation_counter = 5;
+        let apdu = gost_protect(&tx, glo::GET_REQUEST, &plaintext).unwrap();
+        assert!(gost_unprotect(&mut rx, &apdu).is_ok());
+        assert_eq!(gost_unprotect(&mut rx, &apdu), Err(CipherError::ReplayDetected));
     }
 
     #[test]
@@ -1025,6 +1160,8 @@ mod tests {
             authentication_key: hex(b"bddc7e4ac4e164e40785d8c147b4a883bddc7e4ac4e164e40785d8c147b4a883"),
             system_title: hex(b"4D4D4D0000BC614E"),
             invocation_counter: 0x01234567,
+            last_peer_ic: 0,
+            ic_valid: false,
         }
     }
 
@@ -1035,6 +1172,18 @@ mod tests {
         let (tag, recovered) = gost_gmac_unprotect(&mut gost_gmac_ctx(), &apdu).unwrap();
         assert_eq!(tag, glo::GET_REQUEST);
         assert_eq!(recovered, plaintext);
+    }
+
+    #[test]
+    fn gost_gmac_unprotect_rejects_replayed_ic() {
+        let mut tx = gost_gmac_ctx();
+        let mut rx = gost_gmac_ctx();
+        let plaintext = hex(b"C001C100080000010000FF0200");
+
+        tx.invocation_counter = 5;
+        let apdu = gost_gmac_protect(&tx, glo::GET_REQUEST, &plaintext).unwrap();
+        assert!(gost_gmac_unprotect(&mut rx, &apdu).is_ok());
+        assert_eq!(gost_gmac_unprotect(&mut rx, &apdu), Err(CipherError::ReplayDetected));
     }
 
     #[test]
