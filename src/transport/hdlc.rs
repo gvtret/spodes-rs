@@ -453,6 +453,30 @@ impl HdlcFrame {
 
         Ok(HdlcFrame { destination, source, control, information, segmented })
     }
+
+    /// Destination/source addresses when the control field is unknown but the
+    /// rest of the header (and FCS) is intact — used to reply with FRMR.
+    fn peek_addresses(frame: &[u8]) -> Result<(HdlcAddress, HdlcAddress), HdlcError> {
+        if frame.len() < 2 || frame[0] != FLAG || frame[frame.len() - 1] != FLAG {
+            return Err(HdlcError::MissingFlag);
+        }
+        let body = &frame[1..frame.len() - 1];
+        if body.len() < 5 || body[0] & 0xF0 != 0xA0 {
+            return Err(HdlcError::InvalidFormatType);
+        }
+        let length = (((body[0] & 0x07) as usize) << 8) | body[1] as usize;
+        if length != body.len() {
+            return Err(HdlcError::LengthMismatch);
+        }
+        let fcs_pos = body.len() - 2;
+        let expected_fcs = u16::from_le_bytes([body[fcs_pos], body[fcs_pos + 1]]);
+        if fcs16(&body[..fcs_pos]) != expected_fcs {
+            return Err(HdlcError::BadFcs);
+        }
+        let (destination, dlen) = HdlcAddress::decode(body, 2)?;
+        let (source, _) = HdlcAddress::decode(body, 2 + dlen)?;
+        Ok((destination, source))
+    }
 }
 
 /// The DLMS LLC header prepended to the information field of I/UI frames sent by
@@ -626,13 +650,23 @@ impl<T: PhysicalTransport> HdlcLayer<T> {
         self.connected
     }
 
-    /// Reads frames until one decodes cleanly, silently dropping up to
-    /// [`MAX_BAD_FRAMES`] frames with a bad FCS/HCS or malformed header.
+    /// Reads frames until one decodes cleanly. Bad FCS/HCS frames are dropped
+    /// silently; an unknown control field in NRM is answered with FRMR (W)
+    /// (ISO 13239 / Yellow Book HDLC_COMMAND — C++ `OSP_ERR_UNSUPPORTED` path).
     fn read_decoded_frame(&mut self) -> io::Result<HdlcFrame> {
         for _ in 0..MAX_BAD_FRAMES {
             let raw = self.read_frame()?;
-            if let Ok(frame) = HdlcFrame::decode(&raw) {
-                return Ok(frame);
+            match HdlcFrame::decode(&raw) {
+                Ok(frame) => return Ok(frame),
+                Err(HdlcError::UnknownControl(_)) if !self.is_client && self.connected => {
+                    if let Ok((destination, source)) = HdlcFrame::peek_addresses(&raw) {
+                        if destination.value == self.own.value {
+                            self.peer = source;
+                            self.send_unnumbered(Control::Frmr { final_bit: true })?;
+                        }
+                    }
+                }
+                Err(_) => {}
             }
         }
         Err(io::Error::new(io::ErrorKind::InvalidData, "too many undecodable HDLC frames"))
@@ -673,39 +707,68 @@ impl<T: PhysicalTransport> HdlcLayer<T> {
     ///
     /// Waits up to the configured inactivity timeout for the opening flag of
     /// a *new* frame, then up to the (tighter) inter-octet timeout for every
-    /// subsequent octet of that same frame; exceeding either aborts the read
-    /// with a [`std::io::ErrorKind::TimedOut`] error (an inactivity timeout
-    /// additionally marks the link as disconnected — see
-    /// [`Self::is_connected`] — per IEC 62056-46: a silent peer means NDM
-    /// must be assumed without necessarily closing the transport). Both
-    /// timeouts require the transport to honour
+    /// subsequent octet of that same frame.
+    ///
+    /// An **inter-octet** timeout mid-frame discards the incomplete octets and
+    /// keeps waiting for the next frame (C++ `session_recv_frame` parity) —
+    /// it is not surfaced as an error. An **inactivity** timeout with an empty
+    /// buffer marks the link as NDM and returns
+    /// [`std::io::ErrorKind::TimedOut`].
+    ///
+    /// Both timeouts require the transport to honour
     /// [`PhysicalTransport::set_read_timeout`]; a transport that doesn't
     /// (the default) makes reads block indefinitely as before.
     fn read_frame(&mut self) -> io::Result<Vec<u8>> {
-        // Skip to the opening flag, bounded by the inactivity timeout.
-        self.transport.set_read_timeout(self.inactivity_timeout)?;
-        let mut byte = [0u8; 1];
         loop {
-            match read_exact(&mut self.transport, &mut byte) {
-                Ok(()) => {}
-                Err(e) if is_timeout(&e) => {
-                    self.connected = false;
-                    return Err(io::Error::new(io::ErrorKind::TimedOut, "HDLC inactivity timeout: no frame received"));
+            // Skip to the opening flag, bounded by the inactivity timeout.
+            self.transport.set_read_timeout(self.inactivity_timeout)?;
+            let mut byte = [0u8; 1];
+            loop {
+                match read_exact(&mut self.transport, &mut byte) {
+                    Ok(()) => {}
+                    Err(e) if is_timeout(&e) => {
+                        self.connected = false;
+                        return Err(io::Error::new(
+                            io::ErrorKind::TimedOut,
+                            "HDLC inactivity timeout: no frame received",
+                        ));
+                    }
+                    Err(e) => return Err(e),
                 }
-                Err(e) => return Err(e),
+                if byte[0] == FLAG {
+                    break;
+                }
             }
-            if byte[0] == FLAG {
-                break;
+
+            // Frame started: subsequent octets use the inter-octet timeout.
+            self.transport.set_read_timeout(Some(self.inter_octet_timeout))?;
+            match self.read_frame_body() {
+                Ok(frame) => {
+                    let _ = self.transport.set_read_timeout(self.inactivity_timeout);
+                    return Ok(frame);
+                }
+                // Incomplete frame: drop it and wait for the next opening flag
+                // (C++ clears rx_pending and continues — not an error).
+                Err(e) if is_timeout(&e) => {
+                    #[cfg(feature = "tracing")]
+                    tracing::debug!(
+                        timeout_ms = self.inter_octet_timeout.as_millis() as u64,
+                        "HDLC inter-octet timeout, incomplete frame discarded"
+                    );
+                    let _ = self.transport.set_read_timeout(self.inactivity_timeout);
+                }
+                // Bad format / truncated mid-frame: resync like C++ buffer shift.
+                Err(e) if e.kind() == io::ErrorKind::InvalidData => {
+                    #[cfg(feature = "tracing")]
+                    tracing::debug!(error = %e, "HDLC invalid frame discarded, resync");
+                    let _ = self.transport.set_read_timeout(self.inactivity_timeout);
+                }
+                Err(e) => {
+                    let _ = self.transport.set_read_timeout(self.inactivity_timeout);
+                    return Err(e);
+                }
             }
         }
-
-        // A frame has started: the rest of it is bounded by the tighter
-        // inter-octet timeout. The inactivity timeout is restored before
-        // returning, on every path, for the next call.
-        self.transport.set_read_timeout(Some(self.inter_octet_timeout))?;
-        let body = self.read_frame_body();
-        let _ = self.transport.set_read_timeout(self.inactivity_timeout);
-        body
     }
 
     /// Reads the format field, payload and closing flag of a frame whose
@@ -757,6 +820,9 @@ impl<T: PhysicalTransport> DataLinkLayer for HdlcLayer<T> {
     /// control, and a stray `RR` is harmlessly skipped by the next
     /// `receive_apdu` call regardless).
     fn send_apdu(&mut self, apdu: &[u8]) -> io::Result<()> {
+        if !self.is_client && !self.connected {
+            return Err(io::Error::new(io::ErrorKind::NotConnected, "HDLC link is in NDM"));
+        }
         #[cfg(feature = "tracing")]
         trace!(send_seq = self.send_seq, recv_seq = self.recv_seq, apdu_len = apdu.len(), "hdlc send");
         let mut payload = Vec::with_capacity(3 + apdu.len());
@@ -789,8 +855,54 @@ impl<T: PhysicalTransport> DataLinkLayer for HdlcLayer<T> {
                 continue;
             }
             match frame.control {
-                Control::Information { send_seq, .. } => {
-                    // Acknowledge the received frame in the next transmission.
+                // ── NDM (server): only SNRM and DISC are meaningful. ──────
+                // Everything else (I, UI, RR/RNR, …) is ignored — Yellow Book
+                // HDLC_NDMOP / C++ openspodes connect-loop parity.
+                Control::Snrm { .. } if !self.is_client && !self.connected => {
+                    self.peer = frame.source;
+                    self.xid = self.xid_configured;
+                    if !frame.information.is_empty() {
+                        self.xid.negotiate(XidParams::decode(&frame.information));
+                    }
+                    self.send_seq = 0;
+                    self.recv_seq = 0;
+                    self.connected = true;
+                    self.send_unnumbered_with_info(Control::Ua { final_bit: true }, self.xid.encode())?;
+                }
+                Control::Disc { .. } if !self.is_client && !self.connected => {
+                    self.peer = frame.source;
+                    self.send_unnumbered(Control::Dm { final_bit: true })?;
+                }
+                _ if !self.is_client && !self.connected => {
+                    // NDM: silent drop (I / UI / RR / …).
+                }
+
+                // ── NRM (and client): information / UI deliver APDUs. ─────
+                Control::Information { send_seq, recv_seq, .. } => {
+                    if !self.is_client {
+                        self.peer = frame.source;
+                        let max_rx = usize::from(self.xid.max_info_rx.max(1));
+                        // Info longer than negotiated max_info_rx → FRMR (Y).
+                        if frame.information.len() > max_rx {
+                            self.send_unnumbered(Control::Frmr { final_bit: true })?;
+                            continue;
+                        }
+                        // Invalid N(R) → FRMR (Z).
+                        if recv_seq != self.send_seq {
+                            self.send_unnumbered(Control::Frmr { final_bit: true })?;
+                            continue;
+                        }
+                        // Wrong N(S): RR with current N(R), do not advance.
+                        if send_seq != self.recv_seq {
+                            let rr = Control::ReceiveReady {
+                                recv_seq: self.recv_seq,
+                                poll_final: true,
+                            };
+                            self.transport
+                                .send(&HdlcFrame::new(self.peer, self.own, rr, Vec::new()).encode())?;
+                            continue;
+                        }
+                    }
                     self.recv_seq = (send_seq + 1) & 0x07;
                     information.extend_from_slice(&frame.information);
                     // A set segmentation bit means more I-frames follow; ask for
@@ -803,15 +915,11 @@ impl<T: PhysicalTransport> DataLinkLayer for HdlcLayer<T> {
                     }
                     break;
                 }
-                // UI carries unnumbered information (e.g. broadcast); deliver it.
                 Control::Ui { .. } => {
                     information.extend_from_slice(&frame.information);
                     break;
                 }
-                // Server: SNRM (re)establishes NRM — reset the XID ceiling,
-                // negotiate against the client's proposal, answer UA with the
-                // negotiated values, and reset the sequence numbers for the
-                // fresh association.
+                // Server in NRM: SNRM re-establishes (reset XID / seq / UA).
                 Control::Snrm { .. } if !self.is_client => {
                     self.peer = frame.source;
                     self.xid = self.xid_configured;
@@ -823,23 +931,24 @@ impl<T: PhysicalTransport> DataLinkLayer for HdlcLayer<T> {
                     self.connected = true;
                     self.send_unnumbered_with_info(Control::Ua { final_bit: true }, self.xid.encode())?;
                 }
-                // Server: DISC in NRM → UA and back to NDM; DISC in NDM → DM
-                // (IEC 62056-46 §6.4.4.5).
+                // Server in NRM: DISC → UA → NDM.
                 Control::Disc { .. } if !self.is_client => {
-                    let reply =
-                        if self.connected { Control::Ua { final_bit: true } } else { Control::Dm { final_bit: true } };
+                    self.peer = frame.source;
                     self.connected = false;
-                    self.send_unnumbered(reply)?;
+                    self.send_unnumbered(Control::Ua { final_bit: true })?;
                     return Err(io::Error::new(io::ErrorKind::ConnectionAborted, "peer released the data link"));
                 }
-                // RR acknowledges our frames; keep waiting for information.
+                // RR/RNR: invalid N(R) → FRMR (Z); otherwise ack and keep waiting.
                 Control::ReceiveReady { recv_seq, .. } | Control::ReceiveNotReady { recv_seq, .. } => {
-                    let _ = recv_seq;
+                    if !self.is_client && recv_seq != self.send_seq {
+                        self.peer = frame.source;
+                        self.send_unnumbered(Control::Frmr { final_bit: true })?;
+                    }
                 }
-                // Anything else is not valid in this state: reject it with FRMR
-                // (ISO 13239) and keep listening.
+                // Unknown / invalid in NRM → FRMR.
                 _ => {
                     if !self.is_client {
+                        self.peer = frame.source;
                         self.send_unnumbered(Control::Frmr { final_bit: true })?;
                     }
                 }
@@ -1052,17 +1161,261 @@ mod tests {
     #[test]
     fn server_answers_disc_in_ndm_with_dm() {
         let mut server = server_layer();
+        // Default peer is 0x10; DISC comes from 0x21 — DM must target the source.
+        let disc = HdlcFrame::new(
+            HdlcAddress::one_byte(0x03),
+            HdlcAddress::one_byte(0x21),
+            Control::Disc { poll: true },
+            Vec::new(),
+        );
+        let info = Control::Information { send_seq: 0, recv_seq: 0, poll: true };
+        server.transport_mut().feed(&disc.encode());
+        server.transport_mut().feed(&client_frame(Control::Snrm { poll: true }, Vec::new()));
+        server.transport_mut().feed(&client_frame(info, vec![0xC0, 0x01, 0xC1]));
+        let apdu = server.receive_apdu().unwrap();
+        assert_eq!(apdu, vec![0xC0, 0x01, 0xC1]);
+        let dm = HdlcFrame::decode(&server.read_frame().unwrap()).unwrap();
+        assert!(matches!(dm.control, Control::Dm { .. }));
+        assert_eq!(dm.destination, HdlcAddress::one_byte(0x21));
+        let ua = HdlcFrame::decode(&server.read_frame().unwrap()).unwrap();
+        assert!(matches!(ua.control, Control::Ua { .. }));
+        assert!(server.is_connected());
+    }
+
+    #[test]
+    fn server_ignores_everything_but_snrm_and_disc_in_ndm() {
+        let mut server = server_layer();
+        assert!(!server.is_connected());
+        // I / UI / RR while in NDM — must produce no wire reply.
+        server.transport_mut().feed(&client_frame(
+            Control::Information { send_seq: 0, recv_seq: 0, poll: true },
+            vec![0xE6, 0xE6, 0x00, 0x60, 0x36],
+        ));
+        server
+            .transport_mut()
+            .feed(&client_frame(Control::Ui { poll: true }, vec![0xAA]));
+        server.transport_mut().feed(&client_frame(
+            Control::ReceiveReady { recv_seq: 3, poll_final: true },
+            Vec::new(),
+        ));
+        // Then SNRM → UA → NRM and a normal I-frame.
+        server.transport_mut().feed(&client_frame(Control::Snrm { poll: true }, Vec::new()));
+        server.transport_mut().feed(&client_frame(
+            Control::Information { send_seq: 0, recv_seq: 0, poll: true },
+            vec![0xE6, 0xE6, 0x00, 0xC0, 0x01],
+        ));
+        let apdu = server.receive_apdu().unwrap();
+        assert_eq!(apdu, vec![0xC0, 0x01]);
+        let ua = HdlcFrame::decode(&server.read_frame().unwrap()).unwrap();
+        assert!(matches!(ua.control, Control::Ua { .. }));
+        // Only the UA for SNRM — nothing for the preceding NDM I/UI/RR.
+        assert!(server.read_frame().is_err());
+    }
+
+    #[test]
+    fn server_answers_disc_in_nrm_with_ua_then_stays_in_ndm() {
+        let mut server = server_layer();
+        server.connected = true;
+        server.peer = HdlcAddress::one_byte(0x21);
         server.transport_mut().feed(&client_frame(Control::Disc { poll: true }, Vec::new()));
         let err = server.receive_apdu().unwrap_err();
         assert_eq!(err.kind(), io::ErrorKind::ConnectionAborted);
-        let raw = server.read_frame().unwrap();
-        let dm = HdlcFrame::decode(&raw).unwrap();
-        assert!(matches!(dm.control, Control::Dm { .. }));
+        assert!(!server.is_connected());
+        let ua = HdlcFrame::decode(&server.read_frame().unwrap()).unwrap();
+        assert!(matches!(ua.control, Control::Ua { .. }));
+    }
+
+    #[test]
+    fn server_answers_unknown_control_with_frmr() {
+        let mut server = server_layer();
+        server.connected = true;
+        server.peer = HdlcAddress::one_byte(0x21);
+        // Control 0xFF is not a valid HDLC command (Gurux "Неизвестная команда").
+        let mut unknown = HdlcFrame::new(
+            HdlcAddress::one_byte(0x03),
+            HdlcAddress::one_byte(0x21),
+            Control::Disc { poll: true },
+            Vec::new(),
+        )
+        .encode();
+        // Patch control byte to 0xFF and recompute FCS over format..ctrl.
+        unknown[5] = 0xFF;
+        let fcs = super::fcs16(&unknown[1..6]);
+        unknown[6] = fcs as u8;
+        unknown[7] = (fcs >> 8) as u8;
+
+        let info = Control::Information { send_seq: 0, recv_seq: 0, poll: true };
+        server.transport_mut().feed(&unknown);
+        server.transport_mut().feed(&client_frame(info, vec![0xC0, 0x01]));
+        let apdu = server.receive_apdu().unwrap();
+        assert_eq!(apdu, vec![0xC0, 0x01]);
+        let frmr = HdlcFrame::decode(&server.read_frame().unwrap()).unwrap();
+        assert!(matches!(frmr.control, Control::Frmr { final_bit: true }));
+        assert_eq!(frmr.destination, HdlcAddress::one_byte(0x21));
+    }
+
+    #[test]
+    fn server_rejects_oversized_i_frame_with_frmr() {
+        let mut server = server_layer();
+        server.connected = true;
+        server.xid.max_info_rx = 16;
+        let big = vec![0xAAu8; 64];
+        let info = Control::Information { send_seq: 0, recv_seq: 0, poll: true };
+        server.transport_mut().feed(&client_frame(info, big));
+        server.transport_mut().feed(&client_frame(
+            Control::Information { send_seq: 0, recv_seq: 0, poll: true },
+            vec![0xC0, 0x01],
+        ));
+        let apdu = server.receive_apdu().unwrap();
+        assert_eq!(apdu, vec![0xC0, 0x01]);
+        let frmr = HdlcFrame::decode(&server.read_frame().unwrap()).unwrap();
+        assert!(matches!(frmr.control, Control::Frmr { .. }));
+    }
+
+    #[test]
+    fn server_answers_rr_with_bad_nr_with_frmr() {
+        let mut server = server_layer();
+        server.connected = true;
+        server.send_seq = 0;
+        let rr = Control::ReceiveReady { recv_seq: 1, poll_final: true };
+        server.transport_mut().feed(&client_frame(rr, Vec::new()));
+        server.transport_mut().feed(&client_frame(
+            Control::Information { send_seq: 0, recv_seq: 0, poll: true },
+            vec![0xBB],
+        ));
+        let apdu = server.receive_apdu().unwrap();
+        assert_eq!(apdu, vec![0xBB]);
+        let frmr = HdlcFrame::decode(&server.read_frame().unwrap()).unwrap();
+        assert!(matches!(frmr.control, Control::Frmr { .. }));
+    }
+
+    #[test]
+    fn server_answers_wrong_ns_with_rr() {
+        let mut server = server_layer();
+        server.connected = true;
+        server.recv_seq = 0;
+        // N(S)=1 while V(R)=0
+        let info = Control::Information { send_seq: 1, recv_seq: 0, poll: true };
+        server.transport_mut().feed(&client_frame(info, vec![0xE6, 0xE6, 0x00, 0x60]));
+        server.transport_mut().feed(&client_frame(
+            Control::Information { send_seq: 0, recv_seq: 0, poll: true },
+            vec![0xC0],
+        ));
+        let apdu = server.receive_apdu().unwrap();
+        assert_eq!(apdu, vec![0xC0]);
+        let rr = HdlcFrame::decode(&server.read_frame().unwrap()).unwrap();
+        assert!(matches!(
+            rr.control,
+            Control::ReceiveReady {
+                recv_seq: 0,
+                poll_final: true
+            }
+        ));
+    }
+
+    // ------------------------------------------------------------------
+    // State machine: NDM ↔ NRM via SNRM/UA and DISC/UA|DM.
+    // ------------------------------------------------------------------
+
+    #[test]
+    fn state_ndm_snrm_ua_nrm() {
+        let mut server = server_layer();
+        assert!(!server.is_connected(), "starts in NDM");
+        server.transport_mut().feed(&client_frame(Control::Snrm { poll: true }, Vec::new()));
+        server.transport_mut().feed(&client_frame(
+            Control::Information { send_seq: 0, recv_seq: 0, poll: true },
+            vec![0x01],
+        ));
+        assert_eq!(server.receive_apdu().unwrap(), vec![0x01]);
+        assert!(server.is_connected(), "NDM --SNRM/UA--> NRM");
+        let ua = HdlcFrame::decode(&server.read_frame().unwrap()).unwrap();
+        assert!(matches!(ua.control, Control::Ua { final_bit: true }));
+    }
+
+    #[test]
+    fn state_nrm_disc_ua_ndm() {
+        let mut server = server_layer();
+        server.connected = true;
+        server.transport_mut().feed(&client_frame(Control::Disc { poll: true }, Vec::new()));
+        let err = server.receive_apdu().unwrap_err();
+        assert_eq!(err.kind(), io::ErrorKind::ConnectionAborted);
+        assert!(!server.is_connected(), "NRM --DISC/UA--> NDM");
+        let ua = HdlcFrame::decode(&server.read_frame().unwrap()).unwrap();
+        assert!(matches!(ua.control, Control::Ua { final_bit: true }));
+    }
+
+    #[test]
+    fn state_ndm_disc_dm_ndm() {
+        let mut server = server_layer();
+        assert!(!server.is_connected(), "starts in NDM");
+        server.transport_mut().feed(&client_frame(Control::Disc { poll: true }, Vec::new()));
+        // Unblock receive_apdu after DM handling with SNRM + I.
+        server.transport_mut().feed(&client_frame(Control::Snrm { poll: true }, Vec::new()));
+        server.transport_mut().feed(&client_frame(
+            Control::Information { send_seq: 0, recv_seq: 0, poll: true },
+            vec![0x01],
+        ));
+        let _ = server.receive_apdu().unwrap();
+        let dm = HdlcFrame::decode(&server.read_frame().unwrap()).unwrap();
+        assert!(matches!(dm.control, Control::Dm { final_bit: true }), "NDM --DISC/DM--> NDM");
+        let ua = HdlcFrame::decode(&server.read_frame().unwrap()).unwrap();
+        assert!(matches!(ua.control, Control::Ua { .. }));
+        assert!(server.is_connected(), "SNRM after DM brings us to NRM");
+    }
+
+    #[test]
+    fn state_full_cycle_ndm_nrm_ndm_dm() {
+        let mut server = server_layer();
+        assert!(!server.is_connected());
+
+        // 1) NDM → SNRM → UA → NRM
+        server.transport_mut().feed(&client_frame(Control::Snrm { poll: true }, Vec::new()));
+        server.transport_mut().feed(&client_frame(
+            Control::Information { send_seq: 0, recv_seq: 0, poll: true },
+            vec![0xAA],
+        ));
+        assert_eq!(server.receive_apdu().unwrap(), vec![0xAA]);
+        assert!(server.is_connected());
+        assert!(matches!(
+            HdlcFrame::decode(&server.read_frame().unwrap()).unwrap().control,
+            Control::Ua { .. }
+        ));
+
+        // 2) NRM → DISC → UA → NDM
+        server.transport_mut().feed(&client_frame(Control::Disc { poll: true }, Vec::new()));
+        assert_eq!(
+            server.receive_apdu().unwrap_err().kind(),
+            io::ErrorKind::ConnectionAborted
+        );
+        assert!(!server.is_connected());
+        assert!(matches!(
+            HdlcFrame::decode(&server.read_frame().unwrap()).unwrap().control,
+            Control::Ua { .. }
+        ));
+
+        // 3) NDM → DISC → DM → NDM
+        server.transport_mut().feed(&client_frame(Control::Disc { poll: true }, Vec::new()));
+        server.transport_mut().feed(&client_frame(Control::Snrm { poll: true }, Vec::new()));
+        server.transport_mut().feed(&client_frame(
+            Control::Information { send_seq: 0, recv_seq: 0, poll: true },
+            vec![0xBB],
+        ));
+        assert_eq!(server.receive_apdu().unwrap(), vec![0xBB]);
+        assert!(matches!(
+            HdlcFrame::decode(&server.read_frame().unwrap()).unwrap().control,
+            Control::Dm { .. }
+        ));
+        assert!(matches!(
+            HdlcFrame::decode(&server.read_frame().unwrap()).unwrap().control,
+            Control::Ua { .. }
+        ));
+        assert!(server.is_connected());
     }
 
     #[test]
     fn segmented_information_is_reassembled() {
         let mut server = server_layer();
+        server.connected = true;
         let mut first = HdlcFrame::new(
             HdlcAddress::one_byte(0x03),
             HdlcAddress::one_byte(0x10),
@@ -1085,6 +1438,7 @@ mod tests {
     #[test]
     fn bad_fcs_frames_are_dropped_silently() {
         let mut server = server_layer();
+        server.connected = true;
         let mut corrupted = client_frame(Control::Information { send_seq: 0, recv_seq: 0, poll: true }, vec![0xAA]);
         let len = corrupted.len();
         corrupted[len - 2] ^= 0xFF; // corrupt the FCS
@@ -1092,6 +1446,11 @@ mod tests {
         server
             .transport_mut()
             .feed(&client_frame(Control::Information { send_seq: 1, recv_seq: 0, poll: true }, vec![0xBB]));
+        // After bad frame, N(S)=1 is wrong for V(R)=0 → RR, so also feed correct N(S)=0.
+        server.transport_mut().feed(&client_frame(
+            Control::Information { send_seq: 0, recv_seq: 0, poll: true },
+            vec![0xBB],
+        ));
         let apdu = server.receive_apdu().unwrap();
         assert_eq!(apdu, vec![0xBB]);
     }
@@ -1208,18 +1567,100 @@ mod tests {
     }
 
     #[test]
-    fn silence_mid_frame_times_out_as_inter_octet_without_disconnecting() {
+    fn silence_mid_frame_discards_incomplete_then_inactivity_disconnects() {
         let mut layer = timeout_test_layer();
         layer.connected = true;
         // Only the opening flag and part of the format field arrive; the
-        // peer then goes silent before the frame can be completed.
+        // peer then goes silent. Inter-octet discards the fragment (no error);
+        // the next wait uses inactivity and disconnects to NDM.
         layer.transport.data.push_back(FLAG);
         layer.transport.data.push_back(0xA0);
 
         let err = layer.read_frame().unwrap_err();
         assert_eq!(err.kind(), io::ErrorKind::TimedOut);
-        assert!(err.to_string().contains("inter-octet"), "unexpected message: {err}");
-        assert!(layer.is_connected(), "an inter-octet timeout must not by itself drop the connection");
+        assert!(err.to_string().contains("inactivity"), "unexpected message: {err}");
+        assert!(!layer.is_connected(), "inactivity after inter-octet discard drops to NDM");
+        assert!(
+            layer
+                .transport
+                .set_timeout_log
+                .iter()
+                .any(|t| *t == Some(Duration::from_millis(30))),
+            "inter-octet timeout must have been armed for the incomplete frame"
+        );
+    }
+
+    #[test]
+    fn silence_mid_frame_then_next_complete_frame_is_accepted() {
+        /// Delivers a partial frame, one inter-octet timeout, then a full UA.
+        struct RecoverTransport {
+            phase: u8,
+            frame: Vec<u8>,
+            set_timeout_log: Vec<Option<Duration>>,
+        }
+        impl PhysicalTransport for RecoverTransport {
+            fn send(&mut self, _data: &[u8]) -> io::Result<()> {
+                Ok(())
+            }
+            fn receive(&mut self, buf: &mut [u8]) -> io::Result<usize> {
+                match self.phase {
+                    0 => {
+                        // Opening flag only — starts the frame.
+                        buf[0] = FLAG;
+                        self.phase = 1;
+                        Ok(1)
+                    }
+                    1 => {
+                        // One format byte, then silence → inter-octet.
+                        buf[0] = 0xA0;
+                        self.phase = 2;
+                        Ok(1)
+                    }
+                    2 => {
+                        self.phase = 3;
+                        Err(io::Error::new(io::ErrorKind::TimedOut, "inter-octet"))
+                    }
+                    _ => {
+                        if self.frame.is_empty() {
+                            return Err(io::Error::new(io::ErrorKind::UnexpectedEof, "done"));
+                        }
+                        let n = buf.len().min(self.frame.len());
+                        buf[..n].copy_from_slice(&self.frame[..n]);
+                        self.frame.drain(..n);
+                        Ok(n)
+                    }
+                }
+            }
+            fn set_read_timeout(&mut self, timeout: Option<Duration>) -> io::Result<()> {
+                self.set_timeout_log.push(timeout);
+                Ok(())
+            }
+        }
+
+        let frame = HdlcFrame::new(
+            HdlcAddress::one_byte(0x03),
+            HdlcAddress::one_byte(0x10),
+            Control::Ua { final_bit: true },
+            Vec::new(),
+        )
+        .encode();
+        let mut layer = HdlcLayer::new_server(
+            RecoverTransport {
+                phase: 0,
+                frame,
+                set_timeout_log: Vec::new(),
+            },
+            HdlcAddress::one_byte(0x03),
+            HdlcAddress::one_byte(0x10),
+        );
+        layer.set_inactivity_timeout_s(60);
+        layer.set_inter_octet_timeout_ms(30);
+        layer.connected = true;
+
+        let raw = layer.read_frame().expect("next full frame after inter-octet discard");
+        let decoded = HdlcFrame::decode(&raw).unwrap();
+        assert!(matches!(decoded.control, Control::Ua { .. }));
+        assert!(layer.is_connected(), "inter-octet discard must not drop to NDM");
     }
 
     // ------------------------------------------------------------------
@@ -1365,6 +1806,7 @@ mod tests {
         let n = client.transport_mut().receive(&mut buf).unwrap();
 
         let mut server = server_layer();
+        server.connected = true;
         server.transport_mut().feed(&buf[..n]);
         let reassembled = server.receive_apdu().unwrap();
         assert_eq!(reassembled, apdu);
