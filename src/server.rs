@@ -48,6 +48,8 @@ const SERVER_CONFORMANCE: u32 = 0x00_18_5F;
 
 /// `association_status` values (IEC 62056-6-2, Association LN attribute 8).
 mod association_status {
+    /// No association is open.
+    pub const NON_ASSOCIATED: u8 = 0;
     /// The HLS handshake is still in progress (pass 3/4 pending).
     pub const ASSOCIATION_PENDING: u8 = 1;
     /// The association is open.
@@ -375,6 +377,7 @@ impl RequestDispatcher {
             Some(&tag::SET_REQUEST) => self.dispatch_set(request),
             Some(&tag::ACTION_REQUEST) => self.dispatch_action(request),
             Some(&acse::AARQ_TAG) => Ok(self.handle_aarq(request)),
+            Some(&acse::RLRQ_TAG) => Ok(self.handle_rlrq(request)),
             Some(&other) => Ok(unsupported(other)),
             None => Err(ServiceError::Truncated),
         }
@@ -513,6 +516,23 @@ impl RequestDispatcher {
                     user_information,
                 }
                 .encode()
+            }
+        }
+    }
+
+    /// Answers an RLRQ with RLRE (IEC 62056-5-3 §7.3.6) and clears any
+    /// configured association state back to non-associated. A malformed RLRQ
+    /// is still answered with a normal-release RLRE, since releasing is
+    /// best-effort.
+    pub fn handle_rlrq(&mut self, request: &[u8]) -> Vec<u8> {
+        use crate::service::acse::ReleaseRequest;
+        if let Some(assoc) = self.association.as_mut() {
+            assoc.set_association_status(association_status::NON_ASSOCIATED);
+        }
+        match ReleaseRequest::decode_rlrq(request) {
+            Ok(release) => release.encode_rlre(),
+            Err(_) => {
+                ReleaseRequest { reason: Some(acse::release_reason::NORMAL), user_information: None }.encode_rlre()
             }
         }
     }
@@ -798,6 +818,7 @@ fn not_possible() -> Vec<u8> {
 mod tests {
     use super::*;
     use crate::classes::data::Data;
+    use crate::service::acse::ReleaseRequest;
     use crate::types::CosemDataType;
 
     fn dispatcher_with_data() -> RequestDispatcher {
@@ -1235,6 +1256,14 @@ mod tests {
         let mut d = dispatcher_with_data();
         let resp = d.dispatch(&[tag::DATA_NOTIFICATION, 0x00]).unwrap();
         assert_eq!(resp[0], tag::EXCEPTION_RESPONSE);
+    }
+
+    #[test]
+    fn rlrq_is_answered_with_rlre() {
+        let mut d = dispatcher_with_data();
+        let rlrq = ReleaseRequest { reason: Some(acse::release_reason::NORMAL), user_information: None }.encode_rlrq();
+        let resp = d.dispatch(&rlrq).unwrap();
+        assert_eq!(resp.first(), Some(&acse::RLRE_TAG));
     }
 
     fn push_setup_config() -> crate::classes::push_setup::PushSetupConfig {
