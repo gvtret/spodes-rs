@@ -8,6 +8,20 @@ While the crate is at `0.x`, minor releases may contain breaking changes.
 
 ## [Unreleased]
 
+### Added (Push delivery, ported from openspodes push_delivery.c)
+
+- **`RequestDispatcher::build_push_delivery_request`**: reads each object
+  listed in a `PushSetup`'s `push_object_list` from the dispatcher's
+  registry, assembles the values into a DataNotification body (a single
+  value, or an Array when more than one object is pushed), and pairs it with
+  the destination/transport/client-SAP from the Push setup object, returning
+  a `PushDeliveryRequest` for the host to send over the configured
+  transport. `PushSetup` itself does not hold a registry reference (unlike
+  the C implementation's back-pointer to the server), so the dispatcher —
+  which already owns the object registry — is the natural place for this in
+  the Rust API. New `PushSetup::push_object_list`/`send_destination_and_method`/
+  `push_client_sap` getters.
+
 ### Added (server-side association, ported from openspodes 2.2.0)
 
 - **Server-side AARQ handling** (`RequestDispatcher::handle_aarq`, also wired

@@ -8,6 +8,22 @@ use crate::types::{BerError, CosemDataType};
 use serde::{Deserialize, Serialize};
 use std::any::Any;
 
+/// One outbound push, assembled by
+/// [`RequestDispatcher::build_push_delivery_request`](crate::server::RequestDispatcher::build_push_delivery_request):
+/// the destination and transport from attribute 3, the push client SAP and
+/// the encoded DataNotification body. The host owns the actual transmission.
+#[derive(Debug, Clone, PartialEq)]
+pub struct PushDeliveryRequest {
+    /// Destination address (from `send_destination_and_method`).
+    pub destination: Vec<u8>,
+    /// Transport service identifier (from `send_destination_and_method`).
+    pub transport_service: u8,
+    /// The push client SAP (attribute 9).
+    pub client_sap: i8,
+    /// The encoded DataNotification APDU carrying the push object values.
+    pub body: Vec<u8>,
+}
+
 /// Configuration structure used to build a [`PushSetup`] object.
 #[derive(Clone, Serialize, Deserialize, Debug)]
 pub struct PushSetupConfig {
@@ -50,9 +66,11 @@ pub struct PushSetupConfig {
 /// * version 2 — attributes 1..13, methods `push` and `reset`.
 ///
 /// In versions 0 and 1 attribute 7 (`repetition_delay`) is a `long-unsigned`;
-/// in version 2 it is a structure. The `push` method triggers a data
-/// notification. As the transport/service layer is not implemented yet, `push`
-/// is a no-op trigger that succeeds without actually sending anything.
+/// in version 2 it is a structure. The `push` ACTION only validates that the
+/// object is triggerable; assembling and sending the actual DataNotification
+/// is done by [`RequestDispatcher::build_push_delivery_request`](crate::server::RequestDispatcher::build_push_delivery_request),
+/// which has access to the live object registry that this class does not
+/// hold.
 #[derive(Clone, Serialize, Deserialize, Debug)]
 pub struct PushSetup {
     version: u8,
@@ -93,9 +111,12 @@ impl PushSetup {
     }
 
     /// Method 1: `push` — triggers sending the push object list to the
-    /// destination (IEC 62056-6-2 §4.4.8.3.1). The actual transmission belongs to
-    /// the transport layer, which is not implemented yet, so this only validates
-    /// that the object is triggerable and succeeds.
+    /// destination (IEC 62056-6-2 §4.4.8.3.1). Building the notification body
+    /// requires reading the live values of the referenced objects, which this
+    /// class does not hold; use
+    /// [`RequestDispatcher::build_push_delivery_request`](crate::server::RequestDispatcher::build_push_delivery_request)
+    /// against the object registry to actually assemble and send the push. The
+    /// ACTION itself only validates that the object is triggerable.
     fn push(&mut self) -> Result<CosemDataType, String> {
         Ok(CosemDataType::Null)
     }
@@ -105,6 +126,22 @@ impl PushSetup {
     fn reset(&mut self) -> Result<CosemDataType, String> {
         self.last_confirmation_date_time = DateTime::new([0u8; 12]);
         Ok(CosemDataType::Null)
+    }
+
+    /// Returns the push object list (attribute 2): the objects and attribute
+    /// indices to read when assembling a push.
+    pub fn push_object_list(&self) -> &[CaptureObjectDefinition] {
+        &self.push_object_list
+    }
+
+    /// Returns the send-destination-and-method (attribute 3).
+    pub fn send_destination_and_method(&self) -> &SendDestinationAndMethod {
+        &self.send_destination_and_method
+    }
+
+    /// Returns the push client SAP (attribute 9, 0 in versions without it).
+    pub fn push_client_sap(&self) -> i8 {
+        self.push_client_sap
     }
 }
 

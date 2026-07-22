@@ -114,3 +114,41 @@ and inactivity timeouts (needs deadline support in PhysicalTransport), XID
 parameter negotiation, outbound I-frame segmentation, push_delivery deep
 comparison vs spodus/push.rs. Then release (0.5.0 or 0.6.0 given the new
 public API).
+
+## 2026-07-22 — C-port round 3: push delivery wiring
+
+**Done:**
+- `PushSetup` (src/classes/push_setup.rs): added `push_object_list()`,
+  `send_destination_and_method()`, `push_client_sap()` getters; new
+  `PushDeliveryRequest` struct; updated docs to point at the dispatcher-side
+  assembly (PushSetup itself has no registry back-reference, unlike C's
+  `p->server->dispatcher`).
+- `RequestDispatcher::build_push_delivery_request` (src/server.rs): reads
+  each `push_object_list` entry from the registry, builds a DataNotification
+  body (single value or Array), encodes it, returns a `PushDeliveryRequest`
+  with destination/transport/client_sap. Mirrors C's
+  `push_build_notification_body`/`push_try_schedule_delivery`, but returns
+  the request instead of using a global function-pointer hook (idiomatic
+  Rust: caller owns transmission, no `unsafe`/global state needed). 2 new
+  tests (reads registered object; rejects missing object).
+- Full quality gate green: 341 lib tests + 4 integration suites, fmt/clippy/
+  doc -D warnings all clean.
+
+**State:** branch `main`, uncommitted at entry-write time (commit follows
+immediately). This closes the last item from the C-comparison round ("push
+delivery internals ... not compared in depth" from the first 2026-07-22
+entry) except the two items below.
+
+**Remaining from the full C comparison (deliberately deferred, minor):**
+- HDLC inter-octet / inactivity timeouts (needs a deadline/clock abstraction
+  in PhysicalTransport — larger API change, not done).
+- XID parameter negotiation and outbound I-frame segmentation (C splits long
+  I-frames across multiple HDLC frames; Rust send_apdu sends one frame today
+  — acceptable since APDUs already fit under typical HDLC info-field limits
+  via the xDLMS block-transfer layer instead).
+
+**Next:** consider these two remaining items only if a concrete need arises;
+otherwise the C-parity port is functionally complete. Ready for release
+(0.5.0 or bump to 0.6.0 given the new public API surface: handle_aarq,
+build_push_delivery_request, HdlcLayer::connect/disconnect, 6 new IC
+classes).

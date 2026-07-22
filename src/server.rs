@@ -16,11 +16,13 @@ use crate::interface::InterfaceClass;
 use crate::obis::ObisCode;
 use crate::security::AuthMechanism;
 
+use crate::classes::push_setup::{PushDeliveryRequest, PushSetup};
 use crate::service::acse::{self, AssociationResponse};
 use crate::service::action::{ActionRequest, ActionResponse};
 use crate::service::error::{service_error, state_error, ConfirmedServiceError, ExceptionResponse};
 use crate::service::get::{GetDataResult, GetRequest, GetResponse};
 use crate::service::initiate::{InitiateRequest, InitiateResponse};
+use crate::service::notification::DataNotification;
 use crate::service::set::{SetRequest, SetResponse};
 use crate::service::{data_access_result, tag, AttributeDescriptor, DataBlockSa, MethodDescriptor, ServiceError};
 use crate::types::CosemDataType;
@@ -136,6 +138,52 @@ impl RequestDispatcher {
     /// Returns a reference to the current association, if any.
     pub fn association(&self) -> Option<&AssociationLn> {
         self.association.as_ref()
+    }
+
+    /// Assembles a [`PushDeliveryRequest`] for `push_setup`'s ACTION method 1
+    /// (`push`): reads each object in `push_object_list` from this
+    /// dispatcher's registry, wraps the values in a DataNotification
+    /// (an Array when more than one object is listed), and pairs it with the
+    /// destination and client SAP from `push_setup`.
+    ///
+    /// Mirrors the reference implementation's `push_build_notification_body` /
+    /// `push_try_schedule_delivery`: the host is expected to call this from
+    /// the `push` ACTION handler (this dispatcher owns the object registry
+    /// that `PushSetup` itself does not hold) and then deliver `body` over the
+    /// configured transport.
+    pub fn build_push_delivery_request(
+        &mut self,
+        push_setup: &PushSetup,
+        long_invoke_id_and_priority: u32,
+    ) -> Result<PushDeliveryRequest, String> {
+        let objects = push_setup.push_object_list();
+        if objects.is_empty() {
+            return Err("No push objects configured".to_string());
+        }
+        let mut values = Vec::with_capacity(objects.len());
+        for entry in objects {
+            let obj = self
+                .find(entry.class_id, &entry.logical_name)
+                .ok_or_else(|| format!("Push object {} (class {}) not found", entry.logical_name, entry.class_id))?;
+            let value = obj
+                .attributes()
+                .into_iter()
+                .find(|(id, _)| *id == entry.attribute_index)
+                .map(|(_, v)| v)
+                .ok_or_else(|| format!("Push object has no attribute {}", entry.attribute_index))?;
+            values.push(value);
+        }
+        let body = if values.len() == 1 { values.remove(0) } else { CosemDataType::Array(values) };
+        let notification =
+            DataNotification { long_invoke_id_and_priority, date_time: Vec::new(), notification_body: body };
+        let encoded = notification.encode().map_err(|e| format!("Failed to encode push body: {e:?}"))?;
+        let destination = push_setup.send_destination_and_method();
+        Ok(PushDeliveryRequest {
+            destination: destination.destination.clone(),
+            transport_service: destination.transport_service,
+            client_sap: push_setup.push_client_sap(),
+            body: encoded,
+        })
     }
 
     /// Locates a registered object by class-id and logical name.
@@ -1187,5 +1235,59 @@ mod tests {
         let mut d = dispatcher_with_data();
         let resp = d.dispatch(&[tag::DATA_NOTIFICATION, 0x00]).unwrap();
         assert_eq!(resp[0], tag::EXCEPTION_RESPONSE);
+    }
+
+    fn push_setup_config() -> crate::classes::push_setup::PushSetupConfig {
+        use crate::types::attrs::{ConfirmationParameters, DateTime, SendDestinationAndMethod};
+        crate::classes::push_setup::PushSetupConfig {
+            logical_name: ObisCode::new(0, 0, 25, 9, 0, 255),
+            version: 0,
+            push_object_list: vec![],
+            send_destination_and_method: SendDestinationAndMethod {
+                transport_service: 0,
+                destination: b"192.168.0.1:4059".to_vec(),
+                message: 0,
+            },
+            communication_window: vec![],
+            randomisation_start_interval: 0,
+            number_of_retries: 3,
+            repetition_delay: CosemDataType::LongUnsigned(0),
+            port_reference: vec![],
+            push_client_sap: 1,
+            push_protection_parameters: vec![],
+            push_operation_method: 0,
+            confirmation_parameters: ConfirmationParameters { data: vec![] },
+            last_confirmation_date_time: DateTime::new([0u8; 12]),
+        }
+    }
+
+    #[test]
+    fn push_delivery_request_reads_registered_objects() {
+        use crate::classes::push_setup::PushSetup;
+        use crate::types::attrs::CaptureObjectDefinition;
+
+        let mut d = dispatcher_with_data();
+        let mut config = push_setup_config();
+        config.push_object_list = vec![CaptureObjectDefinition::new(1, ObisCode::new(0, 0, 0x80, 0, 0, 0xFF), 2, 0)];
+        let push = PushSetup::new(config);
+
+        let req = d.build_push_delivery_request(&push, 1).unwrap();
+        assert_eq!(req.destination, b"192.168.0.1:4059");
+        assert_eq!(req.client_sap, 1);
+        let decoded = DataNotification::decode(&req.body).unwrap();
+        assert_eq!(decoded.notification_body, CosemDataType::LongUnsigned(0x1234));
+    }
+
+    #[test]
+    fn push_delivery_request_rejects_missing_object() {
+        use crate::classes::push_setup::PushSetup;
+        use crate::types::attrs::CaptureObjectDefinition;
+
+        let mut d = dispatcher_with_data();
+        let mut config = push_setup_config();
+        config.push_object_list = vec![CaptureObjectDefinition::new(1, ObisCode::new(9, 9, 9, 9, 9, 9), 2, 0)];
+        let push = PushSetup::new(config);
+
+        assert!(d.build_push_delivery_request(&push, 1).is_err());
     }
 }
