@@ -308,10 +308,8 @@ impl InterfaceClass for PushSetup {
         match attribute_id {
             2 => match value {
                 CosemDataType::Array(list) => {
-                    self.push_object_list = list
-                        .iter()
-                        .map(CaptureObjectDefinition::try_from)
-                        .collect::<Result<Vec<_>, _>>()?;
+                    self.push_object_list =
+                        list.iter().map(CaptureObjectDefinition::try_from).collect::<Result<Vec<_>, _>>()?;
                     Ok(())
                 }
                 _ => Err("push_object_list must be array".to_string()),
@@ -322,10 +320,8 @@ impl InterfaceClass for PushSetup {
             }
             4 => match value {
                 CosemDataType::Array(list) => {
-                    self.communication_window = list
-                        .iter()
-                        .map(CommunicationWindow::try_from)
-                        .collect::<Result<Vec<_>, _>>()?;
+                    self.communication_window =
+                        list.iter().map(CommunicationWindow::try_from).collect::<Result<Vec<_>, _>>()?;
                     Ok(())
                 }
                 _ => Err("communication_window must be array".to_string()),

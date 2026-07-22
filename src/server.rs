@@ -327,7 +327,11 @@ impl RequestDispatcher {
             && (d.instance_id == ObisCode::new(0, 0, 40, 0, 0, 255)
                 || self.association.as_ref().is_some_and(|assoc| assoc.logical_name() == &d.instance_id));
         if routed_to_assoc {
-            return match self.association.as_mut().expect("association routing").invoke_method(d.method_id as u8, params)
+            return match self
+                .association
+                .as_mut()
+                .expect("association routing")
+                .invoke_method(d.method_id as u8, params)
             {
                 Ok(crate::types::CosemDataType::Null) => (data_access_result::SUCCESS, None),
                 Ok(value) => (data_access_result::SUCCESS, Some(GetDataResult::Data(value))),
@@ -542,8 +546,7 @@ impl RequestDispatcher {
     /// СПОДЭС Configurator associations are configured as HLS-GMAC (5). Accept
     /// that pairing for AARQ, then finish the handshake with GMAC.
     fn aarq_mechanism_matches_assoc(requested: AuthMechanism, required: AuthMechanism) -> bool {
-        requested == required
-            || (requested == AuthMechanism::HlsManufacturer && required == AuthMechanism::HlsGmac)
+        requested == required || (requested == AuthMechanism::HlsManufacturer && required == AuthMechanism::HlsGmac)
     }
 
     /// Answers an RLRQ with RLRE (IEC 62056-5-3 §7.3.6) and clears any
@@ -1279,11 +1282,9 @@ mod tests {
     #[test]
     fn rlrq_is_answered_with_rlre() {
         let mut d = dispatcher_with_data();
-        let rlrq = crate::service::acse::ReleaseRequest {
-            reason: Some(acse::release_reason::NORMAL),
-            user_information: None,
-        }
-        .encode_rlrq();
+        let rlrq =
+            crate::service::acse::ReleaseRequest { reason: Some(acse::release_reason::NORMAL), user_information: None }
+                .encode_rlrq();
         let resp = d.dispatch(&rlrq).unwrap();
         assert_eq!(resp.first(), Some(&acse::RLRE_TAG));
     }

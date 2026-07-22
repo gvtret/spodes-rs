@@ -204,16 +204,12 @@ impl AssociationLn {
     }
 
     fn hls_mechanism(&self) -> AuthMechanism {
-        self.hls_handshake_mechanism
-            .unwrap_or(self.authentication_mechanism)
+        self.hls_handshake_mechanism.unwrap_or(self.authentication_mechanism)
     }
 
     /// Server system title for the AARE responding-AP-title on HLS pass 1/2.
     pub fn responding_ap_title_for_hls(&self) -> Option<Vec<u8>> {
-        self.hls_context
-            .as_ref()
-            .map(|ctx| ctx.server_system_title.clone())
-            .filter(|title| title.len() == 8)
+        self.hls_context.as_ref().map(|ctx| ctx.server_system_title.clone()).filter(|title| title.len() == 8)
     }
 
     /// Returns the authentication mechanism of this association (attribute 6).

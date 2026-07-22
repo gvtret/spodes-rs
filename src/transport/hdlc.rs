@@ -997,12 +997,15 @@ mod tests {
         .encode();
         server.transport_mut().feed(&snrm);
         let info = Control::Information { send_seq: 0, recv_seq: 0, poll: true };
-        server.transport_mut().feed(&HdlcFrame::new(
-            HdlcAddress::one_byte(0x03),
-            HdlcAddress::one_byte(0x61),
-            info,
-            vec![0xE6, 0xE6, 0x00, 0xC0, 0x01, 0xC1],
-        ).encode());
+        server.transport_mut().feed(
+            &HdlcFrame::new(
+                HdlcAddress::one_byte(0x03),
+                HdlcAddress::one_byte(0x61),
+                info,
+                vec![0xE6, 0xE6, 0x00, 0xC0, 0x01, 0xC1],
+            )
+            .encode(),
+        );
         let _ = server.receive_apdu().unwrap();
         let ua_raw = server.read_frame().unwrap();
         let ua = HdlcFrame::decode(&ua_raw).unwrap();
