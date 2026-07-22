@@ -17,6 +17,7 @@
 
 use std::collections::VecDeque;
 use std::io;
+use std::time::Duration;
 
 pub mod hdlc;
 pub mod wrapper;
@@ -33,6 +34,24 @@ pub trait PhysicalTransport {
     /// Receives bytes into `buf`, returning the number of bytes read. A return
     /// value of 0 indicates end of stream.
     fn receive(&mut self, buf: &mut [u8]) -> io::Result<usize>;
+
+    /// Sets the maximum time a subsequent [`receive`](Self::receive) call may
+    /// block before returning an [`io::ErrorKind::TimedOut`] (or
+    /// [`io::ErrorKind::WouldBlock`]) error. `None` waits indefinitely (the
+    /// default behaviour, and what every `receive` implementation must do
+    /// when this method is never called).
+    ///
+    /// Used by [`crate::transport::hdlc::HdlcLayer`] to enforce the IEC 62056-46
+    /// inter-octet and inactivity timeouts. The default implementation is a
+    /// no-op that returns `Ok(())`: a transport that ignores this request
+    /// (i.e. keeps blocking indefinitely) makes those timeouts inactive but
+    /// otherwise behaves exactly as before this method existed — mirrors
+    /// [`std::net::TcpStream::set_read_timeout`], which most network
+    /// transports can delegate to directly.
+    fn set_read_timeout(&mut self, timeout: Option<Duration>) -> io::Result<()> {
+        let _ = timeout;
+        Ok(())
+    }
 }
 
 /// Marker trait for network transports (TCP/UDP).

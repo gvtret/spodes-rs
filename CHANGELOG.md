@@ -8,6 +8,52 @@ While the crate is at `0.x`, minor releases may contain breaking changes.
 
 ## [Unreleased]
 
+### Added (general block transfer, ported from openspodes gbt.c / client.c)
+
+- **`service::gbt::send`/`receive`**: drive the general-block-transfer codec
+  (IEC 62056-5-3 §9.3) over any `DataLinkLayer`, segmenting an oversized
+  APDU into blocks and reassembling them on the other end. Supports
+  unconfirmed transfer (no acks) and confirmed transfer with a window: the
+  sender waits for an ack-only GBT frame every `window` blocks and
+  retransmits from the first block the peer reports missing on a gap; the
+  receiver requests retransmission on out-of-order blocks and
+  acks-and-discards duplicates. `applies_to_apdu` identifies the services
+  GBT covers: GET/SET/ACTION and, unlike the older service-specific
+  WITH-DATABLOCK mechanism, DataNotification and EventNotificationRequest
+  too.
+- **`ClientSession`/`ClientSessionBuilder` GBT integration**: `with_gbt`/
+  `enable_gbt(block_size)`, `gbt_window`/`set_gbt_window`,
+  `gbt_streaming`/`set_gbt_streaming`. When enabled, a request or response
+  whose service qualifies and exceeds the configured block size is
+  transparently segmented/reassembled instead of sent as a single frame.
+  Verified end-to-end over real threads and channels (unconfirmed,
+  confirmed-window, and below-threshold round trips) — the single-call
+  `LoopbackLink` mock used by other session tests cannot exercise GBT's
+  multi-round-trip block/ack exchange.
+- Server-side reassembly/segmentation is provided by the same `gbt::send`/
+  `receive` functions, usable directly by any code driving a
+  `RequestDispatcher` over a `DataLinkLayer` (see `tests/gbt_integration.rs`
+  for the pattern); `RequestDispatcher::set_max_pdu` should be raised when
+  GBT is meant to handle wire segmentation, so the service layer doesn't
+  also segment via WITH-DATABLOCK.
+
+### Added (HDLC inter-octet and inactivity timeouts, ported from openspodes hdlc_session.c)
+
+- **`PhysicalTransport::set_read_timeout`**: an optional, non-breaking
+  trait method (default no-op) mirroring `TcpStream::set_read_timeout`,
+  letting a transport bound how long a `receive` call may block.
+- **`HdlcLayer::set_inter_octet_timeout_ms`/`set_inactivity_timeout_s`**:
+  configure the IEC 62056-46 "межсимвольный" (20..6000 ms, default 25) and
+  "межкадровый" (0..120 s, 0 = disabled) timeouts, clamped to the standard's
+  ranges. `receive_apdu` now waits under the inactivity timeout for a *new*
+  frame to start and switches to the tighter inter-octet timeout for the
+  rest of that frame; either one elapsing aborts the read with an
+  `io::ErrorKind::TimedOut` error (already treated as transient/retryable by
+  `ClientSession`'s existing retry logic). An inactivity timeout also drops
+  `HdlcLayer::is_connected()` to `false` (NDM must be assumed on a silent
+  peer), matching the reference; an inter-octet timeout does not by itself
+  drop the connection.
+
 ### Security (re-audit against openspodes security.c 1.10.0)
 
 - **Replay protection**: `SecurityContext` now tracks the last invocation

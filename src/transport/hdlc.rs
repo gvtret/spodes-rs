@@ -19,6 +19,7 @@
 //! Both check sequences are the CRC-16/X.25 defined by [`fcs16`].
 
 use std::io;
+use std::time::Duration;
 
 #[cfg(feature = "tracing")]
 use tracing::trace;
@@ -365,6 +366,12 @@ pub struct HdlcLayer<T: PhysicalTransport> {
     recv_seq: u8,
     /// Whether the data link is in NRM (connected) as opposed to NDM.
     connected: bool,
+    /// Maximum gap between two octets of the *same* frame (IEC 62056-46
+    /// "межсимвольный" timeout) before the read is aborted.
+    inter_octet_timeout: Duration,
+    /// Maximum time to wait for a *new* frame to start (IEC 62056-46
+    /// "межкадровый" / inactivity timeout); `None` waits indefinitely.
+    inactivity_timeout: Option<Duration>,
 }
 
 /// How many consecutive undecodable (bad FCS/HCS, malformed) frames are
@@ -372,16 +379,69 @@ pub struct HdlcLayer<T: PhysicalTransport> {
 /// with an invalid check sequence are discarded without a response).
 const MAX_BAD_FRAMES: usize = 8;
 
+/// IEC 62056-46 / Blue Book inter-octet timeout limits, in milliseconds.
+const INTER_OCTET_MIN_MS: u16 = 20;
+const INTER_OCTET_MAX_MS: u16 = 6000;
+const INTER_OCTET_DEFAULT_MS: u16 = 25;
+
+/// IEC 62056-46 / Blue Book inactivity timeout limit, in seconds (0 disables it).
+const INACTIVITY_MAX_S: u16 = 120;
+
 impl<T: PhysicalTransport> HdlcLayer<T> {
     /// Creates a client-side HDLC layer that talks to the server at `server`
     /// address using the given `client` address.
     pub fn new_client(transport: T, client: HdlcAddress, server: HdlcAddress) -> Self {
-        HdlcLayer { transport, peer: server, own: client, is_client: true, send_seq: 0, recv_seq: 0, connected: false }
+        HdlcLayer {
+            transport,
+            peer: server,
+            own: client,
+            is_client: true,
+            send_seq: 0,
+            recv_seq: 0,
+            connected: false,
+            inter_octet_timeout: Duration::from_millis(INTER_OCTET_DEFAULT_MS as u64),
+            inactivity_timeout: None,
+        }
     }
 
     /// Creates a server-side HDLC layer.
     pub fn new_server(transport: T, server: HdlcAddress, client: HdlcAddress) -> Self {
-        HdlcLayer { transport, peer: client, own: server, is_client: false, send_seq: 0, recv_seq: 0, connected: false }
+        HdlcLayer {
+            transport,
+            peer: client,
+            own: server,
+            is_client: false,
+            send_seq: 0,
+            recv_seq: 0,
+            connected: false,
+            inter_octet_timeout: Duration::from_millis(INTER_OCTET_DEFAULT_MS as u64),
+            inactivity_timeout: None,
+        }
+    }
+
+    /// Sets the inter-octet timeout (IEC 62056-46 "межсимвольный"): the
+    /// maximum gap allowed between two octets of the same frame before the
+    /// read is aborted with a [`std::io::ErrorKind::TimedOut`] error.
+    /// Clamped to 20..=6000 ms per the standard; defaults to 25 ms.
+    ///
+    /// Has an effect only if the underlying [`PhysicalTransport`] honours
+    /// [`PhysicalTransport::set_read_timeout`].
+    pub fn set_inter_octet_timeout_ms(&mut self, ms: u16) {
+        self.inter_octet_timeout = Duration::from_millis(ms.clamp(INTER_OCTET_MIN_MS, INTER_OCTET_MAX_MS) as u64);
+    }
+
+    /// Sets the inactivity timeout (IEC 62056-46 "межкадровый"): the maximum
+    /// time to wait for a *new* frame to start before
+    /// [`Self::receive_apdu`]-driven reads abort with a
+    /// [`std::io::ErrorKind::TimedOut`] error and the link is considered
+    /// dropped (see [`Self::is_connected`]). Clamped to 0..=120 s; `0`
+    /// disables it (wait indefinitely), which is also the default.
+    ///
+    /// Has an effect only if the underlying [`PhysicalTransport`] honours
+    /// [`PhysicalTransport::set_read_timeout`].
+    pub fn set_inactivity_timeout_s(&mut self, seconds: u16) {
+        let seconds = seconds.min(INACTIVITY_MAX_S);
+        self.inactivity_timeout = if seconds == 0 { None } else { Some(Duration::from_secs(seconds as u64)) };
     }
 
     /// Client: establishes the data link (NDM → NRM) with an SNRM/UA exchange
@@ -460,18 +520,49 @@ impl<T: PhysicalTransport> HdlcLayer<T> {
 
     /// Reads one complete frame (from an opening flag to a closing flag) from the
     /// transport.
+    ///
+    /// Waits up to the configured inactivity timeout for the opening flag of
+    /// a *new* frame, then up to the (tighter) inter-octet timeout for every
+    /// subsequent octet of that same frame; exceeding either aborts the read
+    /// with a [`std::io::ErrorKind::TimedOut`] error (an inactivity timeout
+    /// additionally marks the link as disconnected — see
+    /// [`Self::is_connected`] — per IEC 62056-46: a silent peer means NDM
+    /// must be assumed without necessarily closing the transport). Both
+    /// timeouts require the transport to honour
+    /// [`PhysicalTransport::set_read_timeout`]; a transport that doesn't
+    /// (the default) makes reads block indefinitely as before.
     fn read_frame(&mut self) -> io::Result<Vec<u8>> {
-        // Skip to the opening flag.
+        // Skip to the opening flag, bounded by the inactivity timeout.
+        self.transport.set_read_timeout(self.inactivity_timeout)?;
         let mut byte = [0u8; 1];
         loop {
-            read_exact(&mut self.transport, &mut byte)?;
+            match read_exact(&mut self.transport, &mut byte) {
+                Ok(()) => {}
+                Err(e) if is_timeout(&e) => {
+                    self.connected = false;
+                    return Err(io::Error::new(io::ErrorKind::TimedOut, "HDLC inactivity timeout: no frame received"));
+                }
+                Err(e) => return Err(e),
+            }
             if byte[0] == FLAG {
                 break;
             }
         }
-        // Read the 2-octet frame format field to learn the length.
+
+        // A frame has started: the rest of it is bounded by the tighter
+        // inter-octet timeout. The inactivity timeout is restored before
+        // returning, on every path, for the next call.
+        self.transport.set_read_timeout(Some(self.inter_octet_timeout))?;
+        let body = self.read_frame_body();
+        let _ = self.transport.set_read_timeout(self.inactivity_timeout);
+        body
+    }
+
+    /// Reads the format field, payload and closing flag of a frame whose
+    /// opening flag octet has already been consumed.
+    fn read_frame_body(&mut self) -> io::Result<Vec<u8>> {
         let mut format = [0u8; 2];
-        read_exact(&mut self.transport, &mut format)?;
+        read_exact(&mut self.transport, &mut format).map_err(inter_octet_timeout)?;
         if format[0] & 0xF0 != 0xA0 {
             return Err(HdlcError::InvalidFormatType.into());
         }
@@ -481,12 +572,27 @@ impl<T: PhysicalTransport> HdlcLayer<T> {
         }
         // `length` counts the format field too; read the rest plus the closing flag.
         let mut rest = vec![0u8; length - 2 + 1];
-        read_exact(&mut self.transport, &mut rest)?;
+        read_exact(&mut self.transport, &mut rest).map_err(inter_octet_timeout)?;
         let mut frame = Vec::with_capacity(length + 2);
         frame.push(FLAG);
         frame.extend_from_slice(&format);
         frame.extend_from_slice(&rest);
         Ok(frame)
+    }
+}
+
+/// Whether `e` is a read timeout (from [`PhysicalTransport::set_read_timeout`]).
+fn is_timeout(e: &io::Error) -> bool {
+    matches!(e.kind(), io::ErrorKind::TimedOut | io::ErrorKind::WouldBlock)
+}
+
+/// Relabels a timeout mid-frame as an inter-octet timeout; other errors pass
+/// through unchanged.
+fn inter_octet_timeout(e: io::Error) -> io::Error {
+    if is_timeout(&e) {
+        io::Error::new(io::ErrorKind::TimedOut, "HDLC inter-octet timeout: frame aborted")
+    } else {
+        e
     }
 }
 
@@ -772,5 +878,131 @@ mod tests {
             .feed(&client_frame(Control::Information { send_seq: 1, recv_seq: 0, poll: true }, vec![0xBB]));
         let apdu = server.receive_apdu().unwrap();
         assert_eq!(apdu, vec![0xBB]);
+    }
+
+    // ------------------------------------------------------------------
+    // Inter-octet / inactivity timeouts.
+    // ------------------------------------------------------------------
+
+    #[test]
+    fn inter_octet_timeout_ms_clamps_to_standard_range() {
+        let mut layer =
+            HdlcLayer::new_client(MemoryTransport::new(), HdlcAddress::one_byte(0x10), HdlcAddress::one_byte(0x03));
+        layer.set_inter_octet_timeout_ms(5); // below the 20 ms minimum
+        assert_eq!(layer.inter_octet_timeout, Duration::from_millis(20));
+        layer.set_inter_octet_timeout_ms(60_000); // above the 6000 ms maximum
+        assert_eq!(layer.inter_octet_timeout, Duration::from_millis(6000));
+        layer.set_inter_octet_timeout_ms(100);
+        assert_eq!(layer.inter_octet_timeout, Duration::from_millis(100));
+    }
+
+    #[test]
+    fn inactivity_timeout_s_clamps_and_zero_disables() {
+        let mut layer =
+            HdlcLayer::new_client(MemoryTransport::new(), HdlcAddress::one_byte(0x10), HdlcAddress::one_byte(0x03));
+        assert_eq!(layer.inactivity_timeout, None, "disabled by default");
+        layer.set_inactivity_timeout_s(200); // above the 120 s maximum
+        assert_eq!(layer.inactivity_timeout, Some(Duration::from_secs(120)));
+        layer.set_inactivity_timeout_s(30);
+        assert_eq!(layer.inactivity_timeout, Some(Duration::from_secs(30)));
+        layer.set_inactivity_timeout_s(0);
+        assert_eq!(layer.inactivity_timeout, None, "0 disables it again");
+    }
+
+    /// A [`PhysicalTransport`] mock that logs every requested read timeout
+    /// and can simulate the peer going silent after a fixed number of
+    /// delivered bytes (or immediately, if empty) by returning
+    /// [`io::ErrorKind::TimedOut`] instead of blocking forever.
+    #[derive(Default)]
+    struct TimeoutTransport {
+        data: std::collections::VecDeque<u8>,
+        set_timeout_log: Vec<Option<Duration>>,
+    }
+
+    impl PhysicalTransport for TimeoutTransport {
+        fn send(&mut self, _data: &[u8]) -> io::Result<()> {
+            Ok(())
+        }
+        fn receive(&mut self, buf: &mut [u8]) -> io::Result<usize> {
+            if self.data.is_empty() {
+                // No more data will ever arrive: a real blocking transport
+                // configured with a read timeout would time out here rather
+                // than signal EOF.
+                return Err(io::Error::new(io::ErrorKind::TimedOut, "simulated timeout"));
+            }
+            let mut n = 0;
+            while n < buf.len() {
+                match self.data.pop_front() {
+                    Some(b) => {
+                        buf[n] = b;
+                        n += 1;
+                    }
+                    None => break,
+                }
+            }
+            Ok(n)
+        }
+        fn set_read_timeout(&mut self, timeout: Option<Duration>) -> io::Result<()> {
+            self.set_timeout_log.push(timeout);
+            Ok(())
+        }
+    }
+
+    fn timeout_test_layer() -> HdlcLayer<TimeoutTransport> {
+        let mut layer = HdlcLayer::new_client(
+            TimeoutTransport::default(),
+            HdlcAddress::one_byte(0x10),
+            HdlcAddress::one_byte(0x03),
+        );
+        layer.set_inactivity_timeout_s(60);
+        layer.set_inter_octet_timeout_ms(30);
+        layer
+    }
+
+    #[test]
+    fn read_frame_switches_from_inactivity_to_inter_octet_timeout() {
+        let mut layer = timeout_test_layer();
+        let frame = HdlcFrame::new(
+            HdlcAddress::one_byte(0x03),
+            HdlcAddress::one_byte(0x10),
+            Control::Ua { final_bit: true },
+            Vec::new(),
+        )
+        .encode();
+        layer.transport.data.extend(frame);
+
+        layer.read_frame().expect("full frame is available");
+
+        // Inactivity timeout while waiting for the flag, inter-octet timeout
+        // for the rest of the frame, then inactivity restored for the next call.
+        assert_eq!(
+            layer.transport.set_timeout_log,
+            vec![Some(Duration::from_secs(60)), Some(Duration::from_millis(30)), Some(Duration::from_secs(60))]
+        );
+    }
+
+    #[test]
+    fn no_frame_at_all_times_out_as_inactivity_and_disconnects() {
+        let mut layer = timeout_test_layer();
+        layer.connected = true;
+        let err = layer.read_frame().unwrap_err();
+        assert_eq!(err.kind(), io::ErrorKind::TimedOut);
+        assert!(err.to_string().contains("inactivity"), "unexpected message: {err}");
+        assert!(!layer.is_connected(), "inactivity timeout must drop the connected state");
+    }
+
+    #[test]
+    fn silence_mid_frame_times_out_as_inter_octet_without_disconnecting() {
+        let mut layer = timeout_test_layer();
+        layer.connected = true;
+        // Only the opening flag and part of the format field arrive; the
+        // peer then goes silent before the frame can be completed.
+        layer.transport.data.push_back(FLAG);
+        layer.transport.data.push_back(0xA0);
+
+        let err = layer.read_frame().unwrap_err();
+        assert_eq!(err.kind(), io::ErrorKind::TimedOut);
+        assert!(err.to_string().contains("inter-octet"), "unexpected message: {err}");
+        assert!(layer.is_connected(), "an inter-octet timeout must not by itself drop the connection");
     }
 }

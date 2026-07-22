@@ -39,6 +39,7 @@ use crate::service::acse;
 use crate::service::acse::{AssociationRequest, AssociationResponse, ReleaseRequest, ReleaseResponse};
 use crate::service::action::{ActionRequest, ActionResponse};
 use crate::service::ciphering::{self, glo, SecurityContext};
+use crate::service::gbt;
 use crate::service::get::{GetRequest, GetResponse};
 use crate::service::set::{SetRequest, SetResponse};
 use crate::service::{invoke_id_and_priority, tag, AttributeDescriptor, MethodDescriptor, RawApdu};
@@ -149,6 +150,29 @@ struct Ciphers {
     rx: SecurityContext,
 }
 
+/// General block transfer configuration for a session (IEC 62056-5-3 §9.3):
+/// requests/responses whose service qualifies (see [`gbt::applies_to_apdu`])
+/// and exceed `block_payload_max` are segmented into GBT blocks instead of
+/// sent as a single frame.
+#[derive(Debug, Clone, Copy)]
+struct GbtConfig {
+    /// Maximum payload octets per block (the overall block size minus the
+    /// GBT header, see [`gbt::HEADER_MAX`]).
+    block_payload_max: usize,
+    /// Confirmed-mode window size (0 = unconfirmed: no ack is awaited
+    /// between blocks).
+    window: u8,
+    /// Whether the streaming variant is used.
+    streaming: bool,
+}
+
+impl GbtConfig {
+    fn new(block_size: usize) -> Self {
+        let block_payload_max = block_size.saturating_sub(gbt::HEADER_MAX).max(1);
+        GbtConfig { block_payload_max, window: 0, streaming: false }
+    }
+}
+
 /// Current state of the application association.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum AssociationState {
@@ -166,6 +190,7 @@ pub struct ClientSession<L: DataLinkLayer> {
     invoke_id: u8,
     high_priority: bool,
     cipher: Option<Ciphers>,
+    gbt: Option<GbtConfig>,
     config: SessionConfig,
     state: AssociationState,
     /// Negotiated application context (from AARQ/AARE).
@@ -249,12 +274,13 @@ pub struct ClientSessionBuilder<L: DataLinkLayer> {
     config: SessionConfig,
     tx_cipher: Option<SecurityContext>,
     rx_cipher: Option<SecurityContext>,
+    gbt: Option<GbtConfig>,
 }
 
 impl<L: DataLinkLayer> ClientSessionBuilder<L> {
     /// Creates a new builder with the given transport link.
     pub fn new(link: L) -> Self {
-        ClientSessionBuilder { link, config: SessionConfig::default(), tx_cipher: None, rx_cipher: None }
+        ClientSessionBuilder { link, config: SessionConfig::default(), tx_cipher: None, rx_cipher: None, gbt: None }
     }
 
     /// Sets the request timeout. If a response is not received within this
@@ -285,6 +311,34 @@ impl<L: DataLinkLayer> ClientSessionBuilder<L> {
         self
     }
 
+    /// Enables general block transfer (IEC 62056-5-3 §9.3) for requests and
+    /// responses whose service qualifies (see [`gbt::applies_to_apdu`]) and
+    /// exceed `block_size` octets: they are segmented into GBT blocks instead
+    /// of sent as a single frame. Unconfirmed by default (no ack between
+    /// blocks); see [`ClientSessionBuilder::gbt_window`] for confirmed mode.
+    pub fn with_gbt(mut self, block_size: usize) -> Self {
+        self.gbt = Some(GbtConfig::new(block_size));
+        self
+    }
+
+    /// Sets the confirmed-mode window size for GBT (0 = unconfirmed).
+    /// Has no effect unless [`ClientSessionBuilder::with_gbt`] was called.
+    pub fn gbt_window(mut self, window: u8) -> Self {
+        if let Some(g) = self.gbt.as_mut() {
+            g.window = window;
+        }
+        self
+    }
+
+    /// Enables the streaming variant of GBT. Has no effect unless
+    /// [`ClientSessionBuilder::with_gbt`] was called.
+    pub fn gbt_streaming(mut self, enabled: bool) -> Self {
+        if let Some(g) = self.gbt.as_mut() {
+            g.streaming = enabled;
+        }
+        self
+    }
+
     /// Builds the [`ClientSession`].
     pub fn build(self) -> ClientSession<L> {
         let cipher = match (self.tx_cipher, self.rx_cipher) {
@@ -296,6 +350,7 @@ impl<L: DataLinkLayer> ClientSessionBuilder<L> {
             invoke_id: 1,
             high_priority: true,
             cipher,
+            gbt: self.gbt,
             config: self.config,
             state: AssociationState::Idle,
             application_context: acse::application_context::LN,
@@ -312,6 +367,7 @@ impl<L: DataLinkLayer> ClientSession<L> {
             invoke_id: 1,
             high_priority: true,
             cipher: None,
+            gbt: None,
             config: SessionConfig::default(),
             state: AssociationState::Idle,
             application_context: acse::application_context::LN,
@@ -330,10 +386,40 @@ impl<L: DataLinkLayer> ClientSession<L> {
             invoke_id: 1,
             high_priority: true,
             cipher: Some(Ciphers { tx: tx_context, rx: rx_context }),
+            gbt: None,
             config: SessionConfig::default(),
             state: AssociationState::Idle,
             application_context: acse::application_context::LN_CIPHERING,
             mechanism: None,
+        }
+    }
+
+    /// Enables general block transfer (IEC 62056-5-3 §9.3) for requests and
+    /// responses whose service qualifies (see [`gbt::applies_to_apdu`]) and
+    /// exceed `block_size` octets. Unconfirmed by default; see
+    /// [`Self::set_gbt_window`] for confirmed mode.
+    pub fn enable_gbt(&mut self, block_size: usize) {
+        self.gbt = Some(GbtConfig::new(block_size));
+    }
+
+    /// Disables general block transfer, restoring single-frame sends.
+    pub fn disable_gbt(&mut self) {
+        self.gbt = None;
+    }
+
+    /// Sets the confirmed-mode window size for GBT (0 = unconfirmed). Has no
+    /// effect unless GBT is enabled.
+    pub fn set_gbt_window(&mut self, window: u8) {
+        if let Some(g) = self.gbt.as_mut() {
+            g.window = window;
+        }
+    }
+
+    /// Enables or disables the streaming variant of GBT. Has no effect
+    /// unless GBT is enabled.
+    pub fn set_gbt_streaming(&mut self, enabled: bool) {
+        if let Some(g) = self.gbt.as_mut() {
+            g.streaming = enabled;
         }
     }
 
@@ -708,7 +794,16 @@ impl<L: DataLinkLayer> ClientSession<L> {
         };
         #[cfg(feature = "tracing")]
         trace!(len = outgoing.len(), "sending APDU");
-        self.link.send_apdu(&outgoing)?;
+        // Segment via general block transfer when it's enabled, the plain
+        // request's service qualifies, and the (possibly ciphered) frame
+        // exceeds the configured block size; qualification is checked on the
+        // plain request so ciphering doesn't change whether GBT applies.
+        match &self.gbt {
+            Some(g) if gbt::applies_to_apdu(plain_request) && outgoing.len() > g.block_payload_max => {
+                gbt::send(&mut self.link, &outgoing, g.block_payload_max, g.window, g.streaming)?;
+            }
+            _ => self.link.send_apdu(&outgoing)?,
+        }
         if let Some(c) = &mut self.cipher {
             // Advance our sending counter for the next protected request.
             c.tx.invocation_counter = c.tx.invocation_counter.wrapping_add(1);
@@ -724,6 +819,11 @@ impl<L: DataLinkLayer> ClientSession<L> {
         }
 
         let reply = self.link.receive_apdu()?;
+        let reply = if reply.first() == Some(&gbt::GENERAL_BLOCK_TRANSFER) {
+            gbt::receive(&mut self.link, reply)?
+        } else {
+            reply
+        };
 
         // Check timeout after receive
         if let Some(deadline) = deadline {

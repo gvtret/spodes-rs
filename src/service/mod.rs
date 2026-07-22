@@ -102,6 +102,12 @@ impl std::fmt::Display for ServiceError {
 
 impl std::error::Error for ServiceError {}
 
+impl From<ServiceError> for std::io::Error {
+    fn from(e: ServiceError) -> Self {
+        std::io::Error::new(std::io::ErrorKind::InvalidData, e)
+    }
+}
+
 impl From<BerError> for ServiceError {
     fn from(_: BerError) -> Self {
         ServiceError::InvalidData

@@ -225,3 +225,97 @@ for release; likely 0.6.0 given the accumulated public API additions across
 today's four rounds (handle_aarq, build_push_delivery_request,
 HdlcLayer::connect/disconnect, 6 new IC classes, CipherError variants,
 key_rotation_needed).
+
+## 2026-07-22 — GBT wiring + HDLC inter-octet/inactivity timeouts
+
+**Done (both items the user explicitly asked to take up):**
+
+1. **GBT (General Block Transfer) wiring** — was previously codec-only
+   (`service/gbt.rs` encode/decode), now fully wired:
+   - `gbt::applies_to_apdu`, `gbt::send`, `gbt::receive` (src/service/gbt.rs)
+     drive the codec over any `DataLinkLayer`. Confirmed mode: sender waits
+     for an ack every `window` blocks, retransmits on a reported gap;
+     receiver requests retransmission on out-of-order blocks, acks/discards
+     duplicates. **Found and fixed a real ack-cadence bug during testing**:
+     initial `receive()` acked every accepted block regardless of window
+     size, desyncing from `send()` (which only checks for an ack once per
+     window) — caused spurious retransmit storms with window>1. Fixed by
+     tracking `blocks_since_ack` and only acking every `window` blocks,
+     matching the sender's batching exactly.
+   - `ClientSession`/`ClientSessionBuilder` gained `with_gbt`/`enable_gbt`/
+     `gbt_window`/`gbt_streaming` (mirrors C's `osp_client_enable_gbt` etc.)
+     wired into `transact_once`: request segmented via GBT when it qualifies
+     and exceeds the block size (checked on the *plain* pre-cipher tag, so
+     ciphering doesn't change whether GBT applies — a deliberate improvement
+     over the C reference, which checks the tag post-ciphering and so can
+     never actually engage GBT together with ciphering); response
+     reassembled via `gbt::receive` when the first byte is the GBT tag.
+   - New `impl From<ServiceError> for io::Error` (src/service/mod.rs) so GBT
+     codec errors compose with `io::Result` the same way `HdlcError` already
+     does.
+   - New `tests/gbt_integration.rs`: 3 end-to-end tests over **real OS
+     threads + mpsc channels** (client session + a small GBT-aware server
+     loop) — unconfirmed large GET, confirmed-window (2) large GET, and a
+     small response that stays unsegmented. Note: `RequestDispatcher` is not
+     `Send` (holds `Box<dyn InterfaceClass>` without a Send bound), so the
+     dispatcher must be *built inside* the spawned server thread, not moved
+     in — and the dispatcher's `max_pdu` must be raised (`usize::MAX` in the
+     test) so it emits one full response for GBT to segment, instead of
+     pre-segmenting via its own WITH-DATABLOCK mechanism first.
+   - 11 gbt.rs unit tests (was 3) using a `ScriptedLink` `DataLinkLayer` mock
+     that scripts exact ack sequences — covers unconfirmed/confirmed send,
+     gap-retransmit, non-ack-reply rejection, single/multi-block receive,
+     gap/duplicate handling on receive.
+
+2. **HDLC inter-octet and inactivity timeouts** (src/transport/hdlc.rs,
+   src/transport/mod.rs):
+   - `PhysicalTransport::set_read_timeout(Option<Duration>) -> io::Result<()>`
+     — new trait method, **default no-op body so fully non-breaking** for
+     existing implementors (`MemoryTransport`, example `TcpTransport`s).
+     Mirrors `TcpStream::set_read_timeout` exactly so a real TCP transport
+     can just forward to it.
+   - `HdlcLayer` gained `inter_octet_timeout: Duration` (default 25ms,
+     `set_inter_octet_timeout_ms` clamps 20..6000) and
+     `inactivity_timeout: Option<Duration>` (default `None`/disabled,
+     `set_inactivity_timeout_s` clamps 0..120, 0→None) — exact limits from
+     IEC 62056-46 / the C reference's `OSP_HDLC_INTER_OCTET_MIN/MAX_MS` and
+     `OSP_HDLC_INACTIVITY_MAX_S`.
+   - `read_frame` split into flag-search (bounded by inactivity timeout) and
+     `read_frame_body` (bounded by inter-octet timeout once the flag is
+     found); timeout restored to inactivity before returning either way.
+     Both timeout kinds surface as `io::ErrorKind::TimedOut` (already
+     classified transient/retryable by `ClientSession`'s `is_transient_io`,
+     so no new retry plumbing needed) with a distinguishing message
+     ("inactivity" vs "inter-octet"). Only the inactivity timeout sets
+     `connected = false` (assume NDM on a silent peer, matching the C
+     doc comment "drop to NDM without closing transport"); an inter-octet
+     timeout (a single garbled/interrupted frame) does not.
+   - 5 new tests incl. a `TimeoutTransport` mock that logs every
+     `set_read_timeout` call and can simulate the peer going silent —
+     verifies the exact inactivity→inter-octet→inactivity phase sequence,
+     the TimedOut+disconnect behavior on inactivity, and the
+     TimedOut+no-disconnect behavior on inter-octet silence.
+   - **Not wired into an example**: no example in this crate drives
+     `HdlcLayer` directly (only `Wrapper`/IEC 62056-47) — adding one was out
+     of scope for "add HDLC timeouts" and would be its own task if wanted.
+
+**State:** branch `main`, all quality gates green — 360 lib tests (was 347)
++ 90 across 7 integration suites (gbt_integration.rs is new); fmt/clippy/doc
+`-D warnings` clean. Uncommitted at entry-write time (commit follows
+immediately).
+
+**This closes both items from the previous session's "deliberately NOT
+ported" list.** Per that entry's closing note, the remaining un-ported items
+(XID parameter negotiation, outbound I-frame segmentation) were NOT part of
+this request and remain open if wanted later — HDLC already does inbound
+segmented-I-frame *reassembly* (from the 2026-07-22 round-2 HDLC hardening),
+just not outbound segmentation of a single large `send_apdu` call (GBT is
+the mechanism this crate offers for large payloads instead).
+
+**Next:** release. Given the accumulated public API growth across all of
+today's rounds (handle_aarq, build_push_delivery_request, GBT send/receive +
+session integration, PhysicalTransport::set_read_timeout, HdlcLayer
+connect/disconnect + timeouts, 6 new IC classes, new CipherError variants,
+key_rotation_needed), 0.6.0 is the right next version per semver (still 0.x,
+so technically optional, but the surface added is substantial). Not
+released yet — awaiting user go-ahead per the `release` skill's normal flow.
