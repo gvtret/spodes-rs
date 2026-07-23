@@ -410,3 +410,148 @@ uncommitted, nothing unpushed.
 automatically from the new publish (usually within a few minutes) —
 https://docs.rs/spodes-rs/0.6.0/spodes_rs/. If further work resumes, start
 fresh from a clean `main`.
+
+## 2026-07-23 — Finished idiomatic refactor, reviewed/merged PRs #2–#6, released v0.7.0 and v0.7.1
+
+**Done:**
+
+1. **Idiomatic refactor completed** on `refactor/idiomatic` (worktree
+   `/home/trgv/spodes-rs-refactor`) and merged to `main` as **PR #3**: the
+   two "risky" categories the user explicitly opted into —
+   - **Numeric casts** (174/174 pedantic+nursery sites): 30 mechanical
+     `cast_lossless` fixes, ~84 scoped `#[allow]`s with inline justification
+     (BER `write_length` helper, raw-octet round-trips, practically-bounded
+     counts), and ~15 **real fixes**: `types/attrs.rs`'s `TryFrom` impls now
+     reject an out-of-range `Long`/`LongUnsigned` wire value via
+     `try_from` instead of silently truncating it into a different valid
+     id (12 new regression tests); HDLC's `XidParams::decode` clamps an
+     out-of-range peer window-size proposal to `u8::MAX` instead of
+     wrapping it small. 3 `debug_assert!`s added on genuine protocol-level
+     bounds (wrapper 16-bit length field, GOST KDF one-octet counter,
+     HDLC version-0 unsigned max-info).
+   - **Trait/method signatures** (107/107 sites, user confirmed "include
+     everything including unnecessary_wraps"): `trivially_copy_pass_by_ref`,
+     `unused_self`, `needless_pass_by_ref_mut`, `needless_pass_by_value` (one
+     public API break: `gbt::receive`'s `Vec<u8>` param → `&[u8]`),
+     `return_self_not_must_use` (15 `#[must_use]` on session.rs builders),
+     `unnecessary_wraps` (60 sites — the duplicated `write_length` helper
+     and ~20 always-`Ok`/never-`Err` `invoke_method` handlers now return
+     bare values, callers wrap with `Ok(...)`).
+   - Full gate green throughout; lib tests grew 372→386 (regression tests
+     for the cast fixes). PR #3 reviewed (self, reading the full diff with
+     focus on server.rs dispatch/HDLC signature changes/gbt.rs API
+     break/attrs.rs validation) and merged clean via `gh pr merge`.
+
+2. **Reviewed and merged 4 more PRs from the user's parallel
+   `spodes-server-rs` work**, each following the same pattern (check CI →
+   fix any `cargo fmt` gaps in a throwaway worktree → review the actual
+   protocol/logic diff → renew stale tests if the PR changed behavior they
+   assumed → merge → sync `main`):
+   - **PR #2** `feat/hls-hdlc-server-parity` — HLS-GMAC/Gurux-HIGH interop
+     shim, `Data`/`PushSetup` `set_attribute`, HDLC client-SAP learning.
+     Flagged (not blocking) the manufacturer-mechanism downgrade acceptance
+     as a deliberate, described tradeoff.
+   - **PR #4** `fix/hdlc-server-state-machine-frmr` — NDM/NRM state machine
+     hardening, FRMR paths (W/Y/Z), inter-octet-timeout-discards-not-errors
+     behavior change. Clean, only needed a fmt fix.
+   - **PR #5** `fix/xdlms-aarq-hls-association` — **real correctness fix**:
+     HLS pass 3/4 success wasn't marking the association actually
+     associated; added GET/SET/ACTION gating on association state; extended
+     ACSE wire format (protocol-version, sender-acse-requirements,
+     provider/user diagnostic CHOICE, HLS mechanism-name echo). Clean, only
+     needed a fmt fix.
+   - **PR #6** `fix/gurux-suite-server-parity` — largest and messiest: CI
+     showed real test failures, not just fmt. Found and fixed **two actual
+     stale-test bugs the PR author introduced**: (a) `Register` gained
+     `set_attribute` but the old `test_set_register_returns_not_writable`
+     still asserted the pre-existing read-only behavior — renamed/updated
+     to `test_set_register_updates_value`, mirroring the earlier `Data`
+     precedent; (b) **Clock's ACTION method IDs were renumbered** to match
+     the Blue Book (`adjust_to_measuring_period` inserted at 2, shifting
+     `adjust_to_minute` 2→3 and `adjust_to_preset_time` 3→4, `shift_time`
+     added at 6) but `tests/integration.rs` and `examples/clock_usage.rs`
+     still called the old IDs — silently exercising the *wrong* method
+     (verified the fix by actually running `cargo run --example
+     clock_usage` and checking the output byte-for-byte). Also reviewed
+     the substantive HDLC N(R)-ahead-vs-behind refinement and
+     `PendingBlocks`/role-conformance additions — correct.
+
+3. **Hit a genuine GitHub platform outage mid-PR-#6**: pushes to the PR
+   branch stopped triggering any "GitHub Actions" check-suite at all
+   (confirmed via `check-suites` API — only 3rd-party apps like
+   GitGuardian fired), and later `gh pr merge`/the REST merge endpoint
+   itself started 409'ing with "Head branch is out of date" even though
+   `mergeStateStatus` read `CLEAN`. Diagnosed thoroughly (workflow state
+   active, repo public/not archived/not a fork, Actions permissions
+   enabled, rate limits fine) before concluding it wasn't anything on our
+   end. **User explicitly authorized proceeding on local verification
+   alone** after ~15+ min of no recovery. Worked around the broken merge
+   API by merging PR #6's branch **directly via git** (`git merge --no-ff`
+   + `git push origin main` from the main checkout) instead of
+   `gh pr merge` — GitHub auto-detected the PR as merged once the commits
+   landed. CI/merge-API recovered on their own shortly after (confirmed:
+   subsequent CI runs and the tag-triggered Release workflow both worked
+   normally for the v0.7.0/v0.7.1 releases that followed).
+
+4. **Released v0.7.0**: bumped `Cargo.toml`, wrote a full CHANGELOG entry
+   (grouped by the 5 merged PRs' themes — Added/Fixed×3/Changed — matching
+   the project's established prose-with-bold-lead-ins style), full gate
+   green including `cargo package`, committed `80955a2`, tagged `v0.7.0`,
+   pushed. CI + Release workflow (GitHub Release + crates.io publish) both
+   green; confirmed live via the crates.io API (`max_version: 0.7.0`).
+   **Note**: `curl https://crates.io/api/v1/...` needs a descriptive
+   `User-Agent` header or crates.io 403s the request as an API-policy
+   violation — use
+   `curl -H "User-Agent: <anything descriptive incl. an email>" ...`.
+
+5. **User then asked to scrub all "Gurux" mentions** from source/docs.
+   Since v0.7.0 was already live on crates.io (immutable — can't
+   overwrite a published version, only `yank`), asked the user how to
+   version this; chose **new patch v0.7.1**, explicitly **"don't mention
+   gurux in the commit message"**. Found and fixed all 12 occurrences
+   (`grep -rniI gurux --include='*.rs' --include='*.md' --include='*.toml'
+   .`, excluding `target/`): `src/server.rs` ×2, `src/classes/
+   association_ln.rs`, `src/classes/clock.rs`, `src/transport/hdlc.rs`,
+   `src/security/hls.rs` ×3 (incl. renaming test fn
+   `manufacturer_aes_matches_gurux_reference` →
+   `..._matches_reference_vectors`), `CHANGELOG.md` ×3 (edited the
+   already-released 0.7.0 section's prose too, since the user said "in
+   docs" without carving out an exception for already-published changelog
+   entries). Kept the adjacent "Texas-Instruments/TI" references (only
+   asked to remove Gurux specifically). Verified zero remaining hits, full
+   gate green (build/fmt/clippy -D warnings/402 lib tests unchanged/doc),
+   committed (commit message verified via `git log | grep -i gurux` →ex it
+   1, i.e. genuinely absent), tagged/pushed `v0.7.1`. CI + Release workflow
+   green, crates.io confirmed `max_version: 0.7.1`.
+
+**State:** `main` at `28af151` = `v0.7.1`, released and live on crates.io.
+Working tree clean, nothing uncommitted or unpushed. Full gate green.
+`refactor/idiomatic` worktree (`/home/trgv/spodes-rs-refactor`, still on
+disk) has nothing further queued — it's fully merged into `main` already;
+safe to `git worktree remove` whenever, just wasn't done since no one
+asked. No PRs currently open.
+
+**Next:** none pending. If resuming refactor work, note the **remaining
+pedantic+nursery categories were never part of the original "risky" scope
+the user opted into** and are a fresh decision, not unfinished business:
+`use_self` (512 sites), `doc_markdown` (385), `must_use_candidate` (231),
+`missing_const_for_fn` (130), `missing_errors_doc` (93), plus a long tail
+(counts as of the last sweep before v0.7.0, will have shifted slightly
+with PRs #2/#4/#5/#6's new code). Re-run
+`cargo clippy --all-targets -- -W clippy::pedantic -W clippy::nursery`
+for current counts before starting anything.
+
+**Notes:**
+- The auto-memory system (`~/.claude/projects/-home-trgv-spodes-rs/memory/
+  idiomatic-refactor-snapshot.md`) has the full blow-by-blow of the
+  refactor's commits/reasoning if finer detail than this handoff entry is
+  ever needed — this handoff is the terser, session-boundary-oriented
+  summary; that memory file is the exhaustive one.
+- Pattern that worked well across PRs #2/#4/#5/#6 for reviewing the
+  user's own server-integration PRs: `git worktree add` the PR branch →
+  fix `cargo fmt` (the recurring CI failure cause) → full local gate →
+  read the actual diff for logic/security correctness → **specifically
+  grep for stale tests/examples asserting old behavior the PR just
+  changed** (this caught 2 real bugs in PR #6 that CI's raw failure output
+  alone would have shown as "some test failed" without the "why", and
+  fixing forward beats just reporting the CI failure back).
