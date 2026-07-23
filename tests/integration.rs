@@ -239,7 +239,7 @@ fn test_clock_adjust_to_minute() {
     };
     let mut clock = Clock::new(config);
 
-    let result = clock.invoke_method(2, None).expect("Adjust to minute failed");
+    let result = clock.invoke_method(3, None).expect("Adjust to minute failed");
     assert_eq!(result, CosemDataType::Null);
     if let CosemDataType::OctetString(dt) = &clock.attributes()[1].1 {
         assert_eq!(dt[6], 37); // Minutes: 37 (unchanged)
@@ -270,7 +270,7 @@ fn test_clock_adjust_to_preset_time() {
     let new_time =
         CosemDataType::OctetString(vec![0x07, 0xE5, 0x05, 0x02, 0x03, 0x12, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00]);
 
-    let result = clock.invoke_method(3, Some(new_time.clone())).expect("Adjust to preset time failed");
+    let result = clock.invoke_method(4, Some(new_time.clone())).expect("Adjust to preset time failed");
     assert_eq!(result, CosemDataType::Null);
     assert_eq!(clock.attributes()[1].1, new_time);
 }

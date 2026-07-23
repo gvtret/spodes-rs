@@ -130,10 +130,7 @@ impl InterfaceClass for SpecialDaysTable {
                 let CosemDataType::Array(entries) = value else {
                     return Err("entries must be array".into());
                 };
-                self.entries = entries
-                    .iter()
-                    .map(SpecialDayEntry::try_from)
-                    .collect::<Result<Vec<_>, _>>()?;
+                self.entries = entries.iter().map(SpecialDayEntry::try_from).collect::<Result<Vec<_>, _>>()?;
                 Ok(())
             }
             _ => Err(format!("SpecialDaysTable attribute {attribute_id} is not writable")),

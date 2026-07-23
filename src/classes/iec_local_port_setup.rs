@@ -166,7 +166,8 @@ impl InterfaceClass for IecLocalPortSetup {
                 Ok(())
             }
             6 => {
-                self.device_addr = take_octet_string(&value).map_err(|_| "device_addr must be octet-string".to_string())?;
+                self.device_addr =
+                    take_octet_string(&value).map_err(|_| "device_addr must be octet-string".to_string())?;
                 Ok(())
             }
             7 => {

@@ -55,7 +55,7 @@ fn main() {
         0x00, // Hundredths of a second: 0
         0x00, 0x00, 0x00, // Deviation from UTC: 0
     ]);
-    let result = clock.invoke_method(3, Some(new_time)).expect("Adjust to preset time failed");
+    let result = clock.invoke_method(4, Some(new_time)).expect("Adjust to preset time failed");
     println!("Adjust to preset time result: {result:?}");
     println!("Clock after adjust to preset time: {clock:?}");
 }
