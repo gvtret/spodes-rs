@@ -184,11 +184,11 @@ fn test_clock_serialization_deserialization() {
     deserialize_object(&mut deserialized, &serialized).expect("Deserialization failed");
 
     assert_eq!(deserialized.logical_name(), clock.logical_name());
-    assert_eq!(deserialized.attributes()[1].1, CosemDataType::DateTime(time.0.to_vec()));
+    assert_eq!(deserialized.attributes()[1].1, CosemDataType::OctetString(time.0.to_vec()));
     assert_eq!(deserialized.attributes()[2].1, CosemDataType::Long(180));
     assert_eq!(deserialized.attributes()[3].1, CosemDataType::Unsigned(1));
-    assert_eq!(deserialized.attributes()[4].1, CosemDataType::DateTime(daylight_savings_begin.0.to_vec()));
-    assert_eq!(deserialized.attributes()[5].1, CosemDataType::DateTime(daylight_savings_end.0.to_vec()));
+    assert_eq!(deserialized.attributes()[4].1, CosemDataType::OctetString(daylight_savings_begin.0.to_vec()));
+    assert_eq!(deserialized.attributes()[5].1, CosemDataType::OctetString(daylight_savings_end.0.to_vec()));
     assert_eq!(deserialized.attributes()[6].1, CosemDataType::Integer(60));
     assert_eq!(deserialized.attributes()[7].1, CosemDataType::Boolean(true));
     assert_eq!(deserialized.attributes()[8].1, CosemDataType::Enum(2));
@@ -213,7 +213,7 @@ fn test_clock_adjust_to_quarter() {
 
     let result = clock.invoke_method(1, None).expect("Adjust to quarter failed");
     assert_eq!(result, CosemDataType::Null);
-    if let CosemDataType::DateTime(dt) = &clock.attributes()[1].1 {
+    if let CosemDataType::OctetString(dt) = &clock.attributes()[1].1 {
         assert_eq!(dt[6], 45);
         assert_eq!(dt[7], 0);
         assert_eq!(dt[8], 0);
@@ -241,7 +241,7 @@ fn test_clock_adjust_to_minute() {
 
     let result = clock.invoke_method(2, None).expect("Adjust to minute failed");
     assert_eq!(result, CosemDataType::Null);
-    if let CosemDataType::DateTime(dt) = &clock.attributes()[1].1 {
+    if let CosemDataType::OctetString(dt) = &clock.attributes()[1].1 {
         assert_eq!(dt[6], 37); // Minutes: 37 (unchanged)
         assert_eq!(dt[7], 0); // Seconds: 0
         assert_eq!(dt[8], 0); // Hundredths: 0
@@ -268,7 +268,7 @@ fn test_clock_adjust_to_preset_time() {
     let mut clock = Clock::new(config);
 
     let new_time =
-        CosemDataType::DateTime(vec![0x07, 0xE5, 0x05, 0x02, 0x03, 0x12, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00]);
+        CosemDataType::OctetString(vec![0x07, 0xE5, 0x05, 0x02, 0x03, 0x12, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00]);
 
     let result = clock.invoke_method(3, Some(new_time.clone())).expect("Adjust to preset time failed");
     assert_eq!(result, CosemDataType::Null);
@@ -331,7 +331,7 @@ fn test_extended_register_reset_method() {
     assert_eq!(result, CosemDataType::Null);
     assert_eq!(extended_register.attributes()[1].1, CosemDataType::DoubleLong(0));
     assert_eq!(extended_register.attributes()[3].1, CosemDataType::Null);
-    assert_eq!(extended_register.attributes()[4].1, CosemDataType::DateTime(vec![0u8; 12]));
+    assert_eq!(extended_register.attributes()[4].1, CosemDataType::OctetString(vec![0u8; 12]));
 }
 
 #[test]
@@ -346,7 +346,7 @@ fn test_extended_register_capture_method() {
     let result = extended_register.invoke_method(2, None).expect("Capture method failed");
     assert_eq!(result, CosemDataType::Null);
     assert_eq!(extended_register.attributes()[3].1, CosemDataType::Unsigned(1));
-    if let CosemDataType::DateTime(dt) = &extended_register.attributes()[4].1 {
+    if let CosemDataType::OctetString(dt) = &extended_register.attributes()[4].1 {
         assert_eq!(dt, &vec![0x07, 0xE5, 0x05, 0x01, 0x02, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00]);
     } else {
         panic!("Expected DateTime");
@@ -461,8 +461,8 @@ fn test_demand_register_reset_method() {
     assert_eq!(demand_register.attributes()[1].1, CosemDataType::DoubleLong(0));
     assert_eq!(demand_register.attributes()[2].1, CosemDataType::DoubleLong(0));
     assert_eq!(demand_register.attributes()[4].1, CosemDataType::Null);
-    assert_eq!(demand_register.attributes()[5].1, CosemDataType::DateTime(vec![0u8; 12]));
-    assert_eq!(demand_register.attributes()[6].1, CosemDataType::DateTime(vec![0u8; 12]));
+    assert_eq!(demand_register.attributes()[5].1, CosemDataType::OctetString(vec![0u8; 12]));
+    assert_eq!(demand_register.attributes()[6].1, CosemDataType::OctetString(vec![0u8; 12]));
 }
 
 #[test]
@@ -495,12 +495,12 @@ fn test_demand_register_next_period_method() {
     assert_eq!(demand_register.attributes()[1].1, CosemDataType::DoubleLong(0));
     assert_eq!(demand_register.attributes()[2].1, CosemDataType::DoubleLong(3000));
     assert_eq!(demand_register.attributes()[4].1, CosemDataType::Unsigned(1));
-    if let CosemDataType::DateTime(dt) = &demand_register.attributes()[5].1 {
+    if let CosemDataType::OctetString(dt) = &demand_register.attributes()[5].1 {
         assert_eq!(dt, &vec![0x07, 0xE5, 0x05, 0x01, 0x02, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00]);
     } else {
         panic!("Expected DateTime for capture_time");
     }
-    if let CosemDataType::DateTime(dt) = &demand_register.attributes()[6].1 {
+    if let CosemDataType::OctetString(dt) = &demand_register.attributes()[6].1 {
         assert_eq!(dt, &vec![0x07, 0xE5, 0x05, 0x01, 0x02, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00]);
     } else {
         panic!("Expected DateTime for start_time_current");

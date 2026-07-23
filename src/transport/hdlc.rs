@@ -672,6 +672,52 @@ impl<T: PhysicalTransport> HdlcLayer<T> {
         Err(io::Error::new(io::ErrorKind::InvalidData, "too many undecodable HDLC frames"))
     }
 
+    /// Blocks until an RR/RNR acknowledges `expected_nr` (= next N(S) to send).
+    /// Partial acks with N(R) behind `expected_nr` are ignored; N(R) ahead of
+    /// V(S) yields FRMR (Z).
+    fn wait_for_rr(&mut self, expected_nr: u8) -> io::Result<()> {
+        loop {
+            let frame = self.read_decoded_frame()?;
+            if frame.destination.value != self.own.value {
+                continue;
+            }
+            match frame.control {
+                Control::ReceiveReady { recv_seq, .. } | Control::ReceiveNotReady { recv_seq, .. } => {
+                    self.peer = frame.source;
+                    if recv_seq == expected_nr {
+                        return Ok(());
+                    }
+                    // Distance from expected toward recv_seq in the forward
+                    // direction; values 1..=4 are treated as "ahead" (invalid).
+                    let ahead = (recv_seq.wrapping_sub(expected_nr)) & 0x07;
+                    if ahead != 0 && ahead <= 4 {
+                        self.send_unnumbered(Control::Frmr { final_bit: true })?;
+                        return Err(io::Error::new(io::ErrorKind::InvalidData, "HDLC RR N(R) ahead of V(S)"));
+                    }
+                }
+                Control::Disc { .. } => {
+                    self.peer = frame.source;
+                    self.connected = false;
+                    self.send_unnumbered(Control::Ua { final_bit: true })?;
+                    return Err(io::Error::new(io::ErrorKind::ConnectionAborted, "peer released the data link"));
+                }
+                Control::Snrm { .. } => {
+                    self.peer = frame.source;
+                    self.xid = self.xid_configured;
+                    if !frame.information.is_empty() {
+                        self.xid.negotiate(XidParams::decode(&frame.information));
+                    }
+                    self.send_seq = 0;
+                    self.recv_seq = 0;
+                    self.connected = true;
+                    self.send_unnumbered_with_info(Control::Ua { final_bit: true }, self.xid.encode())?;
+                    return Err(io::Error::new(io::ErrorKind::ConnectionReset, "peer re-established the data link"));
+                }
+                _ => {}
+            }
+        }
+    }
+
     /// Sends an unnumbered response frame (server side).
     fn send_unnumbered(&mut self, control: Control) -> io::Result<()> {
         self.send_unnumbered_with_info(control, Vec::new())
@@ -814,11 +860,13 @@ impl<T: PhysicalTransport> DataLinkLayer for HdlcLayer<T> {
     /// format field's segmentation bit set on every frame but the last) when
     /// the LLC-prefixed payload exceeds the negotiated `max_info_tx` (see
     /// [`Self::xid`]) — the mirror of the segmented-frame reassembly already
-    /// performed by [`Self::receive_apdu`]. Each segment consumes one N(S)
-    /// slot; segments are sent back-to-back without waiting for the peer's
-    /// per-segment `RR` (this layer doesn't model true windowed flow
-    /// control, and a stray `RR` is harmlessly skipped by the next
-    /// `receive_apdu` call regardless).
+    /// performed by [`Self::receive_apdu`].
+    ///
+    /// With `window_tx == 1` the **server** waits for the peer's `RR` after
+    /// each non-final segment (etalon behaviour). Blasting every segment
+    /// back-to-back leaves the client's intermediate `RR`s (N(R) behind
+    /// `send_seq`) to be mis-classified as invalid N(R) → FRMR once
+    /// [`Self::receive_apdu`] resumes.
     fn send_apdu(&mut self, apdu: &[u8]) -> io::Result<()> {
         if !self.is_client && !self.connected {
             return Err(io::Error::new(io::ErrorKind::NotConnected, "HDLC link is in NDM"));
@@ -832,6 +880,7 @@ impl<T: PhysicalTransport> DataLinkLayer for HdlcLayer<T> {
         // The LLC prefix makes `payload` at least 3 octets, so this always
         // sends at least one frame.
         let max_info = (self.xid.max_info_tx as usize).max(1);
+        let wait_rr = !self.is_client && self.xid.window_tx <= 1;
         let mut offset = 0;
         while offset < payload.len() {
             let chunk = (payload.len() - offset).min(max_info);
@@ -842,6 +891,9 @@ impl<T: PhysicalTransport> DataLinkLayer for HdlcLayer<T> {
             self.transport.send(&frame.encode())?;
             self.send_seq = (self.send_seq + 1) & 0x07;
             offset += chunk;
+            if !last && wait_rr {
+                self.wait_for_rr(self.send_seq)?;
+            }
         }
         Ok(())
     }
@@ -887,10 +939,15 @@ impl<T: PhysicalTransport> DataLinkLayer for HdlcLayer<T> {
                             self.send_unnumbered(Control::Frmr { final_bit: true })?;
                             continue;
                         }
-                        // Invalid N(R) → FRMR (Z).
+                        // N(R) ahead of V(S) → FRMR (Z). Behind/equal is OK
+                        // (equal = full ack; behind can appear if the peer's
+                        // cumulative ack lags a windowed burst).
                         if recv_seq != self.send_seq {
-                            self.send_unnumbered(Control::Frmr { final_bit: true })?;
-                            continue;
+                            let ahead = (recv_seq.wrapping_sub(self.send_seq)) & 0x07;
+                            if ahead != 0 && ahead <= 4 {
+                                self.send_unnumbered(Control::Frmr { final_bit: true })?;
+                                continue;
+                            }
                         }
                         // Wrong N(S): RR with current N(R), do not advance.
                         if send_seq != self.recv_seq {
@@ -934,11 +991,16 @@ impl<T: PhysicalTransport> DataLinkLayer for HdlcLayer<T> {
                     self.send_unnumbered(Control::Ua { final_bit: true })?;
                     return Err(io::Error::new(io::ErrorKind::ConnectionAborted, "peer released the data link"));
                 }
-                // RR/RNR: invalid N(R) → FRMR (Z); otherwise ack and keep waiting.
+                // RR/RNR: N(R) ahead of V(S) → FRMR (Z). N(R) behind is a
+                // late/partial ack (harmless after windowed send); equal is
+                // a full ack. Keep waiting either way.
                 Control::ReceiveReady { recv_seq, .. } | Control::ReceiveNotReady { recv_seq, .. } => {
                     if !self.is_client && recv_seq != self.send_seq {
-                        self.peer = frame.source;
-                        self.send_unnumbered(Control::Frmr { final_bit: true })?;
+                        let ahead = (recv_seq.wrapping_sub(self.send_seq)) & 0x07;
+                        if ahead != 0 && ahead <= 4 {
+                            self.peer = frame.source;
+                            self.send_unnumbered(Control::Frmr { final_bit: true })?;
+                        }
                     }
                 }
                 // Unknown / invalid in NRM → FRMR.

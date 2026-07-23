@@ -124,6 +124,22 @@ impl InterfaceClass for SpecialDaysTable {
         }
     }
 
+    fn set_attribute(&mut self, attribute_id: u8, value: CosemDataType) -> Result<(), String> {
+        match attribute_id {
+            2 => {
+                let CosemDataType::Array(entries) = value else {
+                    return Err("entries must be array".into());
+                };
+                self.entries = entries
+                    .iter()
+                    .map(SpecialDayEntry::try_from)
+                    .collect::<Result<Vec<_>, _>>()?;
+                Ok(())
+            }
+            _ => Err(format!("SpecialDaysTable attribute {attribute_id} is not writable")),
+        }
+    }
+
     fn invoke_method(&mut self, method_id: u8, params: Option<CosemDataType>) -> Result<CosemDataType, String> {
         match method_id {
             1 => self.insert(&params.ok_or("Missing parameter for insert method")?),

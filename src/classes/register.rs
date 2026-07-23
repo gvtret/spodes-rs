@@ -148,6 +148,20 @@ impl InterfaceClass for Register {
         Err(BerError::InvalidTag)
     }
 
+    fn set_attribute(&mut self, attribute_id: u8, value: CosemDataType) -> Result<(), String> {
+        match attribute_id {
+            2 => {
+                self.value = value;
+                Ok(())
+            }
+            3 => {
+                self.scaler_unit = ScalerUnit::try_from(&value)?;
+                Ok(())
+            }
+            _ => Err(format!("Register attribute {attribute_id} is not writable")),
+        }
+    }
+
     fn invoke_method(&mut self, method_id: u8, _params: Option<CosemDataType>) -> Result<CosemDataType, String> {
         match method_id {
             1 => self.reset(),

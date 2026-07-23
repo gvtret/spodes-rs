@@ -60,6 +60,9 @@ pub struct ProfileGeneric {
     buffer: Vec<Choice>,
     #[serde(skip)]
     capture_objects: Vec<(Arc<dyn InterfaceClass + Send + Sync>, u8)>,
+    /// When set via SET, overrides the Arc-based capture_objects for GET.
+    #[serde(skip)]
+    capture_objects_value: Option<CosemDataType>,
     capture_period: u32,
     sort_method: SortMethod,
     sort_object: Option<CaptureObjectDefinition>,
@@ -96,6 +99,7 @@ impl ProfileGeneric {
             logical_name: config.logical_name,
             buffer: config.buffer,
             capture_objects: config.capture_objects,
+            capture_objects_value: None,
             capture_period: config.capture_period,
             sort_method: config.sort_method,
             sort_object: config.sort_object,
@@ -217,22 +221,24 @@ impl InterfaceClass for ProfileGeneric {
     }
 
     fn attributes(&self) -> Vec<(u8, CosemDataType)> {
-        let capture_objects = CosemDataType::Array(
-            self.capture_objects
-                .iter()
-                .map(|(obj, attr_id)| {
-                    // Attribute ids are always <128 in practice (i8-valued on the wire).
-                    #[allow(clippy::cast_possible_wrap)]
-                    let attr_id = *attr_id as i8;
-                    CosemDataType::Structure(vec![
-                        CosemDataType::LongUnsigned(obj.class_id()),
-                        CosemDataType::OctetString(obj.logical_name().to_bytes()),
-                        CosemDataType::Integer(attr_id), // attribute_index (integer)
-                        CosemDataType::LongUnsigned(0),  // data_index (long-unsigned, default 0)
-                    ])
-                })
-                .collect(),
-        );
+        let capture_objects = self.capture_objects_value.clone().unwrap_or_else(|| {
+            CosemDataType::Array(
+                self.capture_objects
+                    .iter()
+                    .map(|(obj, attr_id)| {
+                        // Attribute ids are always <128 in practice (i8-valued on the wire).
+                        #[allow(clippy::cast_possible_wrap)]
+                        let attr_id = *attr_id as i8;
+                        CosemDataType::Structure(vec![
+                            CosemDataType::LongUnsigned(obj.class_id()),
+                            CosemDataType::OctetString(obj.logical_name().to_bytes()),
+                            CosemDataType::Integer(attr_id), // attribute_index (integer)
+                            CosemDataType::LongUnsigned(0),  // data_index (long-unsigned, default 0)
+                        ])
+                    })
+                    .collect(),
+            )
+        });
 
         vec![
             (1, CosemDataType::OctetString(self.logical_name.to_bytes())),
@@ -331,6 +337,43 @@ impl InterfaceClass for ProfileGeneric {
             return Err(BerError::InvalidLength);
         }
         Err(BerError::InvalidTag)
+    }
+
+    fn set_attribute(&mut self, attribute_id: u8, value: CosemDataType) -> Result<(), String> {
+        match attribute_id {
+            3 => {
+                let CosemDataType::Array(ref list) = value else {
+                    return Err("capture_objects must be array".into());
+                };
+                for item in list {
+                    let _ = CaptureObjectDefinition::try_from(item)?;
+                }
+                self.capture_objects_value = Some(value);
+                Ok(())
+            }
+            4 => match value {
+                CosemDataType::DoubleLongUnsigned(v) => {
+                    self.capture_period = v;
+                    Ok(())
+                }
+                _ => Err("capture_period must be double-long-unsigned".into()),
+            },
+            5 => match value {
+                CosemDataType::Unsigned(v) => {
+                    self.sort_method = SortMethod::from_u8(v).unwrap_or(SortMethod::Fifo);
+                    Ok(())
+                }
+                _ => Err("sort_method must be unsigned".into()),
+            },
+            8 => match value {
+                CosemDataType::DoubleLongUnsigned(v) => {
+                    self.profile_entries = v;
+                    Ok(())
+                }
+                _ => Err("profile_entries must be double-long-unsigned".into()),
+            },
+            _ => Err(format!("ProfileGeneric attribute {attribute_id} is not writable")),
+        }
     }
 
     fn invoke_method(&mut self, method_id: u8, params: Option<CosemDataType>) -> Result<CosemDataType, String> {

@@ -126,6 +126,30 @@ impl InterfaceClass for SingleActionSchedule {
         Ok(())
     }
 
+    fn set_attribute(&mut self, attribute_id: u8, value: CosemDataType) -> Result<(), String> {
+        match attribute_id {
+            2 => {
+                self.executed_script = ExecutedScript::try_from(&value)?;
+                Ok(())
+            }
+            3 => match value {
+                CosemDataType::Enum(v) => {
+                    self.schedule_type = v;
+                    Ok(())
+                }
+                _ => Err("schedule_type must be enum".into()),
+            },
+            4 => {
+                let CosemDataType::Array(list) = value else {
+                    return Err("execution_time must be array".into());
+                };
+                self.execution_time = list.iter().map(ExecutionTime::try_from).collect::<Result<Vec<_>, _>>()?;
+                Ok(())
+            }
+            _ => Err(format!("SingleActionSchedule attribute {attribute_id} is not writable")),
+        }
+    }
+
     fn invoke_method(&mut self, method_id: u8, _params: Option<CosemDataType>) -> Result<CosemDataType, String> {
         Err(format!("Method {method_id} not supported for Single action schedule (no specific methods)"))
     }

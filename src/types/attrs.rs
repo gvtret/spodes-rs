@@ -48,7 +48,8 @@ impl DateTime {
 
 impl From<DateTime> for CosemDataType {
     fn from(dt: DateTime) -> Self {
-        CosemDataType::DateTime(dt.0.to_vec())
+        // COSEM date-time on the wire is octet-string SIZE(12), not A-XDR tag 25.
+        CosemDataType::OctetString(dt.0.to_vec())
     }
 }
 
@@ -2106,9 +2107,10 @@ pub struct CommunicationWindow {
 
 impl From<CommunicationWindow> for CosemDataType {
     fn from(cw: CommunicationWindow) -> Self {
+        // Blue Book / openspodes: window bounds are octet-string SIZE(12).
         CosemDataType::Structure(vec![
-            CosemDataType::DateTime(cw.begin.0.to_vec()),
-            CosemDataType::DateTime(cw.end.0.to_vec()),
+            CosemDataType::OctetString(cw.begin.0.to_vec()),
+            CosemDataType::OctetString(cw.end.0.to_vec()),
         ])
     }
 }

@@ -124,7 +124,7 @@ impl PushSetup {
     /// Method 2: `reset` — resets the push confirmation state by clearing
     /// `last_confirmation_date_time`.
     fn reset(&mut self) -> CosemDataType {
-        self.last_confirmation_date_time = DateTime::new([0u8; 12]);
+        self.last_confirmation_date_time = DateTime::from_ymdhms(1900, 1, 1, 0, 0, 0);
         CosemDataType::Null
     }
 
@@ -443,7 +443,10 @@ mod tests {
         let mut obj = sample_versioned(2);
         obj.last_confirmation_date_time = DateTime::new([0x07; 12]);
         obj.invoke_method(2, None).unwrap();
-        assert_eq!(obj.attributes()[12].1, CosemDataType::DateTime(vec![0; 12]));
+        assert_eq!(
+            obj.attributes()[12].1,
+            CosemDataType::from(DateTime::from_ymdhms(1900, 1, 1, 0, 0, 0))
+        );
         // `reset` is not available in versions 0 and 1.
         let mut v1 = sample_versioned(1);
         assert!(v1.invoke_method(2, None).is_err());

@@ -114,6 +114,11 @@ impl Clock {
         CosemDataType::Null
     }
 
+    /// Adjusts the time to the measuring period (stub — C++ parity).
+    fn adjust_to_measuring_period(&mut self) -> CosemDataType {
+        CosemDataType::Null
+    }
+
     /// Adjusts the time to the nearest minute.
     fn adjust_to_minute(&mut self) -> CosemDataType {
         self.time.0[7] = 0;
@@ -123,7 +128,7 @@ impl Clock {
 
     /// Sets a preset time.
     fn adjust_to_preset_time(&mut self, params: Option<CosemDataType>) -> Result<CosemDataType, String> {
-        if let Some(CosemDataType::DateTime(dt)) = params {
+        if let Some(CosemDataType::DateTime(dt) | CosemDataType::OctetString(dt)) = params {
             if dt.len() == 12 {
                 let mut buf = [0u8; 12];
                 buf.copy_from_slice(&dt);
@@ -136,6 +141,12 @@ impl Clock {
 
     /// Preset-time adjustment (stub).
     fn preset_adjusting_time() -> CosemDataType {
+        CosemDataType::Null
+    }
+
+    /// Shifts the clock by a relative offset in seconds (Blue Book method 6).
+    /// Parameter is ignored for success/failure — C++ returns null without applying.
+    fn shift_time(_params: Option<CosemDataType>) -> CosemDataType {
         CosemDataType::Null
     }
 }
@@ -154,13 +165,15 @@ impl InterfaceClass for Clock {
     }
 
     fn attributes(&self) -> Vec<(u8, CosemDataType)> {
+        // Blue Book date-time attributes are carried as octet-string (tag 0x09),
+        // matching `osp_val_cosem_datetime` / Gurux expectations — not tag 0x19.
         vec![
             (1, CosemDataType::OctetString(self.logical_name.to_bytes())),
-            (2, CosemDataType::DateTime(self.time.0.to_vec())),
+            (2, CosemDataType::OctetString(self.time.0.to_vec())),
             (3, CosemDataType::Long(self.time_zone)),
             (4, CosemDataType::Unsigned(self.status)),
-            (5, CosemDataType::DateTime(self.daylight_savings_begin.0.to_vec())),
-            (6, CosemDataType::DateTime(self.daylight_savings_end.0.to_vec())),
+            (5, CosemDataType::OctetString(self.daylight_savings_begin.0.to_vec())),
+            (6, CosemDataType::OctetString(self.daylight_savings_end.0.to_vec())),
             (7, CosemDataType::Integer(self.daylight_savings_deviation)),
             (8, CosemDataType::Boolean(self.daylight_savings_enabled)),
             (9, CosemDataType::Enum(self.clock_base)),
@@ -170,9 +183,11 @@ impl InterfaceClass for Clock {
     fn methods(&self) -> Vec<(u8, String)> {
         vec![
             (1, "adjust_to_quarter".to_string()),
-            (2, "adjust_to_minute".to_string()),
-            (3, "adjust_to_preset_time".to_string()),
-            (4, "preset_adjusting_time".to_string()),
+            (2, "adjust_to_measuring_period".to_string()),
+            (3, "adjust_to_minute".to_string()),
+            (4, "adjust_to_preset_time".to_string()),
+            (5, "preset_adjusting_time".to_string()),
+            (6, "shift_time".to_string()),
         ]
     }
 
@@ -242,12 +257,55 @@ impl InterfaceClass for Clock {
         Err(BerError::InvalidTag)
     }
 
+    fn set_attribute(&mut self, attribute_id: u8, value: CosemDataType) -> Result<(), String> {
+        match attribute_id {
+            2 => {
+                self.time = DateTime::try_from(&value)?;
+                Ok(())
+            }
+            3 => match value {
+                CosemDataType::Long(v) => {
+                    self.time_zone = v;
+                    Ok(())
+                }
+                _ => Err("time_zone must be long".into()),
+            },
+            // Attr 4 (status) is read-only in the ACL mask.
+            5 => {
+                self.daylight_savings_begin = DateTime::try_from(&value)?;
+                Ok(())
+            }
+            6 => {
+                self.daylight_savings_end = DateTime::try_from(&value)?;
+                Ok(())
+            }
+            7 => match value {
+                CosemDataType::Integer(v) => {
+                    self.daylight_savings_deviation = v;
+                    Ok(())
+                }
+                _ => Err("daylight_savings_deviation must be integer".into()),
+            },
+            8 => match value {
+                CosemDataType::Boolean(v) => {
+                    self.daylight_savings_enabled = v;
+                    Ok(())
+                }
+                _ => Err("daylight_savings_enabled must be boolean".into()),
+            },
+            // Attr 9 (clock_base) is read-only.
+            _ => Err(format!("Clock attribute {attribute_id} is not writable")),
+        }
+    }
+
     fn invoke_method(&mut self, method_id: u8, params: Option<CosemDataType>) -> Result<CosemDataType, String> {
         match method_id {
             1 => Ok(self.adjust_to_quarter()),
-            2 => Ok(self.adjust_to_minute()),
-            3 => self.adjust_to_preset_time(params),
-            4 => Ok(Self::preset_adjusting_time()),
+            2 => Ok(self.adjust_to_measuring_period()),
+            3 => Ok(self.adjust_to_minute()),
+            4 => self.adjust_to_preset_time(params),
+            5 => Ok(Self::preset_adjusting_time()),
+            6 => Ok(Self::shift_time(params)),
             _ => Err(format!("Method {method_id} not supported for Clock class")),
         }
     }
