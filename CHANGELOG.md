@@ -8,6 +8,123 @@ While the crate is at `0.x`, minor releases may contain breaking changes.
 
 ## [Unreleased]
 
+## [0.7.0] - 2026-07-23
+
+### Added (Gurux HIGH / HLS-GMAC interop, HDLC peer SAP)
+
+- **Gurux "HIGH" security accepted against HLS-GMAC associations**: the AARQ
+  handler now accepts a client proposing the generic mechanism 2
+  (`HlsManufacturer`) against an association configured for mechanism 5
+  (`HlsGmac`), completing the four-pass handshake with the manufacturer-AES
+  scheme Gurux's HIGH level actually implements — still gated on knowing the
+  correct shared secret. `AssociationLn` tracks the in-flight handshake
+  mechanism separately from the configured one, and the AARE's
+  responding-AP-title is only echoed for ciphering / title-bound (GMAC+)
+  mechanisms, matching the etalon.
+- **`Data` (class 1) and `PushSetup` (class 40) gained `set_attribute`**:
+  `Data` attribute 2 (value) and `PushSetup` attributes 2–8
+  (`push_object_list`, `send_destination_and_method`, `communication_window`,
+  `randomisation_start_interval`, `number_of_retries`, `repetition_delay`,
+  version-≥1 `port_reference`) are now writable for server-side
+  configuration.
+- **HDLC client-SAP learning**: the server learns the client's address from
+  SNRM and exposes it via the new `DataLinkLayer::client_sap()` (default
+  `None`, non-breaking); inbound frames not addressed to this station are
+  now filtered before dispatch.
+
+### Fixed (HDLC server state machine: NDM/NRM, FRMR, inter-octet timeout)
+
+- **NDM now only accepts SNRM and DISC** (Yellow Book `HDLC_NDMOP` / C++
+  connect-loop parity); any other frame (I, UI, RR/RNR, unknown control) is
+  silently ignored instead of being processed as if already associated.
+- **FRMR paths added** for an unknown control field (`W`), an oversized
+  I-frame `information` beyond the negotiated `max_info_rx` (`Y`), and an
+  invalid N(R) on I/RR/RNR frames (`Z`); a wrong N(S) gets an RR carrying
+  the current N(R) without advancing the receive sequence. Replying to an
+  unknown control field re-parses the raw frame's addresses (`peek_addresses`)
+  so the FRMR still reaches the right peer even though the control byte
+  itself didn't decode.
+- **Inter-octet vs. inactivity timeout semantics now match the C++
+  `session_recv_frame` reference**: an inter-octet timeout mid-frame
+  discards the incomplete octets and keeps listening for the next frame
+  (previously surfaced as an error without disconnecting); an inactivity
+  timeout on an empty buffer marks the link NDM and returns `TimedOut`, as
+  before. `send_apdu` now refuses to send while the server side is in NDM.
+
+### Fixed (xDLMS AARQ/HLS association etalon parity)
+
+- **HLS pass 3/4 success now actually marks the association associated**
+  (`AssociationLn::association_status` was previously left in the "pending"
+  state after a successful `reply_to_HLS_authentication`, a genuine gap).
+- **GET/SET/ACTION are now gated on association state**: allowed when no
+  association is configured or once associated; while an HLS handshake is
+  pending, only the `reply_to_HLS_authentication` ACTION on Association LN
+  is accepted — everything else yields an EXCEPTION-RESPONSE
+  (`service-not-allowed` / `operation-not-possible`).
+- **AARQ validation hardened** against the C++/Yellow Book etalon: a
+  protocol-version other than `{version1}` is rejected with the
+  acse-service-**provider** diagnostic `no-common-acse-version` (previously
+  only user diagnostics existed); a `sender-acse-requirements` bit pattern
+  other than the authentication bit, or a mechanism-name without a
+  calling-authentication-value (or vice versa), is rejected as
+  `authentication-failure`.
+- **ACSE wire format extended** for `protocol-version` (`[0]`),
+  `sender-acse-requirements` (configurable, not hardcoded), the
+  acse-service-provider vs. -user diagnostic CHOICE, and the AARE's HLS
+  functional unit (`mechanism-name` echoed back alongside the StoC
+  challenge) — all with symmetric encode/decode.
+
+### Fixed (COSEM/HDLC server: Gurux mass-SET / configurator suite parity)
+
+- **`set_attribute` added** for Register (value, scaler_unit), Clock (time,
+  time_zone, daylight-saving fields), Limiter, ProfileGeneric
+  (capture_objects, capture_period, sort_method, profile_entries),
+  Association LN, Security Setup and several other interface classes needed
+  by the Gurux mass-SET / configurator test suite.
+- **GET/SET datablock state (`PendingBlocks`) can now be persisted across
+  APDUs**: `RequestDispatcher::take_pending`/`restore_pending` let a host
+  that rebuilds the dispatcher per request stash and restore in-flight
+  block transfers.
+- **HDLC send-side now waits for the peer's RR when `window_tx <= 1`**
+  (server), matching the etalon's non-pipelined behaviour; N(R) validation
+  on I/RR/RNR frames was refined to only FRMR when N(R) is genuinely
+  *ahead* of V(S), since a *behind* N(R) is a normal lagging cumulative ack
+  under windowed sends, not a protocol violation.
+- **Role-based AARE conformance negotiation** (public / reader / configurator,
+  matching the C++ `aare` fill order) replaces the previous single fixed
+  conformance block.
+- **Clock dates are now carried as `octet-string` (tag `0x09`)**, not
+  `date-time` (tag `0x19`), matching `osp_val_cosem_datetime` / Gurux
+  expectations; method IDs renumbered to the Blue Book layout
+  (`adjust_to_measuring_period` inserted at 2, `shift_time` added at 6); and
+  `PushSetup::reset` now sets `last_confirmation_date_time` to 1900-01-01
+  rather than all-zero.
+
+### Changed (full rust-idiomatic refactor: pedantic + nursery clippy)
+
+- Every category of a full `clippy::pedantic` + `clippy::nursery` sweep the
+  project explicitly opted into, including the two risky ones (numeric
+  casts and trait/method signatures), is now applied: inlined `format!`
+  args, `let…else`, dropped redundant `continue`s and clones, merged
+  identical match arms, idiomatic `Option` handling (`map_or`/`map_or_else`/
+  `is_none_or`), `From`/`.into()` over lossless `as` casts, and simplified
+  method signatures (borrowed parameters instead of owned, `#[must_use]` on
+  consuming builders, bare return values instead of always-`Ok`/`Some`
+  wrappers).
+- **Two real bugs surfaced and fixed while auditing the numeric casts**,
+  not just style: several `TryFrom<&CosemDataType>` impls silently
+  truncated an out-of-range `Long`/`LongUnsigned` wire value (attribute_id,
+  method_id, scaler, version, client_SAP, quality_of_service, and others)
+  into a different, valid-looking in-range value instead of rejecting it —
+  now validated with `try_from` and covered by regression tests; HDLC's
+  `XidParams::decode` similarly wrapped an out-of-range peer-proposed
+  window size instead of rejecting it — now clamped to `u8::MAX`.
+- Every other cast left in place is backed by either a provable invariant
+  (a guard, a bitmask, a fixed-shape encoding) or a `debug_assert!` on a
+  genuine protocol-level bound (the HDLC wrapper's 16-bit length field, the
+  GOST KDF's one-octet block counter, HDLC's version-0 `unsigned` max-info
+  field) — documented inline at each site rather than blanket-suppressed.
+
 ## [0.6.0] - 2026-07-22
 
 ### Added (HDLC XID negotiation and outbound I-frame segmentation)
@@ -339,7 +456,8 @@ Initial release: a full DLMS/COSEM stack for IEC 62056 and the Russian
 - **Tooling** — GitHub Actions CI (fmt, clippy, test, doc, package) and a
   tag-triggered release workflow; dual MIT / Apache-2.0 license.
 
-[Unreleased]: https://github.com/gvtret/spodes-rs/compare/v0.6.0...HEAD
+[Unreleased]: https://github.com/gvtret/spodes-rs/compare/v0.7.0...HEAD
+[0.7.0]: https://github.com/gvtret/spodes-rs/compare/v0.6.0...v0.7.0
 [0.6.0]: https://github.com/gvtret/spodes-rs/compare/v0.4.0...v0.6.0
 [0.4.0]: https://github.com/gvtret/spodes-rs/compare/v0.3.0...v0.4.0
 [0.3.0]: https://github.com/gvtret/spodes-rs/compare/v0.2.2...v0.3.0
