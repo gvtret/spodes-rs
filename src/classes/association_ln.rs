@@ -410,6 +410,8 @@ impl AssociationLn {
         match self.reply_to_hls_authentication(data) {
             Ok(reply) => {
                 self.hls_failures = 0;
+                // Pass 3/4 complete — AA is fully open (IEC 62056-6-2 attr 8 = associated).
+                self.association_status = 2;
                 Ok(reply)
             }
             Err(e) => {
