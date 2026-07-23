@@ -400,13 +400,32 @@ impl RequestDispatcher {
     /// [`Self::handle_aarq`].
     pub fn dispatch(&mut self, request: &[u8]) -> Result<Vec<u8>, ServiceError> {
         match request.first() {
-            Some(&tag::GET_REQUEST) => self.dispatch_get(request),
-            Some(&tag::SET_REQUEST) => Ok(self.dispatch_set(request)),
-            Some(&tag::ACTION_REQUEST) => self.dispatch_action(request),
             Some(&acse::AARQ_TAG) => Ok(self.handle_aarq(request)),
             Some(&acse::RLRQ_TAG) => Ok(self.handle_rlrq(request)),
-            Some(&other) => Ok(unsupported(other)),
+            Some(&tag) => {
+                if !self.xdlms_services_allowed(request) {
+                    return Ok(not_possible());
+                }
+                match tag {
+                    tag::GET_REQUEST => self.dispatch_get(request),
+                    tag::SET_REQUEST => Ok(self.dispatch_set(request)),
+                    tag::ACTION_REQUEST => self.dispatch_action(request),
+                    other => Ok(unsupported(other)),
+                }
+            }
             None => Err(ServiceError::Truncated),
+        }
+    }
+
+    /// xDLMS GET/SET/ACTION are allowed only when associated. While HLS is
+    /// pending, only `reply_to_HLS_authentication` (Association LN method 1)
+    /// is accepted — everything else yields EXCEPTION-RESPONSE (C++
+    /// `hls_pending` gate / Yellow Book APPL_OPEN HLS pass 3).
+    fn xdlms_services_allowed(&self, request: &[u8]) -> bool {
+        match self.association.as_ref().map(AssociationLn::association_status) {
+            None | Some(association_status::ASSOCIATED) => true,
+            Some(association_status::ASSOCIATION_PENDING) => is_hls_pass3_action(request),
+            Some(_) => false,
         }
     }
 
@@ -430,10 +449,18 @@ impl RequestDispatcher {
     /// Requires an association to be configured via [`Self::set_association`];
     /// without one, only mechanism 0 (lowest) AARQs are accepted.
     pub fn handle_aarq(&mut self, request: &[u8]) -> Vec<u8> {
-        use crate::service::acse::{acse_diagnostic as diag, application_context, AssociationRequest};
+        use crate::service::acse::{
+            acse_diagnostic as diag, acse_provider_diagnostic as pdiag, application_context, AssociationRequest,
+            PROTOCOL_VERSION_1,
+        };
+
+        // Fresh AARQ clears any prior AA (C++ resets associated/hls_pending).
+        if let Some(assoc) = self.association.as_mut() {
+            assoc.set_association_status(association_status::NON_ASSOCIATED);
+        }
 
         let Ok(aarq) = AssociationRequest::decode(request) else {
-            return reject_aare(application_context::LN, diag::NULL, None);
+            return reject_aare(application_context::LN, diag::NULL, false, None);
         };
         let echo_context = aarq.application_context;
 
@@ -441,7 +468,14 @@ impl RequestDispatcher {
         if aarq.application_context != application_context::LN
             && aarq.application_context != application_context::LN_CIPHERING
         {
-            return reject_aare(application_context::LN, diag::APPLICATION_CONTEXT_NAME_NOT_SUPPORTED, None);
+            return reject_aare(application_context::LN, diag::APPLICATION_CONTEXT_NAME_NOT_SUPPORTED, false, None);
+        }
+
+        // Protocol-version must be absent or {version1} (`02 84`).
+        if let Some(pv) = aarq.protocol_version {
+            if pv != PROTOCOL_VERSION_1 {
+                return reject_aare(echo_context, pdiag::NO_COMMON_ACSE_VERSION, true, None);
+            }
         }
 
         // Ciphering and title-bound HLS mechanisms require an 8-octet client
@@ -449,7 +483,7 @@ impl RequestDispatcher {
         let mech_id = aarq.mechanism_name.unwrap_or(0);
         let title_bound = aarq.application_context == application_context::LN_CIPHERING || mech_id >= 5;
         if title_bound && aarq.calling_ap_title.as_ref().map(Vec::len) != Some(8) {
-            return reject_aare(echo_context, diag::CALLING_AP_TITLE_NOT_RECOGNIZED, None);
+            return reject_aare(echo_context, diag::CALLING_AP_TITLE_NOT_RECOGNIZED, false, None);
         }
 
         // Validate the xDLMS InitiateRequest, when present and well-formed.
@@ -465,21 +499,34 @@ impl RequestDispatcher {
                 None
             };
             if let Some(value) = err {
-                return reject_aare(echo_context, diag::NULL, Some(value));
+                return reject_aare(echo_context, diag::NULL, false, Some(value));
             }
         }
 
-        // Authentication, against the configured association.
+        // Authentication, against the configured association (C++ `aarq_validate` order).
         let required = self.association.as_ref().map(|a| a.authentication_mechanism()).unwrap_or(AuthMechanism::None);
         if required != AuthMechanism::None {
-            if aarq.mechanism_name.is_none() && aarq.calling_authentication_value.is_none() {
-                return reject_aare(echo_context, diag::AUTHENTICATION_REQUIRED, None);
+            let has_mech = aarq.mechanism_name.is_some();
+            let has_auth = aarq.calling_authentication_value.is_some();
+            if !has_mech && !has_auth {
+                return reject_aare(echo_context, diag::AUTHENTICATION_REQUIRED, false, None);
+            }
+            if let Some(bits) = aarq.sender_acse_requirements {
+                if bits != 0x80 {
+                    return reject_aare(echo_context, diag::AUTHENTICATION_FAILURE, false, None);
+                }
+            }
+            if !has_mech {
+                return reject_aare(echo_context, diag::AUTHENTICATION_FAILURE, false, None);
             }
             let Some(mech) = aarq.mechanism_name.and_then(AuthMechanism::from_id) else {
-                return reject_aare(echo_context, diag::AUTHENTICATION_MECHANISM_NAME_NOT_RECOGNISED, None);
+                return reject_aare(echo_context, diag::AUTHENTICATION_MECHANISM_NAME_NOT_RECOGNISED, false, None);
             };
+            if !has_auth && mech != AuthMechanism::None {
+                return reject_aare(echo_context, diag::AUTHENTICATION_FAILURE, false, None);
+            }
             if !Self::aarq_mechanism_matches_assoc(mech, required) {
-                return reject_aare(echo_context, diag::AUTHENTICATION_FAILURE, None);
+                return reject_aare(echo_context, diag::AUTHENTICATION_FAILURE, false, None);
             }
         }
 
@@ -491,12 +538,12 @@ impl RequestDispatcher {
                     assoc.set_association_status(association_status::ASSOCIATED);
                 }
                 AssociationResponse {
+                    protocol_version: Some(PROTOCOL_VERSION_1),
                     application_context: echo_context,
                     result: acse::result::ACCEPTED,
                     diagnostic: diag::NULL,
-                    responding_ap_title: None,
-                    responding_authentication_value: None,
                     user_information,
+                    ..AssociationResponse::default()
                 }
                 .encode()
             }
@@ -506,18 +553,18 @@ impl RequestDispatcher {
                     _ => false,
                 };
                 if !secret_ok {
-                    return reject_aare(echo_context, diag::AUTHENTICATION_FAILURE, None);
+                    return reject_aare(echo_context, diag::AUTHENTICATION_FAILURE, false, None);
                 }
                 if let Some(assoc) = self.association.as_mut() {
                     assoc.set_association_status(association_status::ASSOCIATED);
                 }
                 AssociationResponse {
+                    protocol_version: Some(PROTOCOL_VERSION_1),
                     application_context: echo_context,
                     result: acse::result::ACCEPTED,
                     diagnostic: diag::NULL,
-                    responding_ap_title: None,
-                    responding_authentication_value: None,
                     user_information,
+                    ..AssociationResponse::default()
                 }
                 .encode()
             }
@@ -526,10 +573,10 @@ impl RequestDispatcher {
                 // handshake completes with the reply_to_HLS_authentication
                 // ACTION (pass 3/4), served by the Association LN object.
                 let Some(ctos) = aarq.calling_authentication_value else {
-                    return reject_aare(echo_context, diag::AUTHENTICATION_FAILURE, None);
+                    return reject_aare(echo_context, diag::AUTHENTICATION_FAILURE, false, None);
                 };
                 let Some(assoc) = self.association.as_mut() else {
-                    return reject_aare(echo_context, diag::AUTHENTICATION_FAILURE, None);
+                    return reject_aare(echo_context, diag::AUTHENTICATION_FAILURE, false, None);
                 };
                 assoc.set_ctos(ctos);
                 if let Some(title) = aarq.calling_ap_title {
@@ -538,14 +585,33 @@ impl RequestDispatcher {
                 assoc.set_hls_handshake_mechanism(mechanism);
                 let stoc = assoc.generate_stoc(16);
                 assoc.set_association_status(association_status::ASSOCIATION_PENDING);
-                let responding_ap_title = assoc.responding_ap_title_for_hls();
+                // Responding-AP-title: required with ciphering / title-bound HLS
+                // (GMAC+); omit for Gurux HIGH (mech 2) over plain LN (etalon).
+                let responding_ap_title = if echo_context == application_context::LN_CIPHERING
+                    || matches!(
+                        mechanism,
+                        AuthMechanism::HlsGmac
+                            | AuthMechanism::HlsSha256
+                            | AuthMechanism::HlsEcdsa
+                            | AuthMechanism::HlsGostCmac
+                            | AuthMechanism::HlsGostStreebog
+                            | AuthMechanism::HlsGostSignature
+                    ) {
+                    assoc.responding_ap_title_for_hls()
+                } else {
+                    None
+                };
                 AssociationResponse {
+                    protocol_version: Some(PROTOCOL_VERSION_1),
                     application_context: echo_context,
+                    // Yellow Book: accepted + authentication-required while HLS pending.
                     result: acse::result::ACCEPTED,
-                    diagnostic: diag::NULL,
+                    diagnostic: diag::AUTHENTICATION_REQUIRED,
                     responding_ap_title,
+                    mechanism_name: Some(mechanism.id()),
                     responding_authentication_value: Some(stoc),
                     user_information,
+                    ..AssociationResponse::default()
                 }
                 .encode()
             }
@@ -804,10 +870,17 @@ fn selective_index(value: &CosemDataType) -> Option<u32> {
     }
 }
 
-/// Builds a permanently-rejecting AARE with the given acse-service-user
-/// diagnostic; `initiate_err` adds an `initiateError` ConfirmedServiceError to
-/// the user-information.
-fn reject_aare(application_context: u8, diagnostic: u8, initiate_err: Option<u8>) -> Vec<u8> {
+/// Builds a permanently-rejecting AARE with the given diagnostic;
+/// `initiate_err` adds an `initiateError` ConfirmedServiceError to the
+/// user-information. `diagnostic_is_provider` selects the acse-service-provider
+/// CHOICE (e.g. no-common-acse-version).
+fn reject_aare(
+    application_context: u8,
+    diagnostic: u8,
+    diagnostic_is_provider: bool,
+    initiate_err: Option<u8>,
+) -> Vec<u8> {
+    use crate::service::acse::PROTOCOL_VERSION_1;
     let user_information = initiate_err.map_or_else(Vec::new, |value| {
         ConfirmedServiceError {
             service: crate::service::error::service::INITIATE_ERROR,
@@ -817,14 +890,23 @@ fn reject_aare(application_context: u8, diagnostic: u8, initiate_err: Option<u8>
         .encode()
     });
     AssociationResponse {
+        protocol_version: Some(PROTOCOL_VERSION_1),
         application_context,
         result: acse::result::REJECTED_PERMANENT,
         diagnostic,
-        responding_ap_title: None,
-        responding_authentication_value: None,
+        diagnostic_is_provider,
         user_information,
+        ..AssociationResponse::default()
     }
     .encode()
+}
+
+/// True when the APDU is Association LN `reply_to_HLS_authentication` (method 1).
+fn is_hls_pass3_action(request: &[u8]) -> bool {
+    match ActionRequest::decode(request) {
+        Ok(ActionRequest::Normal { method, .. }) => method.class_id == 15 && method.method_id == 1,
+        _ => false,
+    }
 }
 
 /// EXCEPTION-RESPONSE for an unsupported service tag.
@@ -888,6 +970,7 @@ mod tests {
         crate::service::acse::AssociationRequest {
             application_context: context,
             calling_ap_title: None,
+            sender_acse_requirements: mechanism.map(|_| 0x80),
             mechanism_name: mechanism,
             calling_authentication_value: auth.map(<[u8]>::to_vec),
             user_information: InitiateRequest {
@@ -899,6 +982,7 @@ mod tests {
                 client_max_receive_pdu_size: 0x0400,
             }
             .encode(),
+            ..Default::default()
         }
         .encode()
     }
@@ -972,8 +1056,77 @@ mod tests {
         req.calling_ap_title = Some(b"CLIENT01".to_vec());
         let aare = AssociationResponse::decode(&d.handle_aarq(&req.encode())).unwrap();
         assert_eq!(aare.result, acse::result::ACCEPTED);
+        assert_eq!(aare.diagnostic, acse::acse_diagnostic::AUTHENTICATION_REQUIRED);
         let stoc = aare.responding_authentication_value.expect("StoC missing");
         assert_eq!(stoc.len(), 16);
+    }
+
+    #[test]
+    fn aarq_bad_protocol_version_is_provider_reject() {
+        let mut d = dispatcher_with_data();
+        let mut req = crate::service::acse::AssociationRequest::decode(&aarq(1, None, None)).unwrap();
+        req.protocol_version = Some([0x02, 0x44]);
+        let aare = AssociationResponse::decode(&d.handle_aarq(&req.encode())).unwrap();
+        assert_eq!(aare.result, acse::result::REJECTED_PERMANENT);
+        assert!(aare.diagnostic_is_provider);
+        assert_eq!(aare.diagnostic, acse::acse_provider_diagnostic::NO_COMMON_ACSE_VERSION);
+    }
+
+    #[test]
+    fn aarq_wrong_acse_requirements_is_auth_failure() {
+        let mut d = dispatcher_with_data();
+        d.set_association(association(AuthMechanism::Lls));
+        let mut req = crate::service::acse::AssociationRequest::decode(&aarq(1, Some(1), Some(b"password"))).unwrap();
+        req.sender_acse_requirements = Some(0x00);
+        let aare = AssociationResponse::decode(&d.handle_aarq(&req.encode())).unwrap();
+        assert_eq!(aare.result, acse::result::REJECTED_PERMANENT);
+        assert_eq!(aare.diagnostic, acse::acse_diagnostic::AUTHENTICATION_FAILURE);
+    }
+
+    #[test]
+    fn aarq_missing_mechanism_with_auth_is_auth_failure() {
+        let mut d = dispatcher_with_data();
+        d.set_association(association(AuthMechanism::Lls));
+        let mut req = crate::service::acse::AssociationRequest::decode(&aarq(1, None, None)).unwrap();
+        req.sender_acse_requirements = Some(0x80);
+        req.calling_authentication_value = Some(b"password".to_vec());
+        let aare = AssociationResponse::decode(&d.handle_aarq(&req.encode())).unwrap();
+        assert_eq!(aare.result, acse::result::REJECTED_PERMANENT);
+        assert_eq!(aare.diagnostic, acse::acse_diagnostic::AUTHENTICATION_FAILURE);
+    }
+
+    #[test]
+    fn get_while_hls_pending_is_service_not_allowed() {
+        let mut d = dispatcher_with_data();
+        d.set_association(association(AuthMechanism::HlsSha1));
+        let req =
+            crate::service::acse::AssociationRequest::decode(&aarq(1, Some(4), Some(b"CTOS0123CTOS0123"))).unwrap();
+        // HlsSha1 (4) is not title-bound (>=5); no calling-AP-title needed.
+        let aare = AssociationResponse::decode(&d.handle_aarq(&req.encode())).unwrap();
+        assert_eq!(aare.result, acse::result::ACCEPTED);
+        assert_eq!(d.association().unwrap().association_status(), association_status::ASSOCIATION_PENDING);
+
+        let get = GetRequest::Normal {
+            invoke_id_and_priority: 0xC0,
+            attribute: AttributeDescriptor {
+                class_id: 15,
+                instance_id: ObisCode::new(0, 0, 40, 0, 0, 255),
+                attribute_id: 1,
+            },
+            access_selection: None,
+        }
+        .encode()
+        .unwrap();
+        let resp = d.dispatch(&get).unwrap();
+        assert_eq!(resp[0], 0xD8); // EXCEPTION-RESPONSE
+        let ex = ExceptionResponse::decode(&resp).unwrap();
+        assert_eq!(ex.state_error, state_error::SERVICE_NOT_ALLOWED);
+        assert_eq!(ex.service_error, service_error::OPERATION_NOT_POSSIBLE);
+
+        // After HLS completes (status → associated), GET is allowed again.
+        d.association_mut().unwrap().set_association_status(association_status::ASSOCIATED);
+        let resp = d.dispatch(&get).unwrap();
+        assert_ne!(resp[0], 0xD8, "GET after HLS must not be Exception");
     }
 
     #[test]

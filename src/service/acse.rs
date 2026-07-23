@@ -97,16 +97,29 @@ pub mod acse_diagnostic {
     pub const AUTHENTICATION_REQUIRED: u8 = 14;
 }
 
+/// ACSE `result-source-diagnostic` values of the acse-service-provider CHOICE.
+pub mod acse_provider_diagnostic {
+    /// No common ACSE version (AARQ.protocol-version not version1).
+    pub const NO_COMMON_ACSE_VERSION: u8 = 2;
+}
+
+/// BER BIT STRING value for ACSE protocol-version `{version1 (0)}`.
+pub const PROTOCOL_VERSION_1: [u8; 2] = [0x02, 0x84];
+
 const OID_PREFIX_APP_CONTEXT: [u8; 6] = [0x60, 0x85, 0x74, 0x05, 0x08, 0x01];
 const OID_PREFIX_MECHANISM: [u8; 6] = [0x60, 0x85, 0x74, 0x05, 0x08, 0x02];
 
 /// An AARQ (application association request) APDU.
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Default)]
 pub struct AssociationRequest {
+    /// Protocol-version BIT STRING contents (`[unused-bits, bits…]`), when present.
+    pub protocol_version: Option<[u8; 2]>,
     /// Application-context-name identifier (see [`application_context`]).
     pub application_context: u8,
     /// Calling-AP-title (client system title), present when ciphering is used.
     pub calling_ap_title: Option<Vec<u8>>,
+    /// Sender-acse-requirements authentication bit (0x80 when set), when present.
+    pub sender_acse_requirements: Option<u8>,
     /// Authentication-mechanism-name identifier, present for LLS/HLS.
     pub mechanism_name: Option<u8>,
     /// Calling-authentication-value (LLS password or HLS CtoS challenge).
@@ -119,6 +132,10 @@ impl AssociationRequest {
     /// Encodes the AARQ APDU.
     pub fn encode(&self) -> Vec<u8> {
         let mut content = Vec::new();
+        // `[0]` protocol-version (IMPLICIT BIT STRING).
+        if let Some(pv) = self.protocol_version {
+            content.extend_from_slice(&[0x80, 0x02, pv[0], pv[1]]);
+        }
         // `[1]` application-context-name (OBJECT IDENTIFIER).
         ber_tlv(0xA1, &object_identifier(OID_PREFIX_APP_CONTEXT, self.application_context), &mut content);
         // `[6]` calling-AP-title (OCTET STRING) — only with ciphering.
@@ -128,7 +145,8 @@ impl AssociationRequest {
         // Authentication functional unit (`[10]`, `[11]`, `[12]`) — for LLS/HLS.
         if let Some(mech) = self.mechanism_name {
             // `[10]` sender-acse-requirements: BIT STRING { authentication(0) }.
-            content.extend_from_slice(&[0x8A, 0x02, 0x07, 0x80]);
+            let acse_req = self.sender_acse_requirements.unwrap_or(0x80);
+            content.extend_from_slice(&[0x8A, 0x02, 0x07, acse_req]);
             // `[11]` mechanism-name (OBJECT IDENTIFIER, IMPLICIT → raw 7 octets).
             content.push(0x8B);
             let oid = raw_oid(OID_PREFIX_MECHANISM, mech);
@@ -141,6 +159,19 @@ impl AssociationRequest {
                 inner.extend_from_slice(auth);
                 ber_tlv(0xAC, &inner, &mut content);
             }
+        } else if let Some(acse_req) = self.sender_acse_requirements {
+            content.extend_from_slice(&[0x8A, 0x02, 0x07, acse_req]);
+            if let Some(auth) = &self.calling_authentication_value {
+                let mut inner = vec![0x80];
+                push_length(auth.len(), &mut inner);
+                inner.extend_from_slice(auth);
+                ber_tlv(0xAC, &inner, &mut content);
+            }
+        } else if let Some(auth) = &self.calling_authentication_value {
+            let mut inner = vec![0x80];
+            push_length(auth.len(), &mut inner);
+            inner.extend_from_slice(auth);
+            ber_tlv(0xAC, &inner, &mut content);
         }
         // `[30]` user-information (OCTET STRING carrying the InitiateRequest).
         ber_tlv(0xBE, &octet_string(&self.user_information), &mut content);
@@ -154,17 +185,13 @@ impl AssociationRequest {
     /// Decodes an AARQ APDU.
     pub fn decode(bytes: &[u8]) -> Result<AssociationRequest, ServiceError> {
         let content = outer_content(bytes, AARQ_TAG)?;
-        let mut req = AssociationRequest {
-            application_context: 0,
-            calling_ap_title: None,
-            mechanism_name: None,
-            calling_authentication_value: None,
-            user_information: Vec::new(),
-        };
+        let mut req = AssociationRequest::default();
         for (tag, value) in TlvIter::new(content) {
             match tag {
+                0x80 if value.len() >= 2 => req.protocol_version = Some([value[0], value[1]]),
                 0xA1 => req.application_context = parse_oid_last_arc(value)?,
                 0xA6 => req.calling_ap_title = Some(parse_octet_string(value)?),
+                0x8A if value.len() >= 2 => req.sender_acse_requirements = Some(value[1]),
                 0x8B => req.mechanism_name = Some(*value.last().ok_or(ServiceError::Truncated)?),
                 0xAC => req.calling_authentication_value = Some(parse_auth_value(value)?),
                 0xBE => req.user_information = parse_octet_string(value)?,
@@ -176,16 +203,22 @@ impl AssociationRequest {
 }
 
 /// An AARE (application association response) APDU.
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Default)]
 pub struct AssociationResponse {
+    /// Protocol-version BIT STRING contents, when present.
+    pub protocol_version: Option<[u8; 2]>,
     /// Application-context-name identifier.
     pub application_context: u8,
     /// Association result (see [`result`]).
     pub result: u8,
-    /// Result source diagnostic (the acse-service-user diagnostic value).
+    /// Result source diagnostic value.
     pub diagnostic: u8,
+    /// When true, diagnostic is acse-service-provider (`[2]`); otherwise user (`[1]`).
+    pub diagnostic_is_provider: bool,
     /// Responding-AP-title (server system title), present with ciphering.
     pub responding_ap_title: Option<Vec<u8>>,
+    /// Mechanism-name echoed for HLS (IMPLICIT OID last arc).
+    pub mechanism_name: Option<u8>,
     /// Responding-authentication-value (HLS StoC challenge).
     pub responding_authentication_value: Option<Vec<u8>>,
     /// User-information: the xDLMS InitiateResponse APDU (opaque).
@@ -196,22 +229,36 @@ impl AssociationResponse {
     /// Encodes the AARE APDU.
     pub fn encode(&self) -> Vec<u8> {
         let mut content = Vec::new();
+        // `[0]` protocol-version.
+        if let Some(pv) = self.protocol_version {
+            content.extend_from_slice(&[0x80, 0x02, pv[0], pv[1]]);
+        }
         // `[1]` application-context-name.
         ber_tlv(0xA1, &object_identifier(OID_PREFIX_APP_CONTEXT, self.application_context), &mut content);
         // `[2]` result (INTEGER).
         ber_tlv(0xA2, &[0x02, 0x01, self.result], &mut content);
-        // `[3]` result-source-diagnostic (CHOICE acse-service-user `[1]`).
-        ber_tlv(0xA3, &[0xA1, 0x03, 0x02, 0x01, self.diagnostic], &mut content);
+        // `[3]` result-source-diagnostic (CHOICE user `[1]` / provider `[2]`).
+        let diag_choice = if self.diagnostic_is_provider { 0xA2 } else { 0xA1 };
+        ber_tlv(0xA3, &[diag_choice, 0x03, 0x02, 0x01, self.diagnostic], &mut content);
         // `[4]` responding-AP-title (OCTET STRING) — with ciphering.
         if let Some(title) = &self.responding_ap_title {
             ber_tlv(0xA4, &octet_string(title), &mut content);
         }
-        // `[10]` responding-authentication-value (EXPLICIT CHOICE charstring `[0]`) — HLS.
-        if let Some(auth) = &self.responding_authentication_value {
-            let mut inner = vec![0x80];
-            push_length(auth.len(), &mut inner);
-            inner.extend_from_slice(auth);
-            ber_tlv(0xAA, &inner, &mut content);
+        // HLS authentication functional unit: `[8]` / `[9]` / `[10]`.
+        if self.responding_authentication_value.is_some() {
+            content.extend_from_slice(&[0x88, 0x02, 0x07, 0x80]);
+            if let Some(mech) = self.mechanism_name {
+                content.push(0x89);
+                let oid = raw_oid(OID_PREFIX_MECHANISM, mech);
+                push_length(oid.len(), &mut content);
+                content.extend_from_slice(&oid);
+            }
+            if let Some(auth) = &self.responding_authentication_value {
+                let mut inner = vec![0x80];
+                push_length(auth.len(), &mut inner);
+                inner.extend_from_slice(auth);
+                ber_tlv(0xAA, &inner, &mut content);
+            }
         }
         // `[30]` user-information.
         ber_tlv(0xBE, &octet_string(&self.user_information), &mut content);
@@ -225,20 +272,18 @@ impl AssociationResponse {
     /// Decodes an AARE APDU.
     pub fn decode(bytes: &[u8]) -> Result<AssociationResponse, ServiceError> {
         let content = outer_content(bytes, AARE_TAG)?;
-        let mut resp = AssociationResponse {
-            application_context: 0,
-            result: result::REJECTED_PERMANENT,
-            diagnostic: 0,
-            responding_ap_title: None,
-            responding_authentication_value: None,
-            user_information: Vec::new(),
-        };
+        let mut resp = AssociationResponse { result: result::REJECTED_PERMANENT, ..AssociationResponse::default() };
         for (tag, value) in TlvIter::new(content) {
             match tag {
+                0x80 if value.len() >= 2 => resp.protocol_version = Some([value[0], value[1]]),
                 0xA1 => resp.application_context = parse_oid_last_arc(value)?,
                 0xA2 => resp.result = *value.last().ok_or(ServiceError::Truncated)?,
-                0xA3 => resp.diagnostic = *value.last().ok_or(ServiceError::Truncated)?,
+                0xA3 => {
+                    resp.diagnostic_is_provider = value.first() == Some(&0xA2);
+                    resp.diagnostic = *value.last().ok_or(ServiceError::Truncated)?;
+                }
                 0xA4 => resp.responding_ap_title = Some(parse_octet_string(value)?),
+                0x89 => resp.mechanism_name = Some(*value.last().ok_or(ServiceError::Truncated)?),
                 0xAA => resp.responding_authentication_value = Some(parse_auth_value(value)?),
                 0xBE => resp.user_information = parse_octet_string(value)?,
                 _ => {}
@@ -450,8 +495,10 @@ mod tests {
         // IEC 62056-5-3 Annex D.4, LN referencing, LLS.
         let initiate_request = vec![0x01, 0x00, 0x00, 0x00, 0x06, 0x5F, 0x1F, 0x04, 0x00, 0x00, 0x7E, 0x1F, 0x04, 0xB0];
         let aarq = AssociationRequest {
+            protocol_version: None,
             application_context: application_context::LN,
             calling_ap_title: None,
+            sender_acse_requirements: Some(0x80),
             mechanism_name: Some(mechanism::LLS),
             calling_authentication_value: Some(b"12345678".to_vec()),
             user_information: initiate_request,
@@ -478,6 +525,7 @@ mod tests {
             mechanism_name: None,
             calling_authentication_value: None,
             user_information: vec![0x01, 0x00, 0x00, 0x00, 0x06, 0x5F, 0x1F, 0x04, 0x00, 0x00, 0x7E, 0x1F, 0x04, 0xB0],
+            ..Default::default()
         };
         assert_eq!(AssociationRequest::decode(&aarq.encode()).unwrap(), aarq);
     }
@@ -491,6 +539,7 @@ mod tests {
             responding_ap_title: None,
             responding_authentication_value: None,
             user_information: vec![0x08, 0x00, 0x06, 0x5F, 0x1F, 0x04, 0x00, 0x00, 0x7E, 0x1F, 0x04, 0xB0],
+            ..Default::default()
         };
         let encoded = aare.encode();
         assert_eq!(encoded[0], AARE_TAG);
@@ -525,6 +574,7 @@ mod tests {
             responding_ap_title: Some(vec![0x4D, 0x4D, 0x4D, 0x00, 0x00, 0xBC, 0x61, 0x4E]),
             responding_authentication_value: Some(b"P6wRJ21F".to_vec()),
             user_information: vec![0x08, 0x00],
+            ..Default::default()
         };
         let decoded = AssociationResponse::decode(&aare.encode()).unwrap();
         assert_eq!(decoded, aare);
