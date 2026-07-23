@@ -272,10 +272,7 @@ impl AssociationResponse {
     /// Decodes an AARE APDU.
     pub fn decode(bytes: &[u8]) -> Result<AssociationResponse, ServiceError> {
         let content = outer_content(bytes, AARE_TAG)?;
-        let mut resp = AssociationResponse {
-            result: result::REJECTED_PERMANENT,
-            ..AssociationResponse::default()
-        };
+        let mut resp = AssociationResponse { result: result::REJECTED_PERMANENT, ..AssociationResponse::default() };
         for (tag, value) in TlvIter::new(content) {
             match tag {
                 0x80 if value.len() >= 2 => resp.protocol_version = Some([value[0], value[1]]),
@@ -528,7 +525,7 @@ mod tests {
             mechanism_name: None,
             calling_authentication_value: None,
             user_information: vec![0x01, 0x00, 0x00, 0x00, 0x06, 0x5F, 0x1F, 0x04, 0x00, 0x00, 0x7E, 0x1F, 0x04, 0xB0],
-                    ..Default::default()
+            ..Default::default()
         };
         assert_eq!(AssociationRequest::decode(&aarq.encode()).unwrap(), aarq);
     }
@@ -542,7 +539,7 @@ mod tests {
             responding_ap_title: None,
             responding_authentication_value: None,
             user_information: vec![0x08, 0x00, 0x06, 0x5F, 0x1F, 0x04, 0x00, 0x00, 0x7E, 0x1F, 0x04, 0xB0],
-                    ..Default::default()
+            ..Default::default()
         };
         let encoded = aare.encode();
         assert_eq!(encoded[0], AARE_TAG);
@@ -577,7 +574,7 @@ mod tests {
             responding_ap_title: Some(vec![0x4D, 0x4D, 0x4D, 0x00, 0x00, 0xBC, 0x61, 0x4E]),
             responding_authentication_value: Some(b"P6wRJ21F".to_vec()),
             user_information: vec![0x08, 0x00],
-                    ..Default::default()
+            ..Default::default()
         };
         let decoded = AssociationResponse::decode(&aare.encode()).unwrap();
         assert_eq!(decoded, aare);

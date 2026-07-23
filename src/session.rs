@@ -937,7 +937,7 @@ mod tests {
             responding_ap_title: None,
             responding_authentication_value: None,
             user_information: vec![0x08, 0x00, 0x06, 0x5F, 0x1F, 0x04, 0x00, 0x00, 0x7E, 0x1F, 0x01, 0xF4, 0x00, 0x07],
-                    ..Default::default()
+            ..Default::default()
         };
         link.queue_response(aare.encode());
         let mut session = ClientSession::new(link);
@@ -947,7 +947,7 @@ mod tests {
             mechanism_name: Some(mechanism::LLS),
             calling_authentication_value: Some(b"12345678".to_vec()),
             user_information: vec![0x01, 0x00, 0x00, 0x00, 0x06, 0x5F, 0x1F, 0x04, 0x00, 0x00, 0x7E, 0x1F, 0x04, 0xB0],
-                    ..Default::default()
+            ..Default::default()
         };
         let got = session.associate(&aarq).unwrap();
         assert_eq!(got, aare);
@@ -1189,7 +1189,7 @@ mod tests {
             responding_ap_title: None,
             responding_authentication_value: None,
             user_information: vec![],
-                    ..Default::default()
+            ..Default::default()
         };
         link.queue_response(aare.encode());
 
@@ -1203,7 +1203,7 @@ mod tests {
             mechanism_name: None,
             calling_authentication_value: None,
             user_information: vec![],
-                    ..Default::default()
+            ..Default::default()
         };
         let resp = session.associate(&aarq).unwrap();
         assert_eq!(resp.result, acse::result::ACCEPTED);
@@ -1222,7 +1222,7 @@ mod tests {
             responding_ap_title: None,
             responding_authentication_value: None,
             user_information: vec![],
-                    ..Default::default()
+            ..Default::default()
         };
         link.queue_response(aare.encode());
 
@@ -1233,7 +1233,7 @@ mod tests {
             mechanism_name: None,
             calling_authentication_value: None,
             user_information: vec![],
-                    ..Default::default()
+            ..Default::default()
         };
         let resp = session.associate(&aarq).unwrap();
         assert_eq!(resp.result, acse::result::REJECTED_PERMANENT);
@@ -1251,7 +1251,7 @@ mod tests {
             responding_ap_title: None,
             responding_authentication_value: None,
             user_information: vec![],
-                    ..Default::default()
+            ..Default::default()
         };
         link.queue_response(aare.encode());
 
@@ -1272,7 +1272,7 @@ mod tests {
             responding_ap_title: None,
             responding_authentication_value: None,
             user_information: vec![],
-                    ..Default::default()
+            ..Default::default()
         };
         link.queue_response(aare.encode());
 
@@ -1293,7 +1293,7 @@ mod tests {
             responding_ap_title: None,
             responding_authentication_value: None,
             user_information: vec![],
-                    ..Default::default()
+            ..Default::default()
         };
         link.queue_response(aare.encode());
         // Queue RLRE response
@@ -1307,7 +1307,7 @@ mod tests {
             mechanism_name: None,
             calling_authentication_value: None,
             user_information: vec![],
-                    ..Default::default()
+            ..Default::default()
         };
         session.associate(&aarq).unwrap();
         assert!(session.is_associated());

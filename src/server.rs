@@ -1076,8 +1076,7 @@ mod tests {
     fn aarq_wrong_acse_requirements_is_auth_failure() {
         let mut d = dispatcher_with_data();
         d.set_association(association(AuthMechanism::Lls));
-        let mut req =
-            crate::service::acse::AssociationRequest::decode(&aarq(1, Some(1), Some(b"password"))).unwrap();
+        let mut req = crate::service::acse::AssociationRequest::decode(&aarq(1, Some(1), Some(b"password"))).unwrap();
         req.sender_acse_requirements = Some(0x00);
         let aare = AssociationResponse::decode(&d.handle_aarq(&req.encode())).unwrap();
         assert_eq!(aare.result, acse::result::REJECTED_PERMANENT);
