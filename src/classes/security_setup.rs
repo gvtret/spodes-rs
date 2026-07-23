@@ -258,6 +258,40 @@ impl InterfaceClass for SecuritySetup {
         Ok(())
     }
 
+    fn set_attribute(&mut self, attribute_id: u8, value: CosemDataType) -> Result<(), String> {
+        match attribute_id {
+            2 => match value {
+                CosemDataType::Enum(v) => {
+                    self.security_policy = v;
+                    Ok(())
+                }
+                _ => Err("security_policy must be enum".into()),
+            },
+            3 => match value {
+                CosemDataType::Enum(v) => {
+                    self.security_suite = v;
+                    Ok(())
+                }
+                _ => Err("security_suite must be enum".into()),
+            },
+            4 => match value {
+                CosemDataType::OctetString(v) => {
+                    self.client_system_title = v;
+                    Ok(())
+                }
+                _ => Err("client_system_title must be octet-string".into()),
+            },
+            5 => match value {
+                CosemDataType::OctetString(v) => {
+                    self.server_system_title = v;
+                    Ok(())
+                }
+                _ => Err("server_system_title must be octet-string".into()),
+            },
+            _ => Err(format!("SecuritySetup attribute {attribute_id} is not writable")),
+        }
+    }
+
     fn invoke_method(&mut self, method_id: u8, params: Option<CosemDataType>) -> Result<CosemDataType, String> {
         let params = params.ok_or("Missing method parameter")?;
         match method_id {

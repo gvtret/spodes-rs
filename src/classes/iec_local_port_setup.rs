@@ -147,6 +147,45 @@ impl InterfaceClass for IecLocalPortSetup {
         Ok(())
     }
 
+    fn set_attribute(&mut self, attribute_id: u8, value: CosemDataType) -> Result<(), String> {
+        match attribute_id {
+            2 => {
+                self.default_mode = take_enum(&value).map_err(|_| "default_mode must be enum".to_string())?;
+                Ok(())
+            }
+            3 => {
+                self.default_baud = take_enum(&value).map_err(|_| "default_baud must be enum".to_string())?;
+                Ok(())
+            }
+            4 => {
+                self.prop_baud = take_enum(&value).map_err(|_| "prop_baud must be enum".to_string())?;
+                Ok(())
+            }
+            5 => {
+                self.response_time = take_enum(&value).map_err(|_| "response_time must be enum".to_string())?;
+                Ok(())
+            }
+            6 => {
+                self.device_addr =
+                    take_octet_string(&value).map_err(|_| "device_addr must be octet-string".to_string())?;
+                Ok(())
+            }
+            7 => {
+                self.pass_p1 = take_octet_string(&value).map_err(|_| "pass_p1 must be octet-string".to_string())?;
+                Ok(())
+            }
+            8 => {
+                self.pass_p2 = take_octet_string(&value).map_err(|_| "pass_p2 must be octet-string".to_string())?;
+                Ok(())
+            }
+            9 => {
+                self.pass_w5 = take_octet_string(&value).map_err(|_| "pass_w5 must be octet-string".to_string())?;
+                Ok(())
+            }
+            _ => Err(format!("IecLocalPortSetup attribute {attribute_id} is not writable")),
+        }
+    }
+
     fn invoke_method(&mut self, method_id: u8, _params: Option<CosemDataType>) -> Result<CosemDataType, String> {
         Err(format!("Method {method_id} not supported for IEC local port setup (no specific methods)"))
     }

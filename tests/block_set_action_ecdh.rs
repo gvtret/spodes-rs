@@ -162,7 +162,7 @@ fn test_set_data_attribute_updates_value() {
 }
 
 #[test]
-fn test_set_register_returns_not_writable() {
+fn test_set_register_updates_value() {
     let mut server = RequestDispatcher::new();
     server.add(Box::new(Register::new(
         ObisCode::new(1, 0, 1, 8, 0, 0xFF),
@@ -173,7 +173,7 @@ fn test_set_register_returns_not_writable() {
     let link = LoopbackLink::new(server);
     let mut session = ClientSession::new(link);
 
-    // Register objects don't support SET by default.
+    // Register attribute 2 (value) is writable.
     let obis = ObisCode::new(1, 0, 1, 8, 0, 0xFF);
     let result = session.set(3, obis.clone(), 2, CosemDataType::DoubleLongUnsigned(999));
     assert!(result.is_ok());
@@ -182,7 +182,7 @@ fn test_set_register_returns_not_writable() {
         Ok(GetResponse::Normal { result: GetDataResult::Data(v), .. }) => v,
         other => panic!("unexpected: {other:?}"),
     };
-    assert_eq!(value, CosemDataType::DoubleLongUnsigned(100));
+    assert_eq!(value, CosemDataType::DoubleLongUnsigned(999));
 }
 
 #[test]

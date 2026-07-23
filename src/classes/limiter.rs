@@ -181,6 +181,70 @@ impl InterfaceClass for Limiter {
         Ok(())
     }
 
+    fn set_attribute(&mut self, attribute_id: u8, value: CosemDataType) -> Result<(), String> {
+        match attribute_id {
+            2 => {
+                self.monitored_value = ValueDefinition::try_from(&value)?;
+                Ok(())
+            }
+            3 => {
+                self.threshold_active = value;
+                Ok(())
+            }
+            4 => {
+                self.threshold_normal = value;
+                Ok(())
+            }
+            5 => {
+                self.threshold_emergency = value;
+                Ok(())
+            }
+            6 => match value {
+                CosemDataType::DoubleLongUnsigned(v) => {
+                    self.min_over_threshold_duration = v;
+                    Ok(())
+                }
+                _ => Err("min_over_threshold_duration must be double-long-unsigned".into()),
+            },
+            7 => match value {
+                CosemDataType::DoubleLongUnsigned(v) => {
+                    self.min_under_threshold_duration = v;
+                    Ok(())
+                }
+                _ => Err("min_under_threshold_duration must be double-long-unsigned".into()),
+            },
+            8 => {
+                self.emergency_profile = EmergencyProfile::try_from(&value)?;
+                Ok(())
+            }
+            9 => {
+                let CosemDataType::Array(list) = value else {
+                    return Err("emergency_profile_group_id_list must be array".into());
+                };
+                self.emergency_profile_group_id_list = list
+                    .iter()
+                    .map(|e| match e {
+                        CosemDataType::LongUnsigned(v) => Ok(*v),
+                        _ => Err("group id must be long-unsigned".into()),
+                    })
+                    .collect::<Result<Vec<_>, String>>()?;
+                Ok(())
+            }
+            10 => match value {
+                CosemDataType::Boolean(v) => {
+                    self.emergency_profile_active = v;
+                    Ok(())
+                }
+                _ => Err("emergency_profile_active must be boolean".into()),
+            },
+            11 => {
+                self.actions = LimiterAction::try_from(&value)?;
+                Ok(())
+            }
+            _ => Err(format!("Limiter attribute {attribute_id} is not writable")),
+        }
+    }
+
     fn invoke_method(&mut self, method_id: u8, _params: Option<CosemDataType>) -> Result<CosemDataType, String> {
         Err(format!("Method {method_id} not supported for Limiter (no specific methods)"))
     }

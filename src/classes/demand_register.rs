@@ -236,6 +236,26 @@ impl InterfaceClass for DemandRegister {
         Err(BerError::InvalidTag)
     }
 
+    fn set_attribute(&mut self, attribute_id: u8, value: CosemDataType) -> Result<(), String> {
+        match attribute_id {
+            8 => match value {
+                CosemDataType::DoubleLongUnsigned(v) => {
+                    self.period = v;
+                    Ok(())
+                }
+                _ => Err("period must be double-long-unsigned".into()),
+            },
+            9 => match value {
+                CosemDataType::LongUnsigned(v) => {
+                    self.number_of_periods = v;
+                    Ok(())
+                }
+                _ => Err("number_of_periods must be long-unsigned".into()),
+            },
+            _ => Err(format!("DemandRegister attribute {attribute_id} is not writable")),
+        }
+    }
+
     fn invoke_method(&mut self, method_id: u8, _params: Option<CosemDataType>) -> Result<CosemDataType, String> {
         match method_id {
             1 => self.reset(),

@@ -719,6 +719,34 @@ impl InterfaceClass for AssociationLn {
         Ok(())
     }
 
+    fn set_attribute(&mut self, attribute_id: u8, value: CosemDataType) -> Result<(), String> {
+        match attribute_id {
+            7 => match value {
+                CosemDataType::OctetString(secret) => {
+                    zeroize::Zeroize::zeroize(&mut self.secret);
+                    self.secret = secret;
+                    Ok(())
+                }
+                _ => Err("secret must be octet-string".into()),
+            },
+            10 if matches!(self.version, AssociationLnVersion::Version2) => {
+                let CosemDataType::Array(list) = value else {
+                    return Err("user_list must be array".into());
+                };
+                self.user_list = list.iter().map(User::try_from).collect::<Result<Vec<_>, _>>()?;
+                Ok(())
+            }
+            11 if matches!(self.version, AssociationLnVersion::Version2) => {
+                self.current_user = match value {
+                    CosemDataType::Null => None,
+                    other => Some(User::try_from(&other)?),
+                };
+                Ok(())
+            }
+            _ => Err(format!("AssociationLn attribute {attribute_id} is not writable")),
+        }
+    }
+
     fn invoke_method(&mut self, method_id: u8, params: Option<CosemDataType>) -> Result<CosemDataType, String> {
         let params = params.ok_or("Missing method parameter")?;
         let is_v2 = matches!(self.version, AssociationLnVersion::Version2);

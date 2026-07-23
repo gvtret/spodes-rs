@@ -162,6 +162,19 @@ impl InterfaceClass for DisconnectControl {
         Ok(())
     }
 
+    fn set_attribute(&mut self, attribute_id: u8, value: CosemDataType) -> Result<(), String> {
+        match attribute_id {
+            4 => match value {
+                CosemDataType::Enum(v) => {
+                    self.control_mode = v;
+                    Ok(())
+                }
+                _ => Err("control_mode must be enum".into()),
+            },
+            _ => Err(format!("DisconnectControl attribute {attribute_id} is not writable")),
+        }
+    }
+
     fn invoke_method(&mut self, method_id: u8, _params: Option<CosemDataType>) -> Result<CosemDataType, String> {
         match method_id {
             1 => Ok(self.remote_disconnect()),

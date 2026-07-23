@@ -175,6 +175,54 @@ impl InterfaceClass for IecHdlcSetup {
         Ok(())
     }
 
+    fn set_attribute(&mut self, attribute_id: u8, value: CosemDataType) -> Result<(), String> {
+        match attribute_id {
+            2 => match value {
+                CosemDataType::Enum(v) => {
+                    self.comm_speed = v;
+                    Ok(())
+                }
+                _ => Err("comm_speed must be enum".into()),
+            },
+            3 => {
+                self.window_size_transmit =
+                    take_unsigned(&value).map_err(|_| "window_size_transmit must be unsigned".to_string())?;
+                Ok(())
+            }
+            4 => {
+                self.window_size_receive =
+                    take_unsigned(&value).map_err(|_| "window_size_receive must be unsigned".to_string())?;
+                Ok(())
+            }
+            5 => {
+                self.max_info_field_length_transmit =
+                    take_u16(&value).map_err(|_| "max_info_field_length_transmit must be unsigned".to_string())?;
+                Ok(())
+            }
+            6 => {
+                self.max_info_field_length_receive =
+                    take_u16(&value).map_err(|_| "max_info_field_length_receive must be unsigned".to_string())?;
+                Ok(())
+            }
+            7 => {
+                self.inter_octet_time_out =
+                    take_long_unsigned(&value).map_err(|_| "inter_octet_time_out must be long-unsigned".to_string())?;
+                Ok(())
+            }
+            8 => {
+                self.inactivity_time_out =
+                    take_long_unsigned(&value).map_err(|_| "inactivity_time_out must be long-unsigned".to_string())?;
+                Ok(())
+            }
+            9 => {
+                self.device_address =
+                    take_long_unsigned(&value).map_err(|_| "device_address must be long-unsigned".to_string())?;
+                Ok(())
+            }
+            _ => Err(format!("IecHdlcSetup attribute {attribute_id} is not writable")),
+        }
+    }
+
     fn invoke_method(&mut self, method_id: u8, _params: Option<CosemDataType>) -> Result<CosemDataType, String> {
         Err(format!("Method {method_id} not supported for IEC HDLC setup (no specific methods)"))
     }

@@ -42,9 +42,13 @@ const MIN_CLIENT_PDU: u16 = 12;
 /// Server-max-receive-pdu-size offered in the negotiated InitiateResponse.
 const SERVER_MAX_PDU: u16 = 0x0800;
 
-/// The server's conformance block: GET, SET, ACTION, selective access,
-/// block transfer with GET/SET and multiple references.
-const SERVER_CONFORMANCE: u32 = 0x00_18_5F;
+/// SPODES AA role conformance (AND with the client's proposal):
+/// - Public (LOWEST): get + block-get
+/// - Reader (LLS): + selective + action
+/// - Configurator (HLS): + set + block-set + data-notification (+ general-protection)
+const CONFORMANCE_PUBLIC: u32 = 0x00_10_10;
+const CONFORMANCE_READER: u32 = 0x00_10_15;
+const CONFORMANCE_CONFIGURATOR: u32 = 0x40_18_9D;
 
 /// `association_status` values (IEC 62056-6-2, Association LN attribute 8).
 mod association_status {
@@ -68,18 +72,34 @@ mod initiate_error {
 }
 
 /// An outbound GET result being delivered in blocks.
-struct PendingGet {
+#[derive(Debug, Clone)]
+pub struct PendingGet {
     /// The serialized data awaiting block-by-block delivery.
-    data: Vec<u8>,
+    pub data: Vec<u8>,
     /// The block number of the next block to send.
-    next_block: u32,
+    pub next_block: u32,
 }
 
 /// An inbound SET value being reassembled from datablocks.
-struct PendingSet {
-    attribute: AttributeDescriptor,
+#[derive(Debug, Clone)]
+pub struct PendingSet {
+    /// Target attribute of the in-progress SET.
+    pub attribute: AttributeDescriptor,
     /// The accumulated A-XDR value bytes.
-    buffer: Vec<u8>,
+    pub buffer: Vec<u8>,
+}
+
+/// Block-transfer state that must survive across APDUs on the same AA.
+///
+/// Hosts that rebuild a [`RequestDispatcher`] per request (e.g. from a shared
+/// object registry) should stash this on the connection and restore it before
+/// each `dispatch`.
+#[derive(Debug, Default, Clone)]
+pub struct PendingBlocks {
+    /// Outstanding GET datablock delivery, if any.
+    pub get: Option<PendingGet>,
+    /// Outstanding SET datablock reassembly, if any.
+    pub set: Option<PendingSet>,
 }
 
 /// A collection of COSEM objects that answers GET/SET/ACTION requests.
@@ -135,6 +155,17 @@ impl RequestDispatcher {
         #[cfg(feature = "tracing")]
         debug!("setting association for access rights checking");
         self.association = Some(assoc);
+    }
+
+    /// Restores block-transfer state previously taken with [`Self::take_pending`].
+    pub fn restore_pending(&mut self, pending: PendingBlocks) {
+        self.pending_get = pending.get;
+        self.pending_set = pending.set;
+    }
+
+    /// Takes block-transfer state so the host can persist it across requests.
+    pub fn take_pending(&mut self) -> PendingBlocks {
+        PendingBlocks { get: self.pending_get.take(), set: self.pending_set.take() }
     }
 
     /// Returns a reference to the current association, if any.
@@ -531,7 +562,7 @@ impl RequestDispatcher {
         }
 
         let mechanism = aarq.mechanism_name.and_then(AuthMechanism::from_id).unwrap_or(AuthMechanism::None);
-        let user_information = Self::negotiate_initiate_response(initiate.as_ref());
+        let user_information = Self::negotiate_initiate_response(initiate.as_ref(), mechanism);
         match mechanism {
             AuthMechanism::None => {
                 if let Some(assoc) = self.association.as_mut() {
@@ -640,10 +671,21 @@ impl RequestDispatcher {
         )
     }
 
-    /// Builds the negotiated InitiateResponse: the conformance is ANDed with
+    /// Role conformance advertised in AARE, matching C++ `aare` fill order.
+    fn role_conformance(mechanism: AuthMechanism) -> u32 {
+        if mechanism == AuthMechanism::None {
+            CONFORMANCE_PUBLIC
+        } else if mechanism.is_hls() {
+            CONFORMANCE_CONFIGURATOR
+        } else {
+            CONFORMANCE_READER
+        }
+    }
+
+    /// Builds the negotiated InitiateResponse: role conformance is ANDed with
     /// the client's proposal and the PDU size capped by the client's maximum.
-    fn negotiate_initiate_response(ireq: Option<&InitiateRequest>) -> Vec<u8> {
-        let mut conformance = SERVER_CONFORMANCE;
+    fn negotiate_initiate_response(ireq: Option<&InitiateRequest>, mechanism: AuthMechanism) -> Vec<u8> {
+        let mut conformance = Self::role_conformance(mechanism);
         let mut pdu = SERVER_MAX_PDU;
         if let Some(ireq) = ireq {
             if ireq.proposed_conformance != 0 {
@@ -997,6 +1039,19 @@ mod tests {
         let iresp = InitiateResponse::decode(&aare.user_information).unwrap();
         assert_eq!(iresp.negotiated_dlms_version, 6);
         assert_eq!(iresp.server_max_receive_pdu_size, 0x0400);
+        // Public AA: get + block-get only (0x001010), AND with client proposal.
+        assert_eq!(iresp.negotiated_conformance, 0x00_10_10);
+    }
+
+    #[test]
+    fn aarq_lls_reader_conformance() {
+        let mut d = dispatcher_with_data();
+        d.set_association(association(AuthMechanism::Lls));
+        let resp = d.handle_aarq(&aarq(1, Some(1), Some(b"password")));
+        let aare = AssociationResponse::decode(&resp).unwrap();
+        assert_eq!(aare.result, acse::result::ACCEPTED);
+        let iresp = InitiateResponse::decode(&aare.user_information).unwrap();
+        assert_eq!(iresp.negotiated_conformance, 0x00_10_15);
     }
 
     #[test]

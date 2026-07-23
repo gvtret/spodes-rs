@@ -159,6 +159,48 @@ impl InterfaceClass for ActivityCalendar {
         Ok(())
     }
 
+    fn set_attribute(&mut self, attribute_id: u8, value: CosemDataType) -> Result<(), String> {
+        match attribute_id {
+            2 => {
+                self.calendar_name_active = take_octet_string(&value).map_err(|e| format!("{e:?}"))?;
+                Ok(())
+            }
+            3 => {
+                self.season_profile_active = take_typed_array(&value).map_err(|e| format!("{e:?}"))?;
+                Ok(())
+            }
+            4 => {
+                self.week_profile_table_active = take_typed_array(&value).map_err(|e| format!("{e:?}"))?;
+                Ok(())
+            }
+            5 => {
+                self.day_profile_table_active = take_typed_array(&value).map_err(|e| format!("{e:?}"))?;
+                Ok(())
+            }
+            6 => {
+                self.calendar_name_passive = take_octet_string(&value).map_err(|e| format!("{e:?}"))?;
+                Ok(())
+            }
+            7 => {
+                self.season_profile_passive = take_typed_array(&value).map_err(|e| format!("{e:?}"))?;
+                Ok(())
+            }
+            8 => {
+                self.week_profile_table_passive = take_typed_array(&value).map_err(|e| format!("{e:?}"))?;
+                Ok(())
+            }
+            9 => {
+                self.day_profile_table_passive = take_typed_array(&value).map_err(|e| format!("{e:?}"))?;
+                Ok(())
+            }
+            10 => {
+                self.activate_passive_calendar_time = take_octet_string(&value).map_err(|e| format!("{e:?}"))?;
+                Ok(())
+            }
+            _ => Err(format!("ActivityCalendar attribute {attribute_id} is not writable")),
+        }
+    }
+
     fn invoke_method(&mut self, method_id: u8, _params: Option<CosemDataType>) -> Result<CosemDataType, String> {
         match method_id {
             1 => Ok(self.activate_passive_calendar()),
