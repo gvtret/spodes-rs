@@ -174,7 +174,7 @@ fn aes128_block(block: &mut [u8; 16], key: &mut [u8; 16]) {
 /// HLS mechanism 2 (manufacturer-specific "high" authentication).
 ///
 /// DLMS/COSEM does not specify mechanism 2, so implementations follow the widely
-/// deployed Gurux / Texas-Instruments scheme: AES-128 over the zero-padded
+/// deployed Texas-Instruments scheme: AES-128 over the zero-padded
 /// `challenge`, keyed by the zero-padded `secret`. The challenge and secret are
 /// padded to a common length that is a multiple of 16 (the larger of the two,
 /// rounded up); each 16-octet block of the padded challenge is then encrypted.
@@ -216,8 +216,8 @@ mod tests {
     }
 
     #[test]
-    fn manufacturer_aes_matches_gurux_reference() {
-        // Reference vectors produced by the Gurux Aes1Encrypt / Secure routine
+    fn manufacturer_aes_matches_reference_vectors() {
+        // Reference vectors for the Aes1Encrypt / Secure routine
         // (the algorithm this meter family uses for mechanism 2).
         // Single block: secret "12345678", challenge 00112233 44556677.
         let out = manufacturer_aes(b"12345678", &hex(b"0011223344556677"));

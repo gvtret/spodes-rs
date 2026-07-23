@@ -8,16 +8,25 @@ While the crate is at `0.x`, minor releases may contain breaking changes.
 
 ## [Unreleased]
 
+## [0.7.1] - 2026-07-23
+
+### Changed
+
+- Removed third-party client/vendor name references from source comments,
+  test names and the changelog; the underlying behaviour (accepting the
+  manufacturer-specific mechanism-2 "HIGH" scheme, Clock's octet-string
+  date-time encoding, etc.) is unchanged.
+
 ## [0.7.0] - 2026-07-23
 
-### Added (Gurux HIGH / HLS-GMAC interop, HDLC peer SAP)
+### Added (manufacturer HIGH / HLS-GMAC interop, HDLC peer SAP)
 
-- **Gurux "HIGH" security accepted against HLS-GMAC associations**: the AARQ
-  handler now accepts a client proposing the generic mechanism 2
-  (`HlsManufacturer`) against an association configured for mechanism 5
-  (`HlsGmac`), completing the four-pass handshake with the manufacturer-AES
-  scheme Gurux's HIGH level actually implements — still gated on knowing the
-  correct shared secret. `AssociationLn` tracks the in-flight handshake
+- **Manufacturer-specific "HIGH" security accepted against HLS-GMAC
+  associations**: the AARQ handler now accepts a client proposing the
+  generic mechanism 2 (`HlsManufacturer`) against an association configured
+  for mechanism 5 (`HlsGmac`), completing the four-pass handshake with the
+  manufacturer-AES scheme that HIGH level actually implements — still gated
+  on knowing the correct shared secret. `AssociationLn` tracks the in-flight handshake
   mechanism separately from the configured one, and the AARE's
   responding-AP-title is only echoed for ciphering / title-bound (GMAC+)
   mechanisms, matching the etalon.
@@ -74,13 +83,13 @@ While the crate is at `0.x`, minor releases may contain breaking changes.
   functional unit (`mechanism-name` echoed back alongside the StoC
   challenge) — all with symmetric encode/decode.
 
-### Fixed (COSEM/HDLC server: Gurux mass-SET / configurator suite parity)
+### Fixed (COSEM/HDLC server: mass-SET / configurator suite parity)
 
 - **`set_attribute` added** for Register (value, scaler_unit), Clock (time,
   time_zone, daylight-saving fields), Limiter, ProfileGeneric
   (capture_objects, capture_period, sort_method, profile_entries),
   Association LN, Security Setup and several other interface classes needed
-  by the Gurux mass-SET / configurator test suite.
+  by a mass-SET / configurator test suite.
 - **GET/SET datablock state (`PendingBlocks`) can now be persisted across
   APDUs**: `RequestDispatcher::take_pending`/`restore_pending` let a host
   that rebuilds the dispatcher per request stash and restore in-flight
@@ -94,7 +103,7 @@ While the crate is at `0.x`, minor releases may contain breaking changes.
   matching the C++ `aare` fill order) replaces the previous single fixed
   conformance block.
 - **Clock dates are now carried as `octet-string` (tag `0x09`)**, not
-  `date-time` (tag `0x19`), matching `osp_val_cosem_datetime` / Gurux
+  `date-time` (tag `0x19`), matching `osp_val_cosem_datetime` / common client
   expectations; method IDs renumbered to the Blue Book layout
   (`adjust_to_measuring_period` inserted at 2, `shift_time` added at 6); and
   `PushSetup::reset` now sets `last_confirmation_date_time` to 1900-01-01
@@ -456,7 +465,8 @@ Initial release: a full DLMS/COSEM stack for IEC 62056 and the Russian
 - **Tooling** — GitHub Actions CI (fmt, clippy, test, doc, package) and a
   tag-triggered release workflow; dual MIT / Apache-2.0 license.
 
-[Unreleased]: https://github.com/gvtret/spodes-rs/compare/v0.7.0...HEAD
+[Unreleased]: https://github.com/gvtret/spodes-rs/compare/v0.7.1...HEAD
+[0.7.1]: https://github.com/gvtret/spodes-rs/compare/v0.7.0...v0.7.1
 [0.7.0]: https://github.com/gvtret/spodes-rs/compare/v0.6.0...v0.7.0
 [0.6.0]: https://github.com/gvtret/spodes-rs/compare/v0.4.0...v0.6.0
 [0.4.0]: https://github.com/gvtret/spodes-rs/compare/v0.3.0...v0.4.0

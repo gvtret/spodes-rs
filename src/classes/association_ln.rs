@@ -384,7 +384,7 @@ impl AssociationLn {
                 Ok(CosemDataType::OctetString(sig.to_vec()))
             }
             // Mechanism 2 (manufacturer-specific): f(challenge) = AES-128 over
-            // the challenge keyed by the secret (Gurux / TI "high" scheme).
+            // the challenge keyed by the secret (a widely deployed TI "high" scheme).
             AuthMechanism::HlsManufacturer => {
                 let secret = self.secret_bytes();
                 let expected = hls::manufacturer_aes(secret, stoc);

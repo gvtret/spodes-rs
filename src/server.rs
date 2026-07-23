@@ -617,7 +617,7 @@ impl RequestDispatcher {
                 let stoc = assoc.generate_stoc(16);
                 assoc.set_association_status(association_status::ASSOCIATION_PENDING);
                 // Responding-AP-title: required with ciphering / title-bound HLS
-                // (GMAC+); omit for Gurux HIGH (mech 2) over plain LN (etalon).
+                // (GMAC+); omit for manufacturer-specific HIGH security (mech 2) over plain LN (etalon).
                 let responding_ap_title = if echo_context == application_context::LN_CIPHERING
                     || matches!(
                         mechanism,
@@ -649,9 +649,10 @@ impl RequestDispatcher {
         }
     }
 
-    /// Gurux HIGH authentication advertises mechanism 2 (`HlsManufacturer`);
-    /// СПОДЭС Configurator associations are configured as HLS-GMAC (5). Accept
-    /// that pairing for AARQ, then finish the handshake with GMAC.
+    /// Manufacturer-specific HIGH-level authentication advertises mechanism 2
+    /// (`HlsManufacturer`); СПОДЭС Configurator associations are configured as
+    /// HLS-GMAC (5). Accept that pairing for AARQ, then finish the handshake
+    /// with GMAC.
     fn aarq_mechanism_matches_assoc(requested: AuthMechanism, required: AuthMechanism) -> bool {
         requested == required || (requested == AuthMechanism::HlsManufacturer && required == AuthMechanism::HlsGmac)
     }

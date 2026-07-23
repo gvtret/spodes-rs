@@ -1283,7 +1283,7 @@ mod tests {
         let mut server = server_layer();
         server.connected = true;
         server.peer = HdlcAddress::one_byte(0x21);
-        // Control 0xFF is not a valid HDLC command (Gurux "Неизвестная команда").
+        // Control 0xFF is not a valid HDLC command.
         let mut unknown = HdlcFrame::new(
             HdlcAddress::one_byte(0x03),
             HdlcAddress::one_byte(0x21),

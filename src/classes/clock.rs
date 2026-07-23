@@ -166,7 +166,7 @@ impl InterfaceClass for Clock {
 
     fn attributes(&self) -> Vec<(u8, CosemDataType)> {
         // Blue Book date-time attributes are carried as octet-string (tag 0x09),
-        // matching `osp_val_cosem_datetime` / Gurux expectations — not tag 0x19.
+        // matching `osp_val_cosem_datetime` / common client expectations — not tag 0x19.
         vec![
             (1, CosemDataType::OctetString(self.logical_name.to_bytes())),
             (2, CosemDataType::OctetString(self.time.0.to_vec())),
